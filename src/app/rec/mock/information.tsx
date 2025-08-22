@@ -1,0 +1,32 @@
+export const INFORMATION = {
+    principalInvestigator: "Dr. Alex Santiago",
+    courseProgram: "BS Biology",
+    adviser: "Prof. Carla Rivera",
+    email: "alex.santiago@university.edu",
+    typeOfReview: "Full Board",
+    studySite: "SPUP Research Center",
+    status: "Under Review",
+    position: "Student",
+    address: "123 University Ave, Tuguegarao City",
+    contactNumber: "0917 123 4567",
+    coResearchers: ["Maria Lopez", "John Cruz", "Ella Gomez"],
+    studyLevel: "Undergraduate Thesis",
+    studyType: "Experimental",
+    startDate: "2025-07-01",
+    endDate: "2025-08-01",
+    participantCount: 120,
+    participantDescription: "Senior high school students, ages 16-18, randomly sampled.",
+    funding: "Scholarship",
+    fundingDetails: {
+      selfFunded: false,
+      institutionFunded: true,
+      governmentFunded: false,
+      pharmaceuticalFunded: false,
+      scholarship: true,
+      researchGrant: false,
+      others: "",
+    },
+    briefDescription: "This study investigates the effects of coconut coir as a thermal insulator in low-cost housing.",
+    progress: "Under Review"
+  };
+  
