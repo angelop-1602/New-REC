@@ -125,7 +125,7 @@ export default function Page() {
   }
 
   // Conditional rendering logic
-  const shouldShowDecision = submission.status !== "pending";
+  const shouldShowDecision = submission.decision && submission.decisionDate; // Only show if decision was actually made
   const shouldShowReports = submission.status === "approved" || submission.status === "archived";
 
   // Mock data for reports (will be replaced with real data later)
@@ -161,7 +161,8 @@ export default function Page() {
           title={submission.information?.general_information?.protocol_title}
           status={submission.status}
           submissionId={submission.id}
-          spupCode={submission.spupRecCode}
+          spupCode={submission.spupCode}
+          tempCode={submission.tempProtocolCode}
           dateSubmitted={submission.createdAt ? new Date(submission.createdAt).toLocaleDateString() : undefined}
           unreadMessageCount={unreadMessageCount}
         />

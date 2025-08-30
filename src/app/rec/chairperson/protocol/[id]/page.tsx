@@ -133,11 +133,11 @@ export default function ChairpersonProtocolDetailPage() {
         title={submission.information?.general_information?.protocol_title || submission.title || "Untitled Protocol"}
         status={submission.status}
         submissionId={submission.id}
-        spupCode={submission.spupCode || submission.tempProtocolCode}
+        spupCode={submission.spupCode}
+        tempCode={submission.tempProtocolCode}
         dateSubmitted={submission.createdAt}
         unreadMessageCount={unreadCount}
       />
-
       {/* Chairperson Actions Card */}
       <ChairpersonActions
         submission={submission}
@@ -154,14 +154,6 @@ export default function ChairpersonProtocolDetailPage() {
       {/* Documents */}
       <ProtocolDocument documents={submission.documents || []} />
 
-      {/* Messages */}
-      <Card>
-        <ProtocolMessage
-          submissionId={submission.id}
-          unreadCount={unreadCount}
-          onMessageSent={() => setUnreadCount(0)}
-        />
-      </Card>
 
       {/* Decision (only show if accepted or beyond) */}
       {(isAccepted || isApproved) && (

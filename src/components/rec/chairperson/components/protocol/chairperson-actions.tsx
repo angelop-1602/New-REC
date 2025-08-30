@@ -34,7 +34,7 @@ import {
   Loader2
 } from "lucide-react";
 import { useSpupCodeGenerator } from "@/hooks/useSpupCodeGenerator";
-import { acceptSubmission, rejectSubmission } from "@/lib/firebase/firestore";
+import { acceptSubmission, rejectSubmission, makeProtocolDecision } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -56,10 +56,16 @@ export function ChairpersonActions({
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [decisionDialogOpen, setDecisionDialogOpen] = useState(false);
+  const [documentUploadOpen, setDocumentUploadOpen] = useState(false);
   const [spupCode, setSpupCode] = useState("");
   const [reviewType, setReviewType] = useState<'SR' | 'EX'>('SR');
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedReviewer, setSelectedReviewer] = useState("");
+  const [decision, setDecision] = useState<'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved'>('approved');
+  const [decisionDetails, setDecisionDetails] = useState("");
+  const [timeline, setTimeline] = useState("");
+  const [uploadedDocuments, setUploadedDocuments] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [generatedCode, setGeneratedCode] = useState("");
   const [piInitials, setPiInitials] = useState("");
@@ -154,6 +160,66 @@ export function ChairpersonActions({
     setAssignDialogOpen(false);
   };
 
+  const handleMakeDecision = async () => {
+    if (!decisionDetails.trim()) {
+      toast.error("Please provide decision details");
+      return;
+    }
+
+    if ((decision === 'approved_minor_revisions' || decision === 'major_revisions_deferred') && !timeline.trim()) {
+      toast.error("Please specify timeline for revisions");
+      return;
+    }
+
+    if (!user) {
+      toast.error("You must be logged in to make decisions");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await makeProtocolDecision(
+        submission.id,
+        decision,
+        decisionDetails,
+        user.uid,
+        timeline || undefined,
+        uploadedDocuments
+      );
+      
+      const decisionText = {
+        'approved': 'Approved',
+        'approved_minor_revisions': 'Approved with Minor Revisions',
+        'major_revisions_deferred': 'Major Revisions Required',
+        'disapproved': 'Disapproved'
+      }[decision];
+      
+      toast.success(`Protocol ${decisionText}`);
+      onStatusUpdate(decision === 'approved' ? 'approved' : 'accepted');
+      setDecisionDialogOpen(false);
+    } catch (error) {
+      console.error("Error making decision:", error);
+      toast.error("Failed to make decision. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const getDecisionDescription = (decisionType: string) => {
+    switch (decisionType) {
+      case 'approved':
+        return 'The research may proceed as submitted.';
+      case 'approved_minor_revisions':
+        return 'Approval granted with minor revisions required before proceeding.';
+      case 'major_revisions_deferred':
+        return 'Significant ethical issues require major revision and resubmission.';
+      case 'disapproved':
+        return 'Protocol cannot be approved due to unresolvable ethical concerns.';
+      default:
+        return '';
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "approved":
@@ -245,13 +311,23 @@ export function ChairpersonActions({
               </Button>
             )}
 
+            {submission.status === "accepted" && !submission.decision && (
+              <Button 
+                onClick={() => setDecisionDialogOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Make Decision
+              </Button>
+            )}
+
             {submission.status === "accepted" && (
               <Button 
                 variant="outline"
-                onClick={() => {/* TODO: Generate protocol documents */}}
+                onClick={() => setDocumentUploadOpen(true)}
               >
                 <FileText className="mr-2 h-4 w-4" />
-                Generate Documents
+                Upload Documents
               </Button>
             )}
 
@@ -460,6 +536,169 @@ export function ChairpersonActions({
             </Button>
             <Button onClick={handleAssignReviewer}>
               Assign Reviewer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Decision Dialog */}
+      <Dialog open={decisionDialogOpen} onOpenChange={setDecisionDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Make Protocol Decision</DialogTitle>
+            <DialogDescription>
+              Make a final decision on this protocol after review
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Decision Type Selection */}
+            <div>
+              <Label>Decision Type</Label>
+              <RadioGroup value={decision} onValueChange={(value) => setDecision(value as any)}>
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
+                    <RadioGroupItem value="approved" id="approved" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="approved" className="font-medium cursor-pointer text-green-700">
+                        Approved
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {getDecisionDescription('approved')}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
+                    <RadioGroupItem value="approved_minor_revisions" id="minor" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="minor" className="font-medium cursor-pointer text-blue-700">
+                        Approved with Minor Revisions
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {getDecisionDescription('approved_minor_revisions')}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
+                    <RadioGroupItem value="major_revisions_deferred" id="major" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="major" className="font-medium cursor-pointer text-yellow-700">
+                        Major Revisions / Deferred
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {getDecisionDescription('major_revisions_deferred')}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
+                    <RadioGroupItem value="disapproved" id="disapproved" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="disapproved" className="font-medium cursor-pointer text-red-700">
+                        Disapproved
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {getDecisionDescription('disapproved')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Decision Details */}
+            <div>
+              <Label htmlFor="decision-details">Decision Details</Label>
+              <Textarea
+                id="decision-details"
+                placeholder="Provide detailed explanation of the decision..."
+                value={decisionDetails}
+                onChange={(e) => setDecisionDetails(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            {/* Timeline (for revisions) */}
+            {(decision === 'approved_minor_revisions' || decision === 'major_revisions_deferred') && (
+              <div>
+                <Label htmlFor="timeline">Timeline for Compliance</Label>
+                <Input
+                  id="timeline"
+                  placeholder="e.g., 30 days, 2 weeks, etc."
+                  value={timeline}
+                  onChange={(e) => setTimeline(e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Document Upload */}
+            <div>
+              <Label>Upload Decision Documents (Optional)</Label>
+              <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setUploadedDocuments(files);
+                  }}
+                  className="hidden"
+                  id="document-upload"
+                />
+                <Label htmlFor="document-upload" className="cursor-pointer">
+                  <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-sm">Click to upload decision documents</p>
+                  <p className="text-xs text-muted-foreground">PDF, DOC, DOCX files accepted</p>
+                </Label>
+              </div>
+              {uploadedDocuments.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm font-medium">Selected files:</p>
+                  <ul className="text-sm text-muted-foreground">
+                    {uploadedDocuments.map((file, index) => (
+                      <li key={index}>• {file.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setDecisionDialogOpen(false);
+                setDecisionDetails("");
+                setTimeline("");
+                setUploadedDocuments([]);
+              }}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleMakeDecision}
+              disabled={isProcessing || !decisionDetails.trim()}
+              className={
+                decision === 'approved' ? 'bg-green-600 hover:bg-green-700' :
+                decision === 'approved_minor_revisions' ? 'bg-blue-600 hover:bg-blue-700' :
+                decision === 'major_revisions_deferred' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                'bg-red-600 hover:bg-red-700'
+              }
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Confirm Decision
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

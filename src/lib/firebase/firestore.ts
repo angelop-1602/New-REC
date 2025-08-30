@@ -934,4 +934,107 @@ export const rejectSubmission = async (
     console.error("Error rejecting submission:", error);
     throw new Error("Failed to reject submission");
   }
+};
+
+// Make protocol decision (for chairperson)
+export const makeProtocolDecision = async (
+  submissionId: string,
+  decision: 'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved',
+  decisionDetails: string,
+  decisionBy: string,
+  timeline?: string,
+  documents?: File[]
+): Promise<void> => {
+  try {
+    const acceptedRef = doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId);
+    
+    // Update the submission with decision
+    await updateDoc(acceptedRef, {
+      decision: decision,
+      decisionDetails: decisionDetails,
+      decisionDate: serverTimestamp(),
+      decisionBy: decisionBy,
+      timeline: timeline,
+      updatedAt: serverTimestamp()
+    });
+    
+    // If approved, move to approved collection
+    if (decision === 'approved') {
+      const acceptedSnap = await getDoc(acceptedRef);
+      
+      if (acceptedSnap.exists()) {
+        const submissionData = acceptedSnap.data();
+        
+        // Move to approved collection
+        const approvedRef = doc(db, SUBMISSIONS_APPROVED_COLLECTION, submissionId);
+        await setDoc(approvedRef, {
+          ...submissionData,
+          status: 'approved',
+          approvedAt: serverTimestamp()
+        });
+        
+        // Copy subcollections
+        const documentsRef = collection(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, DOCUMENTS_COLLECTION);
+        const messagesRef = collection(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, MESSAGES_COLLECTION);
+        
+        const [documentsSnap, messagesSnap] = await Promise.all([
+          getDocs(documentsRef),
+          getDocs(messagesRef)
+        ]);
+        
+        // Copy documents
+        for (const docSnap of documentsSnap.docs) {
+          const newDocRef = doc(db, SUBMISSIONS_APPROVED_COLLECTION, submissionId, DOCUMENTS_COLLECTION, docSnap.id);
+          await setDoc(newDocRef, docSnap.data());
+        }
+        
+        // Copy messages
+        for (const msgSnap of messagesSnap.docs) {
+          const newMsgRef = doc(db, SUBMISSIONS_APPROVED_COLLECTION, submissionId, MESSAGES_COLLECTION, msgSnap.id);
+          await setDoc(newMsgRef, msgSnap.data());
+        }
+        
+        // Add decision notification message
+        await sendMessage(
+          submissionId,
+          SUBMISSIONS_APPROVED_COLLECTION,
+          decisionBy,
+          "REC Chairperson",
+          `Your protocol has been APPROVED! ${decisionDetails}`,
+          "system"
+        );
+        
+        // Delete from accepted collection
+        await deleteDoc(acceptedRef);
+        
+        // Delete accepted subcollections
+        for (const docSnap of documentsSnap.docs) {
+          await deleteDoc(doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, DOCUMENTS_COLLECTION, docSnap.id));
+        }
+        for (const msgSnap of messagesSnap.docs) {
+          await deleteDoc(doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, MESSAGES_COLLECTION, msgSnap.id));
+        }
+      }
+    } else {
+      // For other decisions, just add notification message
+      const decisionText = {
+        'approved_minor_revisions': 'Approved with Minor Revisions',
+        'major_revisions_deferred': 'Major Revisions Required',
+        'disapproved': 'Disapproved'
+      }[decision];
+      
+      await sendMessage(
+        submissionId,
+        SUBMISSIONS_ACCEPTED_COLLECTION,
+        decisionBy,
+        "REC Chairperson",
+        `Decision: ${decisionText}. ${decisionDetails}${timeline ? ` Timeline: ${timeline}` : ''}`,
+        "system"
+      );
+    }
+    
+  } catch (error) {
+    console.error("Error making decision:", error);
+    throw new Error("Failed to make decision");
+  }
 }; 

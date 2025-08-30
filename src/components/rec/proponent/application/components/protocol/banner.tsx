@@ -36,6 +36,7 @@ interface CustomBannerProps {
   status?: string;
   submissionId?: string;
   spupCode?: string;
+  tempCode?: string;
   dateSubmitted?: string;
   unreadMessageCount?: number;
 }
@@ -45,6 +46,7 @@ export default function CustomBanner({
   status = "pending", 
   submissionId, 
   spupCode,
+  tempCode,
   dateSubmitted,
   unreadMessageCount = 0
 }: CustomBannerProps) {
@@ -93,8 +95,8 @@ export default function CustomBanner({
           <span className="truncate">{displayDate}</span>
         </span>
         
-        {/* SPUP Code (only show if available) */}
-        {spupCode && (
+        {/* Protocol Code (SPUP or Temporary) */}
+        {(spupCode || tempCode) && (
           <>
             <Dot className="hidden sm:block w-4 h-4 text-white/90 flex-shrink-0" />
             <TooltipProvider>
@@ -102,11 +104,21 @@ export default function CustomBanner({
                 <TooltipTrigger>
                   <span className="text-xs sm:text-sm text-white/90 flex items-center gap-1.5 sm:gap-2">
                     <Key className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span className="truncate">{spupCode}</span>
+                    <span className="truncate">
+                      {spupCode || tempCode}
+                      {!spupCode && tempCode && (
+                        <span className="text-yellow-200 ml-1">(Temp)</span>
+                      )}
+                    </span>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="">
-                  <p>SPUP Protocol Code is the unique identifier for the protocol.</p>
+                  <p>
+                    {spupCode 
+                      ? "SPUP Protocol Code is the official identifier for the protocol." 
+                      : "Temporary code until SPUP code is assigned by REC Chairperson."
+                    }
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
