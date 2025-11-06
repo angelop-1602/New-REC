@@ -108,6 +108,12 @@ export const validateForm = (data: any, schema: ValidationSchema): ValidationRes
   
   for (const [fieldPath, fieldValidation] of Object.entries(schema)) {
     const fieldValue = getNestedValue(data, fieldPath);
+    
+    // Skip validation for conditional fields that are not currently required
+    if (shouldSkipConditionalField(fieldPath, data)) {
+      continue;
+    }
+    
     const fieldResult = validateField(fieldValue, fieldValidation.rules);
     
     if (!fieldResult.isValid) {
@@ -119,6 +125,29 @@ export const validateForm = (data: any, schema: ValidationSchema): ValidationRes
     isValid: Object.keys(errors).length === 0,
     errors
   };
+};
+
+// Helper function to determine if a conditional field should be skipped
+const shouldSkipConditionalField = (fieldPath: string, data: any): boolean => {
+  // Skip outside_specify if study site is not "outside"
+  if (fieldPath === "study_site.outside_specify") {
+    const studySite = getNestedValue(data, "study_site.location");
+    return studySite !== "outside";
+  }
+  
+  // Skip pharmaceutical_company_specify if funding is not "pharmaceutical_company"
+  if (fieldPath === "source_of_funding.pharmaceutical_company_specify") {
+    const fundingSource = getNestedValue(data, "source_of_funding.selected");
+    return fundingSource !== "pharmaceutical_company";
+  }
+  
+  // Skip others_specify if funding is not "others"
+  if (fieldPath === "source_of_funding.others_specify") {
+    const fundingSource = getNestedValue(data, "source_of_funding.selected");
+    return fundingSource !== "others";
+  }
+  
+  return false;
 };
 
 // Information form validation schema
@@ -149,13 +178,25 @@ export const informationFormValidation: ValidationSchema = {
   },
   "general_information.principal_investigator.contact_number": {
     rules: [
-      { required: true },
-      { phone: true }
+      { required: false }
+      // Phone validation removed - accepts any format
     ]
   },
-  "general_information.principal_investigator.position_institution": {
+  "general_information.principal_investigator.position": {
     rules: [
       { required: true },
+      { minLength: 2, maxLength: 100 }
+    ]
+  },
+  "general_information.principal_investigator.institution": {
+    rules: [
+      { required: true },
+      { minLength: 2, maxLength: 100 }
+    ]
+  },
+  "general_information.principal_investigator.course_program": {
+    rules: [
+      { required: false },
       { minLength: 2, maxLength: 100 }
     ]
   },
@@ -182,14 +223,8 @@ export const informationFormValidation: ValidationSchema = {
   },
   "study_site.outside_specify": {
     rules: [
-      { 
-        custom: (value: string) => {
-          // This field is required only if study_site.location is "outside"
-          // Note: This custom validation needs access to the entire form data
-          // For now, we'll handle this in the component level
-          return null;
-        }
-      }
+      { required: true },
+      { minLength: 2, maxLength: 100 }
     ]
   },
   "duration_of_study.start_date": {
@@ -214,6 +249,18 @@ export const informationFormValidation: ValidationSchema = {
       { required: true }
     ]
   },
+  "source_of_funding.pharmaceutical_company_specify": {
+    rules: [
+      { required: true },
+      { minLength: 2, maxLength: 100 }
+    ]
+  },
+  "source_of_funding.others_specify": {
+    rules: [
+      { required: true },
+      { minLength: 2, maxLength: 100 }
+    ]
+  },
   "participants.number_of_participants": {
     rules: [
       { required: true },
@@ -228,18 +275,6 @@ export const informationFormValidation: ValidationSchema = {
     ]
   },
   "technical_review_completed": {
-    rules: [
-      { 
-        custom: (value: boolean) => {
-          if (value === null || value === undefined) {
-            return "Please select Yes or No";
-          }
-          return null;
-        }
-      }
-    ]
-  },
-  "submitted_to_other_committee": {
     rules: [
       { 
         custom: (value: boolean) => {

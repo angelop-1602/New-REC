@@ -13,8 +13,11 @@ import {
   limit,
   Timestamp,
   serverTimestamp,
-  addDoc
+  addDoc,
+  writeBatch,
+  WriteBatch
 } from "firebase/firestore";
+import { getStorage, ref, uploadBytes } from "firebase/storage";
 import { InformationType } from "@/types/information.types";
 import { DocumentsType } from "@/types/documents.types";
 import { SubmissionsType } from "@/types/submissions.type";
@@ -25,17 +28,20 @@ import { zipSingleFile } from "@/lib/utils/zip";
 import firebaseApp from "@/lib/firebaseConfig";
 
 const db = getFirestore(firebaseApp);
+const storage = getStorage(firebaseApp);
 
-// Collections
-const SUBMISSIONS_PENDING_COLLECTION = "submissions_pending";
-const SUBMISSIONS_ACCEPTED_COLLECTION = "submissions_accepted";
-const SUBMISSIONS_APPROVED_COLLECTION = "submissions_approved";
-const SUBMISSIONS_ARCHIVED_COLLECTION = "submissions_archived";
+// Single submissions collection with status field
+const SUBMISSIONS_COLLECTION = "submissions";
 const DOCUMENTS_COLLECTION = "documents";
 const MESSAGES_COLLECTION = "messages";
 
-// Legacy collection name (for backward compatibility)
-const SUBMISSIONS_COLLECTION = "submissions_pending"; // Default to pending for legacy functions
+// Legacy collection names removed - now using single submissions collection
+
+// Submission status types (includes legacy statuses for backward compatibility)
+export type SubmissionStatus = 'pending' | 'accepted' | 'approved' | 'archived' | 'draft' | 'submitted' | 'under_review' | 'rejected';
+
+// Export for use in other files
+export { SUBMISSIONS_COLLECTION };
 
 // Submission data structure for Firestore
 export interface SubmissionData {
@@ -46,9 +52,20 @@ export interface SubmissionData {
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  status: "draft" | "submitted" | "under_review" | "approved" | "rejected";
+  status: SubmissionStatus; // Updated to use new status type
   information: InformationType;
   documents?: DocumentsType[];
+  // Additional fields for tracking
+  spupCode?: string;
+  tempProtocolCode?: string;
+  researchType?: string;
+  acceptedBy?: string;
+  acceptedAt?: Timestamp;
+  approvedAt?: Timestamp;
+  archivedAt?: Timestamp;
+  decision?: string;
+  decisionDate?: Timestamp;
+  decisionBy?: string;
 }
 
 // Generate unique temporary protocol code for pending submissions
@@ -79,7 +96,7 @@ export const createSubmission = async (
   try {
     // Generate custom application ID in REC_YYYY_6random format
     const applicationID = generateApplicationID();
-    const submissionRef = doc(db, SUBMISSIONS_PENDING_COLLECTION, applicationID);
+    const submissionRef = doc(db, SUBMISSIONS_COLLECTION, applicationID);
     const tempProtocolCode = generateTempProtocolCode();
     
     const submissionData: PendingSubmissionDoc = {
@@ -111,7 +128,7 @@ export const updateSubmission = async (
   status?: "draft" | "submitted" | "under_review" | "approved" | "rejected"
 ): Promise<void> => {
   try {
-    const submissionRef = doc(db, SUBMISSIONS_PENDING_COLLECTION, submissionId);
+    const submissionRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
     
     // Check if submission exists
     const submissionDoc = await getDoc(submissionRef);
@@ -233,11 +250,19 @@ export const createCompleteSubmission = async (
     console.log(`Submission created with ID: ${submissionId}`);
 
     // Step 2: Upload documents if any exist
-    if (documents.length > 0) {
-      console.log(`Uploading ${documents.length} documents...`);
+    // Filter out documents without valid file references (due to localStorage serialization)
+    const documentsWithFiles = documents.filter(doc => doc._fileRef instanceof File);
+    const skippedCount = documents.length - documentsWithFiles.length;
+    
+    if (skippedCount > 0) {
+      console.warn(`${skippedCount} documents skipped due to missing file references (likely restored from localStorage)`);
+    }
+    
+    if (documentsWithFiles.length > 0) {
+      console.log(`Uploading ${documentsWithFiles.length} documents...`);
       const uploadedDocuments: DocumentsType[] = [];
 
-      for (const document of documents) {
+      for (const document of documentsWithFiles) {
         if (document._fileRef) {
           try {
             console.log(`Uploading document: ${document.title}`);
@@ -286,14 +311,14 @@ export const createCompleteSubmission = async (
 
       // Step 3: Save document metadata to subcollection
       console.log("Saving document metadata...");
-      const documentsRef = collection(db, SUBMISSIONS_PENDING_COLLECTION, submissionId, DOCUMENTS_COLLECTION);
+      const documentsRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, DOCUMENTS_COLLECTION);
       
       for (const document of uploadedDocuments) {
         await setDoc(doc(documentsRef, document.id), document);
       }
 
       // Step 4: Update submission timestamp
-      await updateDoc(doc(db, SUBMISSIONS_PENDING_COLLECTION, submissionId), {
+      await updateDoc(doc(db, SUBMISSIONS_COLLECTION, submissionId), {
         updatedAt: serverTimestamp(),
       });
     }
@@ -342,7 +367,7 @@ export const cleanupFailedSubmission = async (
     // Delete submission document from Firestore
     if (submissionId) {
       try {
-        await deleteDoc(doc(db, SUBMISSIONS_PENDING_COLLECTION, submissionId));
+        await deleteDoc(doc(db, SUBMISSIONS_COLLECTION, submissionId));
         console.log(`Deleted submission: ${submissionId}`);
       } catch (deleteError) {
         console.warn(`Failed to delete submission ${submissionId}:`, deleteError);
@@ -360,74 +385,26 @@ export const getAllUserSubmissions = async (userId: string): Promise<any[]> => {
   try {
     const submissions: any[] = [];
     
-    // Query pending submissions (no orderBy to avoid index requirement)
-    const pendingQuery = query(
-      collection(db, SUBMISSIONS_PENDING_COLLECTION),
+    // Query all submissions for user from single collection
+    const submissionsQuery = query(
+      collection(db, SUBMISSIONS_COLLECTION),
       where("submitBy", "==", userId)
     );
-    const pendingSnapshot = await getDocs(pendingQuery);
+    const snapshot = await getDocs(submissionsQuery);
     
-    pendingSnapshot.forEach((doc) => {
+    snapshot.forEach((doc) => {
+      const data = doc.data();
       submissions.push({
         id: doc.id,
-        collection: "pending",
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
+        collection: data.status || "pending", // For backward compatibility
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
       });
     });
 
-    // Query accepted submissions (no orderBy to avoid index requirement)
-    const acceptedQuery = query(
-      collection(db, SUBMISSIONS_ACCEPTED_COLLECTION),
-      where("submitBy", "==", userId)
-    );
-    const acceptedSnapshot = await getDocs(acceptedQuery);
+    console.log(`✅ Found ${submissions.length} total submissions for user from single collection`);
     
-    acceptedSnapshot.forEach((doc) => {
-      submissions.push({
-        id: doc.id,
-        collection: "accepted",
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
-      });
-    });
-
-    // Query approved submissions (no orderBy to avoid index requirement)
-    const approvedQuery = query(
-      collection(db, SUBMISSIONS_APPROVED_COLLECTION),
-      where("submitBy", "==", userId)
-    );
-    const approvedSnapshot = await getDocs(approvedQuery);
-    
-    approvedSnapshot.forEach((doc) => {
-      submissions.push({
-        id: doc.id,
-        collection: "approved",
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
-      });
-    });
-
-    // Query archived submissions (no orderBy to avoid index requirement)
-    const archivedQuery = query(
-      collection(db, SUBMISSIONS_ARCHIVED_COLLECTION),
-      where("submitBy", "==", userId)
-    );
-    const archivedSnapshot = await getDocs(archivedQuery);
-    
-    archivedSnapshot.forEach((doc) => {
-      submissions.push({
-        id: doc.id,
-        collection: "archived",
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
-      });
-    });
-
     // Sort all submissions by creation date in JavaScript (newest first)
     return submissions.sort((a, b) => {
       const dateA = new Date(a.createdAt);
@@ -546,30 +523,22 @@ export const getUserSubmissionStats = async (userId: string): Promise<{
 // Get submission by ID from any collection
 export const getSubmissionById = async (submissionId: string): Promise<any | null> => {
   try {
-    const collections = [
-      { name: SUBMISSIONS_PENDING_COLLECTION, status: "pending" },
-      { name: SUBMISSIONS_ACCEPTED_COLLECTION, status: "accepted" },
-      { name: SUBMISSIONS_APPROVED_COLLECTION, status: "approved" },
-      { name: SUBMISSIONS_ARCHIVED_COLLECTION, status: "archived" }
-    ];
-
-    for (const collectionInfo of collections) {
-      const docRef = doc(db, collectionInfo.name, submissionId);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        return {
-          id: docSnap.id,
-          collection: collectionInfo.status,
-          status: collectionInfo.status,
-          ...docSnap.data(),
-          createdAt: docSnap.data().createdAt?.toDate?.()?.toISOString() || docSnap.data().createdAt,
-          updatedAt: docSnap.data().updatedAt?.toDate?.()?.toISOString() || docSnap.data().updatedAt,
-        };
-      }
+    // Query single collection
+    const docRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        collection: data.status || "pending", // For backward compatibility
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+      };
     }
 
-    return null; // Submission not found in any collection
+    return null; // Submission not found
   } catch (error) {
     console.error("Error fetching submission by ID:", error);
     throw new Error("Failed to fetch submission details");
@@ -607,16 +576,8 @@ export const getSubmissionWithDocuments = async (submissionId: string): Promise<
       return null;
     }
 
-    // Get collection name based on status
-    const collectionMap = {
-      pending: SUBMISSIONS_PENDING_COLLECTION,
-      accepted: SUBMISSIONS_ACCEPTED_COLLECTION,
-      approved: SUBMISSIONS_APPROVED_COLLECTION,
-      archived: SUBMISSIONS_ARCHIVED_COLLECTION,
-    };
-
-    const collectionName = collectionMap[submission.status as keyof typeof collectionMap];
-    const documents = await getSubmissionDocuments(submissionId, collectionName);
+    // Get documents from single collection's subcollection
+    const documents = await getSubmissionDocuments(submissionId, SUBMISSIONS_COLLECTION);
 
     return {
       ...submission,
@@ -739,21 +700,14 @@ export const getMessagesForSubmission = async (
   submissionId: string
 ): Promise<MessagesType[]> => {
   try {
-    // First find which collection the submission is in
+    // Verify submission exists
     const submission = await getSubmissionById(submissionId);
     if (!submission) {
       throw new Error("Submission not found");
     }
 
-    const collectionMap = {
-      pending: SUBMISSIONS_PENDING_COLLECTION,
-      accepted: SUBMISSIONS_ACCEPTED_COLLECTION,
-      approved: SUBMISSIONS_APPROVED_COLLECTION,
-      archived: SUBMISSIONS_ARCHIVED_COLLECTION,
-    };
-
-    const collectionName = collectionMap[submission.status as keyof typeof collectionMap];
-    return await getSubmissionMessages(submissionId, collectionName);
+    // Use single collection
+    return await getSubmissionMessages(submissionId, SUBMISSIONS_COLLECTION);
   } catch (error) {
     console.error("Error fetching messages for submission:", error);
     throw new Error("Failed to fetch messages");
@@ -769,21 +723,14 @@ export const sendMessageToSubmission = async (
   type?: MessageType
 ): Promise<string> => {
   try {
-    // First find which collection the submission is in
+    // Verify submission exists
     const submission = await getSubmissionById(submissionId);
     if (!submission) {
       throw new Error("Submission not found");
     }
 
-    const collectionMap = {
-      pending: SUBMISSIONS_PENDING_COLLECTION,
-      accepted: SUBMISSIONS_ACCEPTED_COLLECTION,
-      approved: SUBMISSIONS_APPROVED_COLLECTION,
-      archived: SUBMISSIONS_ARCHIVED_COLLECTION,
-    };
-
-    const collectionName = collectionMap[submission.status as keyof typeof collectionMap];
-    return await sendMessage(submissionId, collectionName, senderId, senderName, content, type);
+    // Use single collection
+    return await sendMessage(submissionId, SUBMISSIONS_COLLECTION, senderId, senderName, content, type);
   } catch (error) {
     console.error("Error sending message to submission:", error);
     throw new Error("Failed to send message");
@@ -791,24 +738,16 @@ export const sendMessageToSubmission = async (
 };
 
 // Get all submissions by status
-export const getAllSubmissionsByStatus = async (status: string): Promise<any[]> => {
+export const getAllSubmissionsByStatus = async (status: SubmissionStatus): Promise<any[]> => {
   try {
     const submissions: any[] = [];
     
-    // Map status to collection
-    const collectionMap: Record<string, string> = {
-      'pending': SUBMISSIONS_PENDING_COLLECTION,
-      'accepted': SUBMISSIONS_ACCEPTED_COLLECTION,
-      'approved': SUBMISSIONS_APPROVED_COLLECTION,
-      'archived': SUBMISSIONS_ARCHIVED_COLLECTION,
-    };
-    
-    const collectionName = collectionMap[status];
-    if (!collectionName) {
-      throw new Error(`Invalid status: ${status}`);
-    }
-    
-    const querySnapshot = await getDocs(collection(db, collectionName));
+    // Query single collection filtered by status
+    const statusQuery = query(
+      collection(db, SUBMISSIONS_COLLECTION),
+      where("status", "==", status)
+    );
+    const querySnapshot = await getDocs(statusQuery);
     
     querySnapshot.forEach((doc) => {
       const data = doc.data();
@@ -821,6 +760,7 @@ export const getAllSubmissionsByStatus = async (status: string): Promise<any[]> 
       });
     });
     
+    console.log(`✅ Found ${submissions.length} submissions with status '${status}' from single collection`);
     return submissions;
   } catch (error) {
     console.error('Error fetching submissions by status:', error);
@@ -832,70 +772,42 @@ export const getAllSubmissionsByStatus = async (status: string): Promise<any[]> 
 export const acceptSubmission = async (
   submissionId: string,
   spupCode: string,
-  acceptedBy: string
+  acceptedBy: string,
+  researchType: string = 'SR'
 ): Promise<void> => {
   try {
-    // First, get the submission from pending
-    const pendingRef = doc(db, SUBMISSIONS_PENDING_COLLECTION, submissionId);
-    const pendingSnap = await getDoc(pendingRef);
-    
-    if (!pendingSnap.exists()) {
-      throw new Error("Submission not found in pending collection");
-    }
-    
-    const submissionData = pendingSnap.data();
-    
-    // Create the accepted submission with SPUP code
-    const acceptedRef = doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId);
-    await setDoc(acceptedRef, {
-      ...submissionData,
-      status: "accepted",
+    // Simply update submission status in single collection (no transfer needed)
+    const submissionRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+    await updateDoc(submissionRef, {
+      status: "accepted" as SubmissionStatus,
       spupCode: spupCode,
+      researchType: researchType,
       tempProtocolCode: null, // Clear temp code
       acceptedBy: acceptedBy,
       acceptedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
     
-    // Copy documents subcollection
-    const documentsRef = collection(db, SUBMISSIONS_PENDING_COLLECTION, submissionId, DOCUMENTS_COLLECTION);
-    const documentsSnap = await getDocs(documentsRef);
-    
-    for (const docSnap of documentsSnap.docs) {
-      const newDocRef = doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, DOCUMENTS_COLLECTION, docSnap.id);
-      await setDoc(newDocRef, docSnap.data());
-    }
-    
-    // Copy messages subcollection
-    const messagesRef = collection(db, SUBMISSIONS_PENDING_COLLECTION, submissionId, MESSAGES_COLLECTION);
-    const messagesSnap = await getDocs(messagesRef);
-    
-    for (const msgSnap of messagesSnap.docs) {
-      const newMsgRef = doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, MESSAGES_COLLECTION, msgSnap.id);
-      await setDoc(newMsgRef, msgSnap.data());
-    }
-    
     // Add acceptance notification message
+    const researchTypeNames = {
+      'SR': 'Social/Behavioral Research',
+      'PR': 'Public Health Research', 
+      'HO': 'Health Operations',
+      'BS': 'Biomedical Research',
+      'EX': 'Exempted from Review'
+    };
+    const typeName = researchTypeNames[researchType as keyof typeof researchTypeNames] || researchType;
+    
     await sendMessage(
       submissionId,
-      SUBMISSIONS_ACCEPTED_COLLECTION,
+      SUBMISSIONS_COLLECTION,
       acceptedBy,
       "REC Chairperson",
-      `Your protocol has been accepted and assigned SPUP Code: ${spupCode}. You will be notified once a reviewer has been assigned.`,
+      `Your protocol has been accepted and assigned SPUP Code: ${spupCode} (${typeName}). You will be notified once a reviewer has been assigned.`,
       "system"
     );
     
-    // Delete from pending collection
-    await deleteDoc(pendingRef);
-    
-    // Delete pending subcollections
-    for (const docSnap of documentsSnap.docs) {
-      await deleteDoc(doc(db, SUBMISSIONS_PENDING_COLLECTION, submissionId, DOCUMENTS_COLLECTION, docSnap.id));
-    }
-    for (const msgSnap of messagesSnap.docs) {
-      await deleteDoc(doc(db, SUBMISSIONS_PENDING_COLLECTION, submissionId, MESSAGES_COLLECTION, msgSnap.id));
-    }
-    
+    console.log(`✅ Submission ${submissionId} status updated to 'accepted' (no collection transfer)`);
   } catch (error) {
     console.error("Error accepting submission:", error);
     throw new Error("Failed to accept submission");
@@ -909,11 +821,11 @@ export const rejectSubmission = async (
   rejectedBy: string
 ): Promise<void> => {
   try {
-    const pendingRef = doc(db, SUBMISSIONS_PENDING_COLLECTION, submissionId);
+    const submissionRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
     
     // Update the submission status
-    await updateDoc(pendingRef, {
-      status: "rejected",
+    await updateDoc(submissionRef, {
+      status: "rejected" as SubmissionStatus,
       rejectionReason: rejectionReason,
       rejectedBy: rejectedBy,
       rejectedAt: serverTimestamp(),
@@ -923,7 +835,7 @@ export const rejectSubmission = async (
     // Add rejection notification message
     await sendMessage(
       submissionId,
-      SUBMISSIONS_PENDING_COLLECTION,
+      SUBMISSIONS_COLLECTION,
       rejectedBy,
       "REC Chairperson",
       `Your protocol has been rejected. Reason: ${rejectionReason}. Please address the issues and resubmit.`,
@@ -936,105 +848,442 @@ export const rejectSubmission = async (
   }
 };
 
+/**
+ * Generate sequential meeting reference number for full board decisions
+ * Format: sequential-mm-yyyy (e.g., 001-03-2025)
+ */
+const generateMeetingReference = async (month: number, year: number): Promise<string> => {
+  try {
+    // Query all submissions to find decisions with meeting references for this month-year
+    const submissionsRef = collection(db, SUBMISSIONS_COLLECTION);
+    const submissionsSnapshot = await getDocs(submissionsRef);
+    
+    let maxSequence = 0;
+    const monthYearPattern = `-${month.toString().padStart(2, '0')}-${year}`;
+    
+    for (const submissionDoc of submissionsSnapshot.docs) {
+      try {
+        const decisionRef = doc(db, SUBMISSIONS_COLLECTION, submissionDoc.id, 'decision', 'details');
+        const decisionSnap = await getDoc(decisionRef);
+        
+        if (decisionSnap.exists()) {
+          const decisionData = decisionSnap.data();
+          const meetingRef = decisionData.meetingReference;
+          
+          if (meetingRef && typeof meetingRef === 'string' && meetingRef.includes(monthYearPattern)) {
+            // Extract sequence number (before the first dash)
+            const sequenceMatch = meetingRef.match(/^(\d+)/);
+            if (sequenceMatch) {
+              const sequence = parseInt(sequenceMatch[1], 10);
+              if (sequence > maxSequence) {
+                maxSequence = sequence;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Skip if decision doesn't exist or error reading
+        continue;
+      }
+    }
+    
+    // Return next sequential number
+    const nextSequence = (maxSequence + 1).toString().padStart(3, '0');
+    return `${nextSequence}-${month.toString().padStart(2, '0')}-${year}`;
+  } catch (error) {
+    console.error('Error generating meeting reference:', error);
+    // Fallback: use current date as sequence
+    const fallbackSequence = new Date().getDate().toString().padStart(3, '0');
+    return `${fallbackSequence}-${month.toString().padStart(2, '0')}-${year}`;
+  }
+};
+
 // Make protocol decision (for chairperson)
 export const makeProtocolDecision = async (
   submissionId: string,
-  decision: 'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved',
+  decision: 'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved' | 'deferred',
   decisionDetails: string,
   decisionBy: string,
   timeline?: string,
-  documents?: File[]
+  documents?: File[],
+  meetingMonth?: number,
+  meetingYear?: number
 ): Promise<void> => {
   try {
-    const acceptedRef = doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId);
+    // Upload documents to decision subfolder if provided
+    let uploadedDocuments = [];
+    if (documents && documents.length > 0) {
+      for (const file of documents) {
+        const fileName = `decision_documents/${file.name}`;
+        const storageRef = ref(storage, `submissions/${submissionId}/${fileName}`);
+        await uploadBytes(storageRef, file);
+        
+        // Add document info to array
+        // Note: Cannot use serverTimestamp() inside arrays - use Timestamp.now() instead
+        uploadedDocuments.push({
+          fileName: file.name,
+          storagePath: `submissions/${submissionId}/${fileName}`,
+          uploadedAt: Timestamp.now(), // Fixed: Use Timestamp.now() instead of serverTimestamp()
+          uploadedBy: decisionBy,
+          fileSize: file.size,
+          fileType: file.type
+        });
+      }
+    }
+
+    // Get submission to check if it's full board review
+    const submissionRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+    const submissionSnap = await getDoc(submissionRef);
+    const submissionData = submissionSnap.exists() ? submissionSnap.data() : null;
     
-    // Update the submission with decision
-    await updateDoc(acceptedRef, {
+    // Check if this is a full board review (typeOfReview === 'full')
+    const typeOfReview = submissionData?.information?.general_information?.typeOfReview || 
+                         submissionData?.typeOfReview || '';
+    const isFullBoard = typeOfReview?.toString().toLowerCase() === 'full' || 
+                        typeOfReview?.toString().toLowerCase() === 'full board';
+    
+    // Generate meeting reference for full board decisions if month/year provided
+    let meetingReference: string | undefined;
+    if (isFullBoard && meetingMonth && meetingYear) {
+      meetingReference = await generateMeetingReference(meetingMonth, meetingYear);
+    }
+    
+    // Create comprehensive decision subcollection structure
+    const decisionDetailsRef = doc(db, SUBMISSIONS_COLLECTION, submissionId, 'decision', 'details');
+    const decisionData: any = {
       decision: decision,
       decisionDetails: decisionDetails,
       decisionDate: serverTimestamp(),
       decisionBy: decisionBy,
-      timeline: timeline,
+      createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    });
+    };
     
-    // If approved, move to approved collection
-    if (decision === 'approved') {
-      const acceptedSnap = await getDoc(acceptedRef);
-      
-      if (acceptedSnap.exists()) {
-        const submissionData = acceptedSnap.data();
-        
-        // Move to approved collection
-        const approvedRef = doc(db, SUBMISSIONS_APPROVED_COLLECTION, submissionId);
-        await setDoc(approvedRef, {
-          ...submissionData,
-          status: 'approved',
-          approvedAt: serverTimestamp()
-        });
-        
-        // Copy subcollections
-        const documentsRef = collection(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, DOCUMENTS_COLLECTION);
-        const messagesRef = collection(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, MESSAGES_COLLECTION);
-        
-        const [documentsSnap, messagesSnap] = await Promise.all([
-          getDocs(documentsRef),
-          getDocs(messagesRef)
-        ]);
-        
-        // Copy documents
-        for (const docSnap of documentsSnap.docs) {
-          const newDocRef = doc(db, SUBMISSIONS_APPROVED_COLLECTION, submissionId, DOCUMENTS_COLLECTION, docSnap.id);
-          await setDoc(newDocRef, docSnap.data());
-        }
-        
-        // Copy messages
-        for (const msgSnap of messagesSnap.docs) {
-          const newMsgRef = doc(db, SUBMISSIONS_APPROVED_COLLECTION, submissionId, MESSAGES_COLLECTION, msgSnap.id);
-          await setDoc(newMsgRef, msgSnap.data());
-        }
-        
-        // Add decision notification message
-        await sendMessage(
-          submissionId,
-          SUBMISSIONS_APPROVED_COLLECTION,
-          decisionBy,
-          "REC Chairperson",
-          `Your protocol has been APPROVED! ${decisionDetails}`,
-          "system"
-        );
-        
-        // Delete from accepted collection
-        await deleteDoc(acceptedRef);
-        
-        // Delete accepted subcollections
-        for (const docSnap of documentsSnap.docs) {
-          await deleteDoc(doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, DOCUMENTS_COLLECTION, docSnap.id));
-        }
-        for (const msgSnap of messagesSnap.docs) {
-          await deleteDoc(doc(db, SUBMISSIONS_ACCEPTED_COLLECTION, submissionId, MESSAGES_COLLECTION, msgSnap.id));
-        }
-      }
-    } else {
-      // For other decisions, just add notification message
-      const decisionText = {
-        'approved_minor_revisions': 'Approved with Minor Revisions',
-        'major_revisions_deferred': 'Major Revisions Required',
-        'disapproved': 'Disapproved'
-      }[decision];
-      
-      await sendMessage(
-        submissionId,
-        SUBMISSIONS_ACCEPTED_COLLECTION,
-        decisionBy,
-        "REC Chairperson",
-        `Decision: ${decisionText}. ${decisionDetails}${timeline ? ` Timeline: ${timeline}` : ''}`,
-        "system"
-      );
+    // Only add timeline if it's not undefined or empty
+    if (timeline && timeline.trim()) {
+      decisionData.timeline = timeline;
     }
+    
+    // Add meeting reference for full board decisions
+    if (meetingReference) {
+      decisionData.meetingReference = meetingReference;
+    }
+    
+    // Add documents array to decision data if documents were uploaded
+    if (uploadedDocuments.length > 0) {
+      decisionData.documents = uploadedDocuments;
+    }
+    
+    await setDoc(decisionDetailsRef, decisionData);
+    
+    // Update the submission with decision status and set appropriate status
+    const updateData: any = {
+      decision: decision,
+      decisionDate: serverTimestamp(),
+      decisionBy: decisionBy,
+      updatedAt: serverTimestamp()
+    };
+    
+    // Update status field based on decision
+    if (decision === 'approved') {
+      updateData.status = 'approved' as SubmissionStatus;
+      updateData.approvedAt = serverTimestamp();
+    }
+    // For revisions, disapproved, or deferred, keep status as 'accepted' (awaiting resubmission)
+    
+    // Only add timeline if it's not undefined or empty
+    if (timeline && timeline.trim()) {
+      updateData.timeline = timeline;
+    }
+    
+    // Add meeting reference to submission if present
+    if (meetingReference) {
+      updateData.meetingReference = meetingReference;
+    }
+    
+    await updateDoc(submissionRef, updateData);
+    
+    // Send notification message based on decision
+    const decisionText = {
+      'approved': 'Approved',
+      'approved_minor_revisions': 'Approved with Minor Revisions',
+      'major_revisions_deferred': 'Major Revisions Required',
+      'disapproved': 'Disapproved',
+      'deferred': 'Deferred'
+    }[decision];
+    
+    let message = `Decision: ${decisionText}.`;
+    if (decision === 'approved') {
+      message += ` ${decisionDetails}`;
+    } else {
+      message += ` ${decisionDetails}${timeline ? ` Timeline: ${timeline}` : ''}`;
+    }
+    
+    await sendMessage(
+      submissionId,
+      SUBMISSIONS_COLLECTION,
+      decisionBy,
+      "REC Chairperson",
+      message,
+      "system"
+    );
+    
+    console.log(`✅ Decision made for ${submissionId}: ${decision} (status updated, no collection transfer)`)
     
   } catch (error) {
     console.error("Error making decision:", error);
     throw new Error("Failed to make decision");
+  }
+};
+
+/**
+ * @deprecated No longer needed - we now use status field instead of collection transfer
+ * Robust protocol transfer system from accepted to approved collection
+ * Copies ALL subcollections to prevent data loss
+ */
+export const transferProtocolToApproved = async (
+  submissionId: string,
+  decisionBy: string,
+  decisionDetails: string
+): Promise<void> => {
+  const batch = writeBatch(db);
+  const transferLog: string[] = [];
+  
+  try {
+    console.log(`🔄 Starting robust transfer for protocol: ${submissionId}`);
+    
+    // Get the main submission document
+    const acceptedRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+    const acceptedSnap = await getDoc(acceptedRef);
+    
+    if (!acceptedSnap.exists()) {
+      throw new Error(`Submission ${submissionId} not found in accepted collection`);
+    }
+    
+    const submissionData = acceptedSnap.data();
+    transferLog.push(`✅ Main submission document retrieved`);
+    
+    // Create approved document
+    const approvedRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+    batch.set(approvedRef, {
+      ...submissionData,
+      status: 'approved',
+      approvedAt: serverTimestamp(),
+      transferredAt: serverTimestamp(),
+      transferredBy: decisionBy
+    });
+    transferLog.push(`✅ Main submission document prepared for approved collection`);
+    
+    // Define all subcollections to copy
+    const subcollections = [
+      { name: DOCUMENTS_COLLECTION, type: 'collection' },
+      { name: MESSAGES_COLLECTION, type: 'collection' },
+      { name: 'reviewers', type: 'collection' },
+      { name: 'decision/details', type: 'document' } // Fixed: Must have even segments (4 not 3)
+    ];
+    
+    // Copy each subcollection
+    for (const subcollection of subcollections) {
+      if (subcollection.type === 'collection') {
+        await copySubcollection(
+          submissionId, 
+          subcollection.name, 
+          batch, 
+          transferLog
+        );
+      } else if (subcollection.type === 'document') {
+        await copyDocument(
+          submissionId, 
+          subcollection.name, 
+          batch, 
+          transferLog
+        );
+      }
+    }
+    
+    // Copy assessment forms (nested under reviewers)
+    await copyAssessmentForms(submissionId, batch, transferLog);
+    
+    // Commit all changes
+    await batch.commit();
+    transferLog.push(`✅ All data successfully transferred to approved collection`);
+    
+    // Add decision notification message
+    await sendMessage(
+      submissionId,
+      SUBMISSIONS_COLLECTION,
+      decisionBy,
+      "REC Chairperson",
+      `Your protocol has been APPROVED! ${decisionDetails}`,
+      "system"
+    );
+    transferLog.push(`✅ Decision notification sent`);
+    
+    // Clean up accepted collection
+    await cleanupAcceptedCollection(submissionId, transferLog);
+    
+    console.log(`✅ Transfer completed successfully for ${submissionId}:`, transferLog);
+    
+  } catch (error) {
+    console.error(`❌ Transfer failed for ${submissionId}:`, error);
+    console.error('Transfer log:', transferLog);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to transfer protocol: ${errorMessage}`);
+  }
+};
+
+/**
+ * Copy a subcollection from accepted to approved
+ */
+const copySubcollection = async (
+  submissionId: string,
+  subcollectionName: string,
+  batch: WriteBatch,
+  transferLog: string[]
+): Promise<void> => {
+  try {
+    const sourceRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, subcollectionName);
+    const sourceSnap = await getDocs(sourceRef);
+    
+    if (sourceSnap.empty) {
+      transferLog.push(`ℹ️ No documents found in ${subcollectionName}`);
+      return;
+    }
+    
+    for (const docSnap of sourceSnap.docs) {
+      const targetRef = doc(db, SUBMISSIONS_COLLECTION, submissionId, subcollectionName, docSnap.id);
+      batch.set(targetRef, docSnap.data());
+    }
+    
+    transferLog.push(`✅ Copied ${sourceSnap.docs.length} documents from ${subcollectionName}`);
+  } catch (error) {
+    console.error(`Error copying ${subcollectionName}:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    transferLog.push(`❌ Failed to copy ${subcollectionName}: ${errorMessage}`);
+    throw error;
+  }
+};
+
+/**
+ * Copy a document from accepted to approved
+ */
+const copyDocument = async (
+  submissionId: string,
+  documentPath: string,
+  batch: WriteBatch,
+  transferLog: string[]
+): Promise<void> => {
+  try {
+    // documentPath should be like "decision/details" - splits into subcollection and doc
+    const pathParts = documentPath.split('/');
+    const sourceRef = doc(db, SUBMISSIONS_COLLECTION, submissionId, ...pathParts);
+    const sourceSnap = await getDoc(sourceRef);
+    
+    if (!sourceSnap.exists()) {
+      transferLog.push(`ℹ️ Document ${documentPath} not found`);
+      console.log(`Document not found: ${SUBMISSIONS_COLLECTION}/${submissionId}/${documentPath}`);
+      return;
+    }
+    
+    const targetRef = doc(db, SUBMISSIONS_COLLECTION, submissionId, ...pathParts);
+    batch.set(targetRef, sourceSnap.data());
+    
+    transferLog.push(`✅ Copied document ${documentPath}`);
+    console.log(`Successfully copied: ${documentPath} from accepted to approved`);
+  } catch (error) {
+    console.error(`Error copying document ${documentPath}:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    transferLog.push(`❌ Failed to copy ${documentPath}: ${errorMessage}`);
+    throw error;
+  }
+};
+
+/**
+ * Copy assessment forms (nested under reviewers)
+ */
+const copyAssessmentForms = async (
+  submissionId: string,
+  batch: WriteBatch,
+  transferLog: string[]
+): Promise<void> => {
+  try {
+    const reviewersRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, 'reviewers');
+    const reviewersSnap = await getDocs(reviewersRef);
+    
+    if (reviewersSnap.empty) {
+      transferLog.push(`ℹ️ No reviewers found`);
+      return;
+    }
+    
+    let totalFormsCopied = 0;
+    
+    for (const reviewerSnap of reviewersSnap.docs) {
+      const assessmentFormsRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, 'reviewers', reviewerSnap.id, 'assessment_forms');
+      const assessmentFormsSnap = await getDocs(assessmentFormsRef);
+      
+      if (!assessmentFormsSnap.empty) {
+        for (const formSnap of assessmentFormsSnap.docs) {
+          const targetRef = doc(db, SUBMISSIONS_COLLECTION, submissionId, 'reviewers', reviewerSnap.id, 'assessment_forms', formSnap.id);
+          batch.set(targetRef, formSnap.data());
+          totalFormsCopied++;
+        }
+      }
+    }
+    
+    transferLog.push(`✅ Copied ${totalFormsCopied} assessment forms from ${reviewersSnap.docs.length} reviewers`);
+  } catch (error) {
+    console.error(`Error copying assessment forms:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    transferLog.push(`❌ Failed to copy assessment forms: ${errorMessage}`);
+    throw error;
+  }
+};
+
+/**
+ * Clean up accepted collection after successful transfer
+ */
+const cleanupAcceptedCollection = async (
+  submissionId: string,
+  transferLog: string[]
+): Promise<void> => {
+  try {
+    const batch = writeBatch(db);
+    
+    // Delete main document
+    const acceptedRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+    batch.delete(acceptedRef);
+    
+    // Delete all subcollections
+    const subcollections = [DOCUMENTS_COLLECTION, MESSAGES_COLLECTION, 'reviewers', 'decision'];
+    
+    for (const subcollectionName of subcollections) {
+      const subcollectionRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, subcollectionName);
+      const subcollectionSnap = await getDocs(subcollectionRef);
+      
+      for (const docSnap of subcollectionSnap.docs) {
+        batch.delete(docSnap.ref);
+      }
+    }
+    
+    // Delete assessment forms
+    const reviewersRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, 'reviewers');
+    const reviewersSnap = await getDocs(reviewersRef);
+    
+    for (const reviewerSnap of reviewersSnap.docs) {
+      const assessmentFormsRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, 'reviewers', reviewerSnap.id, 'assessment_forms');
+      const assessmentFormsSnap = await getDocs(assessmentFormsRef);
+      
+      for (const formSnap of assessmentFormsSnap.docs) {
+        batch.delete(formSnap.ref);
+      }
+    }
+    
+    await batch.commit();
+    transferLog.push(`✅ Cleaned up accepted collection`);
+  } catch (error) {
+    console.error(`Error cleaning up accepted collection:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    transferLog.push(`❌ Failed to clean up accepted collection: ${errorMessage}`);
+    // Don't throw error here as the transfer was successful
   }
 }; 

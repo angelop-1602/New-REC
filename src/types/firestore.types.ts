@@ -42,6 +42,8 @@ export interface PendingSubmissionDoc extends WithFirestoreTimestamps<PendingSub
 export interface AcceptedSubmissionDoc extends WithFirestoreTimestamps<AcceptedSubmission> {
   information: InformationType;
   // documents removed - stored only in subcollection
+  
+  // ENHANCED REVIEW PROGRESS WITH MISSING FIELDS
   reviewProgress?: {
     assignedReviewers: string[];   // Reviewer user IDs
     reviewForms?: Array<{          // Review form responses
@@ -55,6 +57,13 @@ export interface AcceptedSubmissionDoc extends WithFirestoreTimestamps<AcceptedS
       notes: string;
       decidedAt: Timestamp;
     };
+    // NEW FIELDS FOR COMPREHENSIVE TRACKING
+    totalReviewers: number;
+    completedReviews: number;
+    pendingReviews: number;
+    overdueReviews: number;
+    averageReviewTime?: number; // In hours
+    lastReviewActivity?: Timestamp;
   };
 }
 
@@ -172,9 +181,10 @@ export const COLLECTION_METADATA: Record<string, CollectionMetadata> = {
     indexes: ['status', 'createdAt', 'submitBy', 'priority'],
     securityRules: ['proponent_read_own', 'chair_full_access']
   },
+  // @deprecated - Now using unified 'submissions' collection
   submissions_accepted: {
     name: 'submissions_accepted', 
-    description: 'Submissions with SPUP code undergoing review process',
+    description: '[DEPRECATED] Use submissions collection with status field instead',
     indexes: ['status', 'assignedReviewers', 'reviewType', 'estimatedCompletionDate'],
     securityRules: ['proponent_read_own', 'reviewer_assigned_access', 'chair_full_access']
   },

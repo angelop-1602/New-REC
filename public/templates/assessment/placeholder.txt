@@ -1,0 +1,132 @@
+Common placeholders (all forms)
+{{spupCode}}
+{{protocolId}}
+{{protocolTitle}}
+{{principalInvestigator}}
+{{studySite}}
+{{sponsor}}
+{{institution}}
+{{submissionDate}}
+{{reviewerName}}
+{{typeOfReview}} // expedited | full
+{{reviewerEmail}} (if available)
+{{formType}} // protocol-review | informed-consent | exemption-checklist | iacuc-review
+{{status}} // draft | submitted | approved | rejected
+{{submittedAt}} // YYYY-MM-DD HH:mm (blank if draft)
+{{recommendation}} // Approved | Minor Modifications Required | Major Modifications Required | Disapproved (where applicable)
+{{justification}} // free text where applicable
+
+Protocol Review Assessment (Form 06B)
+Section 1: SOCIAL VALUE
+{{SocialValue}}, {{SocialValueComments}} // 1. SOCIAL VALUE - Does the study have scientific or social value?
+
+Section 2: SCIENTIFIC SOUNDNESS
+{{StudyObjectives}}, {{StudyObjectivesComments}} // 2.1 Study Objectives - Is/are the proposal's scientific question/s reasonable?
+{{LiteratureReview}}, {{LiteratureReviewComments}} // 2.2 Literature Review - Does the protocol adequately present informational background as to the result of previous studies prior to human experimentation?
+{{ResearchDesign}}, {{ResearchDesignComments}} // 2.3 Research and Sampling design - Is the study design, sampling method and techniques appropriate?
+{{DataCollection}}, {{DataCollectionComments}} // 2.4 Specimen/Data Collection, Processing, Storage - Are the procedures in collecting, processing, and storing data adequate?
+{{InclusionExclusion}}, {{InclusionExclusionComments}} // 2.5 Inclusion/Exclusion Criteria - Are the features of the target population appropriate?
+{{WithdrawalCriteria}}, {{WithdrawalCriteriaComments}} // 2.6 Withdrawal Criteria - Is there a provision for withdrawal from the research?
+{{Facilities}}, {{FacilitiesComments}} // 2.7 Facilities/Infrastructure at Study Site - Are the research facilities adequate?
+{{InvestigatorQualification}}, {{InvestigatorQualificationComments}} // 2.8 Investigator's Qualification, Competence, and Experience - Is/are the investigator/s adequately trained and do they have sufficient experience?
+
+Section 3: ETHICAL SOUNDNESS
+{{PrivacyConfidentiality}}, {{PrivacyConfidentialityComments}} // 3.1 Privacy and Confidentiality Safeguards - Does the research ensure to protect privacy and confidentiality of participant information?
+{{ConflictOfInterest}}, {{ConflictOfInterestComments}} // 3.2 Conflict of Interest - Does the research ensure mechanism of management of conflict arising from financial, familial, or proprietary considerations from PI, sponsor, or the study site?
+{{HumanParticipants}}, {{HumanParticipantsComments}} // 3.3 Involvement of Human Participants - Does the research need to be carried out with human participants?
+{{VulnerablePopulations}}, {{VulnerablePopulationsComments}} // 3.4 Involvement of Vulnerable Populations - Does the study involve individuals who belong to vulnerable group?
+{{VoluntaryRecruitment}}, {{VoluntaryRecruitmentComments}} // 3.5 Participant Selection-voluntary, non-coercive recruitment - Are appropriate mechanisms in place to protect above individual in vulnerable group?
+{{RiskBenefit}}, {{RiskBenefitComments}} // 3.6 Risk-Benefit Ratio - Does the protocol adequately address the risk/ benefit balance?
+{{InformedConsent}}, {{InformedConsentComments}} // 3.7 Informed Consent Process - Is the informed consent procedure/ assent form adequately and culturally appropriate?
+{{CommunityConsiderations}}, {{CommunityConsiderationsComments}} // 3.8 Community Considerations - Does the study offer substantial and relevant contribution to local communities and address possible stigma or draining of local capacity?
+{{CollaborativeTerms}}, {{CollaborativeTermsComments}} // 3.9 Collaborative Study Terms of Reference - Does the study present clear terms on IP rights, publication rights, information and responsibility sharing, transparency, and capacity building?
+
+
+Informed Consent Assessment (Form 06C)
+17 guide questions (Yes/No/Unable + comments):
+{{q1}}, {{q1Comments}} // 1. Does the Informed Consent document state that the procedures are primarily intended for research?
+{{q2}}, {{q2Comments}} // 2. Are procedures for obtaining Informed Consent appropriate?
+{{q3}}, {{q3Comments}} // 3. Does the Informed Consent document contain comprehensive and relevant information?
+{{q4}}, {{q4Comments}} // 4. Is the information provided in the protocol consistent with those in the consent form?
+{{q5}}, {{q5Comments}} // 5. Are study related risks mentioned in the consent form?
+{{q6}}, {{q6Comments}} // 6. Is the language in the Informed Consent document understandable?
+{{q7}}, {{q7Comments}} // 7. Is the Informed Consent translated into the local language/dialect?
+{{q8}}, {{q8Comments}} // 8. Is there adequate protection of vulnerable participants?
+{{q9}}, {{q9Comments}} // 9. Are the different types of consent forms (assent, legally acceptable representative) appropriate for the types of study participants?
+{{q10}}, {{q10Comments}} // 10. Are names and contact numbers from the research team and the SPUP REC in the informed consent?
+{{q11}}, {{q11Comments}} // 11. Does the ICF mention privacy & confidentiality protection?
+{{q12}}, {{q12Comments}} // 12. Is there any inducement for participation?
+{{q13}}, {{q13Comments}} // 13. Is there provision for medical / psychosocial support?
+{{q14}}, {{q14Comments}} // 14. Is there provision for treatment of study-related injuries?
+{{q15}}, {{q15Comments}} // 15. Is there provision for compensation?
+{{q16}}, {{q16Comments}} // 16. Does the ICF clearly describe the responsibilities of the participants?
+{{q17}}, {{q17Comments}} // 17. Does the ICF describe the benefits of participating in the research?
+{{recommendation}} // Approved | Minor Modifications Required | Major Modifications Required | Disapproved
+{{recommendationJustification}}
+
+Exemption Checklist (Form 04A)
+Protocol info already in common placeholders
+II. Protocol Assessment
+{{involvesHumanParticipants}}, {{involvesHumanParticipantsComments}} // 1. Does this research involve human participants?
+{{involvesNonIdentifiableTissue}}, {{involvesNonIdentifiableTissueComments}} // 2. Does this research involve use of non-identifiable human tissue/biological samples?
+{{involvesPublicData}}, {{involvesPublicDataComments}} // 3. Does this research involve use of non-identifiable publicly available data?
+{{involvesInteraction}}, {{involvesInteractionComments}} // 4. Does this research involve interaction with human participants?
+{{qualityAssurance}}, {{qualityAssuranceComments}} // 5.1. Institutional quality assurance
+{{publicServiceEvaluation}}, {{publicServiceEvaluationComments}} // 5.2. Evaluation of public service program
+{{publicHealthSurveillance}}, {{publicHealthSurveillanceComments}} // 5.3. Public health surveillance
+{{educationalEvaluation}}, {{educationalEvaluationComments}} // 5.4. Educational evaluation activities
+{{consumerAcceptability}}, {{consumerAcceptabilityComments}} // 5.5. Consumer acceptability test
+{{surveysQuestionnaire}}, {{surveysQuestionnaireComments}} // 6.1. Surveys and /or questionnaire
+{{interviewsFocusGroup}}, {{interviewsFocusGroupComments}} // 6.2. Interviews or focus group discussion
+{{publicObservations}}, {{publicObservationsComments}} // 6.3. Public observations
+{{existingData}}, {{existingDataComments}} // 6.4. Research which only uses existing data
+{{audioVideo}}, {{audioVideoComments}} // 6.5. Audio/video recordings
+{{dataAnonymization}} // 7. Will the collected data be anonymized or identifiable? // Anonymized | Identifiable | De-identified
+{{foreseeableRisk}}, {{foreseeableRiskComments}} // 8. Is this research likely to involve any foreseeable risk of harm or discomfort to participants; above the level experienced in everyday life? (NEGHRR 2017)
+
+II. Risk Assessment
+{{riskVulnerableGroups}}, {{riskVulnerableGroupsComments}} // 9.1. Any vulnerable group/s
+{{riskSensitiveTopics}}, {{riskSensitiveTopicsComments}} // 9.2. Sensitive topics that may make participants feel uncomfortable (i.e. sexual behavior, illegal activities, racial biases, etc.)
+{{riskUseOfDrugs}}, {{riskUseOfDrugsComments}} // 9.3. Use of Drugs
+{{riskInvasiveProcedure}}, {{riskInvasiveProcedureComments}} // 9.4. Invasive procedure (e.g. blood sampling)
+{{riskPhysicalDistress}}, {{riskPhysicalDistressComments}} // 9.5. Physical stress/distress, discomfort
+{{riskPsychologicalDistress}}, {{riskPsychologicalDistressComments}} // 9.6. Psychological/mental stress/distress
+{{riskDeception}}, {{riskDeceptionComments}} // 9.7. Deception of/or withholding information from subjects
+{{riskAccessData}}, {{riskAccessDataComments}} // 9.8. Access to data by individuals or organizations other than the investigators.
+{{riskConflictInterest}}, {{riskConflictInterestComments}} // 9.9. Conflict of interest issues
+{{riskOtherDilemmas}}, {{riskOtherDilemmasComments}} // 9.10. Or any other ethical dilemmas
+{{riskBloodSampling}}, {{riskBloodSamplingComments}} // 9.11. Is there any blood sampling involved in the study
+{{decision}} // Qualified for Exemption | Unqualified for Exemption
+{{decisionJustification}}
+
+IACUC Protocol Review Assessment (Form 06B IACUC)
+Protocol info + IACUC specifics:
+{{iacucCode}}
+
+
+Section 1: SCIENTIFIC VALUE
+{{ScientificValue}}, {{ScientificValueComments}} // 1. SCIENTIFIC VALUE - Does the study have scientific value?
+
+Section 2: SCIENTIFIC SOUNDNESS (2.1-2.6 only)
+{{StudyObjectives}}, {{StudyObjectivesComments}} // 2.1 Study Objectives - Is/are the proposal's scientific question/s reasonable?
+{{LiteratureReview}}, {{LiteratureReviewComments}} // 2.2 Literature Review - Does the protocol adequately present informational background as to the result of previous studies prior to human experimentation?
+{{ResearchDesign}}, {{ResearchDesignComments}} // 2.3 Research and Sampling design - Is the study design, sampling method and techniques appropriate?
+{{DataCollection}}, {{DataCollectionComments}} // 2.4 Specimen/Data Collection, Processing, Storage - Are the procedures in collecting, processing, and storing data adequate?
+{{FacilitiesInfrastructure}}, {{FacilitiesInfrastructureComments}} // 2.5 Facilities/Infrastructure at Study Site - Are the research facilities adequate?
+{{InvestigatorQualifications}}, {{InvestigatorQualificationsComments}} // 2.6 Investigator's Qualification, Competence, and Experience - Is/are the investigator/s adequately trained and do they have sufficient experience?
+
+Section 3: JUSTIFICATION ON THE USE OF ANIMALS (3.1-3.12)
+{{AnimalDescription}}, {{AnimalDescriptionComments}} // 3.1 Animal Description(?)
+{{AnimalCareProcedures}}, {{AnimalCareProceduresComments}} // 3.2 Animal Care Procedures(?)
+{{AnimalDiet}}, {{AnimalDietComments}} // 3.3 Animal Diet(?)
+{{AnimalManipulationMethods}}, {{AnimalManipulationMethodsComments}} // 3.4 Animal Manipulation Methods(?)
+{{DosingMethods}}, {{DosingMethodsComments}} // 3.5 Dosing Methods(?)
+{{ExpectedOutcomeOrEffects}}, {{ExpectedOutcomeOrEffectsComments}} // 3.6 Expected outcome or Effects(?)
+{{CollectionOfBiologicalAgent}}, {{CollectionOfBiologicalAgentComments}} // 3.7 Collection of Biological Agent(?)
+{{AnimalExaminationMethods}}, {{AnimalExaminationMethodsComments}} // 3.8 Animal Examination Methods(?)
+{{SurgicalProcedures}}, {{SurgicalProceduresComments}} // 3.9 Surgical Procedures(?)
+{{HumaneEndpoints}}, {{HumaneEndpointsComments}} // 3.10 Humane Endpoints
+{{PotentialHazards}}, {{PotentialHazardsComments}} // 3.11 Potential Hazards
+{{WasteDisposal}}, {{WasteDisposalComments}} // 3.12 Waste Disposal
+{{recommendation}} // Approved | Minor Modifications Required | Major Modifications Required | Disapproved
+{{justification}}

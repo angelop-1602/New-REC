@@ -1,27 +1,43 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import CustomBreadcrumbs from "@/components/ui/custom/breadcrum";
 import CustomBanner from "@/components/rec/proponent/application/components/protocol/banner";
-import ProtocolInformation from "@/components/rec/proponent/application/components/protocol/information";
-import ProtocolDocument from "@/components/rec/proponent/application/components/protocol/document";
+import ProtocolOverview from "@/components/rec/shared/protocol-overview";
 import ProtocolDecision from "@/components/rec/proponent/application/components/protocol/decision";
 import { ProtocolReports } from "@/components/rec/proponent/application/components/protocol/report";
 import Footer from "@/components/rec/proponent/application/footer";
-import { getSubmissionWithDocuments, getUnreadMessageCount } from "@/lib/firebase/firestore";
+import { getSubmissionWithDocuments, getUnreadMessageCount, SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
+import { reviewerService } from "@/lib/services/reviewerService";
 import { LoadingSpinner } from "@/components/ui/loading";
+import GlobalBackButton from "@/components/ui/global-back-button";
+import { useFirestoreDoc } from "@/hooks/use-firestore";
+import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
+import { documentGenerator } from "@/lib/services/documentGenerator";
+import { getCurrentChairName } from "@/lib/services/recSettingsService";
+import { extractTemplateData } from "@/lib/services/templateDataMapper";
 
 export default function Page() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const [submission, setSubmission] = useState<any>(null);
+  const [initialSubmission, setInitialSubmission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [hasReviewers, setHasReviewers] = useState(false);
 
   const submissionId = params?.id as string;
+
+  // ⚡ Use real-time protocol hook for auto-updates
+  const { protocol: realtimeProtocol, loading: protocolLoading, error: protocolError } = useRealtimeProtocol({
+    protocolId: submissionId,
+    collectionName: SUBMISSIONS_COLLECTION,
+    enabled: !!submissionId && !!user,
+  });
+
+  // Use realtime protocol if available, fallback to initial submission
+  const submission = realtimeProtocol || initialSubmission;
 
   useEffect(() => {
     const fetchSubmission = async () => {
@@ -47,22 +63,27 @@ export default function Page() {
           return;
         }
 
-        setSubmission(submissionData);
+        setInitialSubmission(submissionData);
+        
+        // Check if protocol has reviewers assigned (only for accepted/pending protocols)
+        if (submissionData.status === 'pending' || submissionData.status === 'accepted') {
+          try {
+            const reviewers = await reviewerService.getProtocolReviewers(submissionId);
+            setHasReviewers(reviewers.length > 0);
+          } catch (reviewerError) {
+            console.error("Error checking reviewers:", reviewerError);
+            setHasReviewers(false);
+          }
+        } else {
+          setHasReviewers(false);
+        }
         
         // Fetch unread message count
         if (submissionData && user) {
           try {
-            const collectionMap = {
-              pending: "submissions_pending",
-              accepted: "submissions_accepted", 
-              approved: "submissions_approved",
-              archived: "submissions_archived",
-            };
-            const collectionName = collectionMap[submissionData.status as keyof typeof collectionMap];
-            if (collectionName) {
-              const unreadCount = await getUnreadMessageCount(submissionData.id, collectionName, user.uid);
-              setUnreadMessageCount(unreadCount);
-            }
+            // Use single submissions collection
+            const unreadCount = await getUnreadMessageCount(submissionData.id, 'submissions', user.uid);
+            setUnreadMessageCount(unreadCount);
           } catch (msgError) {
             console.error("Error fetching unread message count:", msgError);
             // Don't show error for message count, just default to 0
@@ -125,34 +146,28 @@ export default function Page() {
   }
 
   // Conditional rendering logic
-  const shouldShowDecision = submission.decision && submission.decisionDate; // Only show if decision was actually made
+  const hasDecision = submission.decision || submission.status === "approved";
   const shouldShowReports = submission.status === "approved" || submission.status === "archived";
 
-  // Mock data for reports (will be replaced with real data later)
-  const progressReports = [
-    {
-      reportDate: new Date(),
-      formUrl: "/downloads/progress-report-1.pdf",
-      status: "pending" as const,
-    },
-  ];
-  const finalReport = {
-    submittedDate: new Date(),
-    formUrl: "/downloads/final-report.pdf", 
-    status: "pending" as const,
-  };
-  const archiving = {
-    date: new Date(),
-    notificationUrl: "/downloads/archiving-notification.pdf",
-  };
+  // Real data for reports (empty arrays for now - will be populated from database)
+  const progressReports: Array<{
+    reportDate: Date;
+    formUrl: string;
+    status: 'pending' | 'approved' | 'rejected';
+  }> = [];
+  
+  const finalReport = undefined; // No final report submitted yet
+  
+  const archiving = undefined; // Not archived yet
+  
   const isApproved = submission.status === "approved" || submission.status === "archived";
   const isCompleted = submission.status === "archived";
 
   return (
     <div className="min-h-screen pt-16 lg:pt-20 w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 pb-10">
-      {/* Breadcrumbs */}
+      {/* Global Back Button */}
       <div className="w-full max-w-7xl mb-4">
-        <CustomBreadcrumbs />
+        <GlobalBackButton />
       </div>
 
       {/* Protocol Banner */}
@@ -165,13 +180,17 @@ export default function Page() {
           tempCode={submission.tempProtocolCode}
           dateSubmitted={submission.createdAt ? new Date(submission.createdAt).toLocaleDateString() : undefined}
           unreadMessageCount={unreadMessageCount}
+          hasReviewers={hasReviewers}
         />
       </div>
 
-      {/* Decision Alert (only show if not pending) */}
-      {shouldShowDecision && (
+      {/* Decision Alert (only show if there's a decision or if approved) */}
+      {hasDecision && (
         <div className="w-full max-w-7xl mb-6">
-          <ProtocolDecision />
+          <ProtocolDecision 
+            protocolId={submission.id}
+            collection={isApproved ? 'approved' : 'accepted'}
+          />
         </div>
       )}
 
@@ -186,21 +205,48 @@ export default function Page() {
             onSubmitFinalReport={() => {}}
             isApproved={isApproved}
             isCompleted={isCompleted}
+            onDownloadProgressForm={async () => {
+              try {
+                const chairName = await getCurrentChairName();
+                const data = extractTemplateData(submission, chairName);
+                const blob = await documentGenerator.generateDocument('progress_report', data);
+                const fileName = `${submission.spupCode || submission.tempProtocolCode || 'SPUP_REC'}_Progress_Report_Form_${new Date().toISOString().split('T')[0]}.docx`;
+                documentGenerator.downloadDocument(blob, fileName);
+              } catch (e) {
+                console.error('Failed to download progress report form:', e);
+              }
+            }}
+            onDownloadFinalForm={async () => {
+              try {
+                const chairName = await getCurrentChairName();
+                const data = extractTemplateData(submission, chairName);
+                const blob = await documentGenerator.generateDocument('final_report', data);
+                const fileName = `${submission.spupCode || submission.tempProtocolCode || 'SPUP_REC'}_Final_Report_Form_${new Date().toISOString().split('T')[0]}.docx`;
+                documentGenerator.downloadDocument(blob, fileName);
+              } catch (e) {
+                console.error('Failed to download final report form:', e);
+              }
+            }}
           />
         </div>
       )}
 
       {/* Main Content Grid */}
       <div className="w-full max-w-7xl space-y-6">
-        {/* Information and Documents - Two Column Layout on Large Screens */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-6">
-            <ProtocolInformation information={submission.information} />
-          </div>
-          <div className="space-y-6">
-            <ProtocolDocument documents={submission.documents} />
-          </div>
-        </div>
+        {/* Protocol Overview - Unified Information and Documents */}
+        <ProtocolOverview 
+          information={submission.information}
+          documents={submission.documents}
+          userType="proponent"
+          showDocuments={true}
+          protocolId={submission.id}
+          submissionId={submissionId}
+          onDocumentEdit={(documentId: string) => {
+            // TODO: Implement document editing
+            console.log('Edit document:', documentId);
+            // Could navigate to a document edit page or open an edit dialog
+          }}
+        />
       </div>
     </div>
   );

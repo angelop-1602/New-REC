@@ -3,7 +3,7 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileCheck, Upload, Archive, Clock, CheckCircle, XCircle } from "lucide-react";
+import { FileCheck, Upload, Archive, Clock, CheckCircle, XCircle, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import React from "react";
 
@@ -32,6 +32,11 @@ interface ReportsSectionProps {
   onSubmitFinalReport: () => void;
   isApproved: boolean; // Whether the protocol is approved and can accept progress reports
   isCompleted: boolean; // Whether all research activities are completed
+  isChairpersonView?: boolean; // Whether this is being viewed by chairperson (view-only)
+  onGenerateArchiveNotification?: () => void; // Chairperson: generate archiving notification
+  onUploadArchiveNotification?: (file: File) => void; // Chairperson: upload archiving notification
+  onDownloadProgressForm?: () => void; // Download blank progress report form
+  onDownloadFinalForm?: () => void; // Download blank final report form
 }
 
 function getStatusBadge(status: 'pending' | 'approved' | 'rejected') {
@@ -53,6 +58,11 @@ export function ProtocolReports({
   onSubmitFinalReport,
   isApproved,
   isCompleted,
+  isChairpersonView = false,
+  onGenerateArchiveNotification,
+  onUploadArchiveNotification,
+  onDownloadProgressForm,
+  onDownloadFinalForm,
 }: ReportsSectionProps) {
   return (
     <Card className="w-full mx-auto shadow-sm border border-muted-foreground/10 bg-white">
@@ -81,16 +91,29 @@ export function ProtocolReports({
           <TabsContent value="progress" className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
               <h3 className="text-base sm:text-lg font-semibold">Progress Reports</h3>
-              {isApproved && !isCompleted && (
-                <Button 
-                  onClick={onSubmitProgressReport}
-                  className="w-full sm:w-auto"
-                  size="sm"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Submit Progress Report
-                </Button>
-              )}
+              <div className="flex gap-2 w-full sm:w-auto">
+                {onDownloadProgressForm && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={onDownloadProgressForm}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Download Form
+                  </Button>
+                )}
+                {isApproved && !isCompleted && !isChairpersonView && (
+                  <Button 
+                    onClick={onSubmitProgressReport}
+                    className="w-full sm:w-auto"
+                    size="sm"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Submit Progress Report
+                  </Button>
+                )}
+              </div>
             </div>
             
             {progressReports.length > 0 ? (
@@ -130,16 +153,29 @@ export function ProtocolReports({
           <TabsContent value="final" className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
               <h3 className="text-base sm:text-lg font-semibold">Final Report</h3>
-              {isApproved && !finalReport && (
-                <Button 
-                  onClick={onSubmitFinalReport}
-                  className="w-full sm:w-auto"
-                  size="sm"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Submit Final Report
-                </Button>
-              )}
+              <div className="flex gap-2 w-full sm:w-auto">
+                {onDownloadFinalForm && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={onDownloadFinalForm}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Download Form
+                  </Button>
+                )}
+                {isApproved && !finalReport && !isChairpersonView && (
+                  <Button 
+                    onClick={onSubmitFinalReport}
+                    className="w-full sm:w-auto"
+                    size="sm"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Submit Final Report
+                  </Button>
+                )}
+              </div>
             </div>
             
             {finalReport ? (
@@ -198,6 +234,31 @@ export function ProtocolReports({
                     ? 'Waiting for archive notification from REC Chair'
                     : 'Protocol will be archived after final report approval'}
                 </p>
+                {isChairpersonView && finalReport?.status === 'approved' && (
+                  <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
+                    <Button size="sm" onClick={onGenerateArchiveNotification} className="w-full sm:w-auto">
+                      <FileCheck className="w-4 h-4 mr-2" />
+                      Generate Archiving Notification
+                    </Button>
+                    <label className="w-full sm:w-auto">
+                      <input
+                        type="file"
+                        accept=".doc,.docx,.pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file && onUploadArchiveNotification) onUploadArchiveNotification(file);
+                          e.currentTarget.value = '';
+                        }}
+                      />
+                      <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                        <span>
+                          <Upload className="w-4 h-4 mr-2" /> Upload Notification
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { AddDocumentDialog } from "./components/add-document-dialog";
 import { useSubmissionContext } from "@/contexts/SubmissionContext";
+import { setFileReference, removeFileReference } from "@/utils/fileReferenceManager";
 
 const basicRequirements: DocumentRequirementType[] = [
   {
@@ -98,7 +99,7 @@ const supplementaryDocuments: DocumentRequirementType[] = [
 export default function SubmissionDocuments() {
   const [addDocumentOpen, setAddDocumentOpen] = useState(false);
   const [customRequirements, setCustomRequirements] = useState<DocumentRequirementType[]>([]);
-  const { addDocument } = useSubmissionContext();
+  const { addDocument, removeDocument, documents } = useSubmissionContext();
 
   const handleAddCustomDocument = (requirement: DocumentRequirementType) => {
     setCustomRequirements(prev => [...prev, requirement]);
@@ -109,9 +110,28 @@ export default function SubmissionDocuments() {
     if (!file) return;
 
     try {
+      // Check if there's already a document for this requirement
+      const existingDoc = documents.find(doc => 
+        doc.title === requirement.title
+      );
+      
+      // If there's an existing document, remove it and its file reference first
+      if (existingDoc) {
+        console.log(`🔄 Replacing document "${requirement.title}"`);
+        removeDocument(existingDoc.id);
+        removeFileReference(existingDoc.id);
+      }
+
+      // Create unique document ID
+      const documentId = `${requirement.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Store file reference in memory (separate from context)
+      setFileReference(documentId, file);
+      console.log(`📁 File reference stored in memory for "${requirement.title}"`);
+
       // Create DocumentsType object for the uploaded file
       const document: DocumentsType = {
-        id: `${requirement.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: documentId,
         title: requirement.title,
         description: requirement.description,
         uploadedAt: new Date().toISOString(),
@@ -132,12 +152,13 @@ export default function SubmissionDocuments() {
           downloadUrl: "",
           uploadedAt: new Date().toISOString(),
         }],
-        // Store file reference for upload (temporary)
+        // Store file reference for upload (will be restored from memory before submission)
         _fileRef: file as any,
       };
 
       // Add to submission context
       addDocument(document);
+      console.log(`✅ Document "${requirement.title}" added to context with file reference in memory`);
     } catch (error) {
       console.error("Error handling file upload:", error);
     }

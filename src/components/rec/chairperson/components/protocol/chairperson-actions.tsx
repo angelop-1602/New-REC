@@ -1,222 +1,476 @@
-"use client"
+"use client";
 
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle 
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  CheckCircle, 
-  XCircle, 
-  UserPlus, 
-  Send, 
-  FileText,
+import {
+  CheckCircle,
+  XCircle,
   Clock,
   AlertCircle,
-  Info,
-  Loader2
+  AlertTriangle,
+  Users,
+  FileText as FileTextIcon,
+  RefreshCw,
+  MoreVertical,
+  Download,
+  FileJson,
 } from "lucide-react";
-import { useSpupCodeGenerator } from "@/hooks/useSpupCodeGenerator";
-import { acceptSubmission, rejectSubmission, makeProtocolDecision } from "@/lib/firebase/firestore";
-import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { reviewerService } from "@/lib/services/reviewerService";
+import { ApproveDialog } from "./dialogs/ApproveDialog";
+import { RejectDialog } from "./dialogs/RejectDialog";
+import { DecisionDialog } from "./dialogs/DecisionDialog";
+import { AssignReviewersDialog } from "./dialogs/AssignReviewersDialog";
+import { ReassignReviewerDialog } from "./dialogs/ReassignReviewerDialog";
+import { ViewAssessmentDialog } from "./dialogs/ViewAssessmentDialog";
+import { getProtocolReviewerAssessments } from "@/lib/services/assessmentAggregationService";
+import { Separator } from "@/components/ui/separator";
+import { ProtocolReports } from "@/components/rec/proponent/application/components/protocol/report";
+import { getSubmissionDocuments, SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { enhancedDocumentManagementService } from "@/lib/services/enhancedDocumentManagementService";
+import { useRealtimeDocuments } from "@/hooks/useRealtimeDocuments";
+import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
+import { documentGenerator } from "@/lib/services/documentGenerator";
+import { getCurrentChairName } from "@/lib/services/recSettingsService";
+import { extractTemplateData } from "@/lib/services/templateDataMapper";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ChairpersonActionsProps {
   submission: any;
   onStatusUpdate: (status: string) => void;
-  onAssignReviewer: (reviewerId: string) => void;
 }
 
-export function ChairpersonActions({ 
-  submission, 
-  onStatusUpdate, 
-  onAssignReviewer 
+export function ChairpersonActions({
+  submission: initialSubmission,
+  onStatusUpdate,
 }: ChairpersonActionsProps) {
-  const { user } = useAuth();
-  const { generateSpupCode, generateInitials, loading: codeLoading } = useSpupCodeGenerator();
+  const router = useRouter();
   
+  // ⚡ Use real-time protocol hook for all protocol data updates
+  const { protocol: realtimeProtocol, loading: protocolLoading } = useRealtimeProtocol({
+    protocolId: initialSubmission.id,
+    collectionName: SUBMISSIONS_COLLECTION,
+    enabled: true,
+  });
+
+  // Use realtime protocol if available, fallback to initial submission
+  const submission = realtimeProtocol || initialSubmission;
+
+  // Dialog states
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignReviewersDialogOpen, setAssignReviewersDialogOpen] =
+    useState(false);
   const [decisionDialogOpen, setDecisionDialogOpen] = useState(false);
-  const [documentUploadOpen, setDocumentUploadOpen] = useState(false);
-  const [spupCode, setSpupCode] = useState("");
-  const [reviewType, setReviewType] = useState<'SR' | 'EX'>('SR');
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [selectedReviewer, setSelectedReviewer] = useState("");
-  const [decision, setDecision] = useState<'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved'>('approved');
-  const [decisionDetails, setDecisionDetails] = useState("");
-  const [timeline, setTimeline] = useState("");
-  const [uploadedDocuments, setUploadedDocuments] = useState<File[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState("");
-  const [piInitials, setPiInitials] = useState("");
+  const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
+  const [viewAssessmentDialogOpen, setViewAssessmentDialogOpen] = useState(false);
 
-  // Mock reviewers - replace with actual data from Firebase
-  const reviewers = [
-    { id: "reviewer1", name: "Dr. John Doe", expertise: "Medical Ethics" },
-    { id: "reviewer2", name: "Dr. Jane Smith", expertise: "Clinical Research" },
-    { id: "reviewer3", name: "Dr. Robert Johnson", expertise: "Social Sciences" },
-  ];
+  // Reviewer assignment states
+  const [assignedReviewers, setAssignedReviewers] = useState<any[]>([]);
+  const [selectedAssignmentToReassign, setSelectedAssignmentToReassign] = useState<any | null>(null);
+  const [selectedAssessmentToView, setSelectedAssessmentToView] = useState<any | null>(null);
+  const [selectedReviewerName, setSelectedReviewerName] = useState<string>("");
+  const [assessments, setAssessments] = useState<any | null>(null);
+  const [loadingAssessments, setLoadingAssessments] = useState(false);
 
-  // Generate SPUP code when dialog opens
+  // ⚡ Use real-time documents hook for auto-updates
+  const { documents: realtimeDocs, loading: loadingDocuments } = useRealtimeDocuments({
+    protocolId: submission.id,
+    collectionName: SUBMISSIONS_COLLECTION,
+    enabled: submission.status === "pending",
+  });
+
+  // Document validation states
+  const documents = realtimeDocs;
+  const [allDocumentsAccepted, setAllDocumentsAccepted] = useState(false);
+  const [documentRequests, setDocumentRequests] = useState<any[]>([]);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  // Load assigned reviewers when component mounts
   useEffect(() => {
-    const generateCode = async () => {
-      if (approveDialogOpen && submission) {
-        const pi = submission.information?.general_information?.principal_investigator;
-        const code = await generateSpupCode(pi, reviewType);
-        setGeneratedCode(code);
-        setSpupCode(code);
-        
-        // Extract initials from PI name
-        if (pi?.name) {
-          const nameParts = pi.name.trim().split(' ');
-          if (nameParts.length >= 2) {
-            const firstName = nameParts[0];
-            const lastName = nameParts[nameParts.length - 1];
-            setPiInitials(generateInitials(firstName, lastName));
-          }
+    const loadAssignedReviewers = async () => {
+      try {
+        const existingAssignments = await reviewerService.getProtocolReviewers(
+          submission.id
+        );
+        setAssignedReviewers(existingAssignments);
+      } catch (error) {
+        console.error("Error loading assigned reviewers:", error);
+      }
+    };
+
+    loadAssignedReviewers();
+  }, [submission.id]);
+
+  // ⚡ Real-time check if all documents are accepted
+  useEffect(() => {
+    const checkDocuments = async () => {
+      if (submission.status === "pending" && !loadingDocuments) {
+        try {
+          // Load document requests
+          const requests = await enhancedDocumentManagementService.getProtocolDocumentRequests(submission.id);
+          setDocumentRequests(requests);
+          
+          // Count pending requests (documents with status "requested")
+          const pending = requests.filter((r: any) => r.currentStatus === 'requested' || r.status === 'requested').length;
+          setPendingRequestsCount(pending);
+          
+          // Check if all documents are accepted AND no pending requests
+          const hasDocuments = documents.length > 0;
+          const allAccepted = documents.every((doc: any) => {
+            const docStatus = doc.currentStatus || doc.status;
+            console.log(`📄 Document "${doc.title}": status="${doc.status}", currentStatus="${doc.currentStatus}", final="${docStatus}"`);
+            return docStatus === "accepted";
+          });
+          const noPendingRequests = pending === 0;
+          
+          const shouldEnableButton = hasDocuments && allAccepted && noPendingRequests;
+          setAllDocumentsAccepted(shouldEnableButton);
+          
+          console.log(`✅ Documents check:`, {
+            totalDocs: documents.length,
+            acceptedDocs: documents.filter((d: any) => {
+              const docStatus = d.currentStatus || d.status;
+              return docStatus === "accepted";
+            }).length,
+            pendingRequests: pending,
+            hasDocuments,
+            allAccepted,
+            noPendingRequests,
+            buttonEnabled: shouldEnableButton
+          });
+        } catch (error) {
+          console.error("Error checking documents:", error);
+          setAllDocumentsAccepted(false);
         }
       }
     };
-    
-    generateCode();
-  }, [approveDialogOpen, submission, reviewType, generateSpupCode, generateInitials]);
 
-  const handleApprove = async () => {
-    if (!spupCode) {
-      toast.error("Please enter or confirm the SPUP Code");
-      return;
-    }
-    
-    if (!user) {
-      toast.error("You must be logged in to approve submissions");
-      return;
-    }
-    
-    setIsProcessing(true);
+    checkDocuments();
+  }, [submission.id, submission.status, documents, loadingDocuments]);
+
+  // Function to reload assigned reviewers
+  const handleAssignmentsUpdate = async () => {
     try {
-      await acceptSubmission(submission.id, spupCode, user.uid);
-      toast.success(`Protocol accepted with SPUP Code: ${spupCode}`);
-      onStatusUpdate("accepted");
-      setApproveDialogOpen(false);
+      const existingAssignments = await reviewerService.getProtocolReviewers(
+        submission.id
+      );
+      setAssignedReviewers(existingAssignments);
     } catch (error) {
-      console.error("Error accepting submission:", error);
-      toast.error("Failed to accept submission. Please try again.");
-    } finally {
-      setIsProcessing(false);
+      console.error("Error loading assigned reviewers:", error);
     }
   };
 
-  const handleReject = async () => {
-    if (!rejectionReason) {
-      toast.error("Please provide a reason for rejection");
-      return;
+  // Load aggregated reviewer assessments whenever there are assigned reviewers
+  useEffect(() => {
+    const loadAggregated = async () => {
+      try {
+        setLoadingAssessments(true);
+        const result = await getProtocolReviewerAssessments(submission.id);
+        setAssessments(result);
+      } catch (e) {
+        console.error("Failed to load reviewer assessments:", e);
+      } finally {
+        setLoadingAssessments(false);
+      }
+    };
+
+    // Load assessments whenever there are assigned reviewers (even if not all completed)
+    if (assignedReviewers.length > 0) {
+      loadAggregated();
     }
-    
-    if (!user) {
-      toast.error("You must be logged in to reject submissions");
-      return;
-    }
-    
-    setIsProcessing(true);
+  }, [assignedReviewers, submission.id]);
+
+  // Manual refresh function for assessments
+  const handleRefreshAssessments = async () => {
     try {
-      await rejectSubmission(submission.id, rejectionReason, user.uid);
-      toast.success("Protocol rejected");
-      onStatusUpdate("rejected");
-      setRejectDialogOpen(false);
-    } catch (error) {
-      console.error("Error rejecting submission:", error);
-      toast.error("Failed to reject submission. Please try again.");
+      setLoadingAssessments(true);
+      const result = await getProtocolReviewerAssessments(submission.id);
+      setAssessments(result);
+    } catch (e) {
+      console.error("Failed to refresh assessments:", e);
     } finally {
-      setIsProcessing(false);
+      setLoadingAssessments(false);
     }
   };
 
-  const handleAssignReviewer = () => {
-    if (!selectedReviewer) {
-      alert("Please select a reviewer");
-      return;
-    }
-    onAssignReviewer(selectedReviewer);
-    setAssignDialogOpen(false);
+  // Helpers for row actions
+  const handleViewAssessment = (assessment: any, reviewerName: string) => {
+    setSelectedAssessmentToView(assessment);
+    setSelectedReviewerName(reviewerName);
+    setViewAssessmentDialogOpen(true);
   };
 
-  const handleMakeDecision = async () => {
-    if (!decisionDetails.trim()) {
-      toast.error("Please provide decision details");
-      return;
-    }
+  const handleDownloadJson = (assessment: any, submissionId: string, reviewerId: string) => {
+    // Structure JSON to follow question sequence (same as ViewAssessmentDialog)
+    const formData = assessment.formData ?? {};
+    const formType = assessment.formType;
+    
+    // Define sections in order (same structure as ViewAssessmentDialog)
+    const getOrderedStructure = () => {
+      const protocolInfo: any = {
+        'iacucCode': formData.iacucCode,
+        'protocolCode': formData.protocolCode,
+        'submissionDate': formData.submissionDate,
+        'title': formData.title,
+        'studySite': formData.studySite,
+        'principalInvestigator': formData.principalInvestigator,
+        'sponsor': formData.sponsor,
+        'typeOfReview': formData.typeOfReview,
+      };
 
-    if ((decision === 'approved_minor_revisions' || decision === 'major_revisions_deferred') && !timeline.trim()) {
-      toast.error("Please specify timeline for revisions");
-      return;
-    }
+      switch (formType) {
+        case 'protocol-review':
+          return {
+            'Protocol Information': protocolInfo,
+            '1. SOCIAL VALUE': {
+              'socialValue': formData.socialValue,
+              'socialValueComments': formData.socialValueComments,
+            },
+            '2. SCIENTIFIC SOUNDNESS': {
+              'studyObjectives': formData.studyObjectives,
+              'studyObjectivesComments': formData.studyObjectivesComments,
+              'literatureReview': formData.literatureReview,
+              'literatureReviewComments': formData.literatureReviewComments,
+              'researchDesign': formData.researchDesign,
+              'researchDesignComments': formData.researchDesignComments,
+              'dataCollection': formData.dataCollection,
+              'dataCollectionComments': formData.dataCollectionComments,
+              'inclusionExclusion': formData.inclusionExclusion,
+              'inclusionExclusionComments': formData.inclusionExclusionComments,
+              'withdrawalCriteria': formData.withdrawalCriteria,
+              'withdrawalCriteriaComments': formData.withdrawalCriteriaComments,
+              'facilities': formData.facilities,
+              'facilitiesComments': formData.facilitiesComments,
+              'investigatorQualification': formData.investigatorQualification,
+              'investigatorQualificationComments': formData.investigatorQualificationComments,
+            },
+            '3. ETHICAL SOUNDNESS': {
+              'privacyConfidentiality': formData.privacyConfidentiality,
+              'privacyConfidentialityComments': formData.privacyConfidentialityComments,
+              'conflictOfInterest': formData.conflictOfInterest,
+              'conflictOfInterestComments': formData.conflictOfInterestComments,
+              'humanParticipants': formData.humanParticipants,
+              'humanParticipantsComments': formData.humanParticipantsComments,
+              'vulnerablePopulations': formData.vulnerablePopulations,
+              'vulnerablePopulationsComments': formData.vulnerablePopulationsComments,
+              'voluntaryRecruitment': formData.voluntaryRecruitment,
+              'voluntaryRecruitmentComments': formData.voluntaryRecruitmentComments,
+              'riskBenefit': formData.riskBenefit,
+              'riskBenefitComments': formData.riskBenefitComments,
+              'informedConsent': formData.informedConsent,
+              'informedConsentComments': formData.informedConsentComments,
+              'communityConsiderations': formData.communityConsiderations,
+              'communityConsiderationsComments': formData.communityConsiderationsComments,
+              'collaborativeTerms': formData.collaborativeTerms,
+              'collaborativeTermsComments': formData.collaborativeTermsComments,
+            },
+            'III. RECOMMENDATION': {
+              'recommendation': formData.recommendation,
+              'justification': formData.justification,
+            },
+          };
+        case 'informed-consent':
+          const questions: any = {};
+          for (let i = 1; i <= 17; i++) {
+            questions[`q${i}`] = formData[`q${i}`];
+            questions[`q${i}Comments`] = formData[`q${i}Comments`];
+          }
+          return {
+            'Protocol Information': { ...protocolInfo, iacucCode: undefined, typeOfReview: undefined },
+            'II. Guide Questions for Assessment': questions,
+            'Recommendation': {
+              'recommendation': formData.recommendation,
+              'recommendationJustification': formData.recommendationJustification,
+            },
+          };
+        case 'exemption-checklist':
+          return {
+            'Protocol Information': { ...protocolInfo, iacucCode: undefined, typeOfReview: undefined },
+            'II. Protocol Assessment': {
+              'involvesHumanParticipants': formData.involvesHumanParticipants,
+              'involvesHumanParticipantsComments': formData.involvesHumanParticipantsComments,
+              'involvesNonIdentifiableTissue': formData.involvesNonIdentifiableTissue,
+              'involvesNonIdentifiableTissueComments': formData.involvesNonIdentifiableTissueComments,
+              'involvesPublicData': formData.involvesPublicData,
+              'involvesPublicDataComments': formData.involvesPublicDataComments,
+              'involvesInteraction': formData.involvesInteraction,
+              'involvesInteractionComments': formData.involvesInteractionComments,
+              'qualityAssurance': formData.qualityAssurance,
+              'qualityAssuranceComments': formData.qualityAssuranceComments,
+              'publicServiceEvaluation': formData.publicServiceEvaluation,
+              'publicServiceEvaluationComments': formData.publicServiceEvaluationComments,
+              'publicHealthSurveillance': formData.publicHealthSurveillance,
+              'publicHealthSurveillanceComments': formData.publicHealthSurveillanceComments,
+              'educationalEvaluation': formData.educationalEvaluation,
+              'educationalEvaluationComments': formData.educationalEvaluationComments,
+              'consumerAcceptability': formData.consumerAcceptability,
+              'consumerAcceptabilityComments': formData.consumerAcceptabilityComments,
+              'surveysQuestionnaire': formData.surveysQuestionnaire,
+              'surveysQuestionnaireComments': formData.surveysQuestionnaireComments,
+              'interviewsFocusGroup': formData.interviewsFocusGroup,
+              'interviewsFocusGroupComments': formData.interviewsFocusGroupComments,
+              'publicObservations': formData.publicObservations,
+              'publicObservationsComments': formData.publicObservationsComments,
+              'existingData': formData.existingData,
+              'existingDataComments': formData.existingDataComments,
+              'audioVideo': formData.audioVideo,
+              'audioVideoComments': formData.audioVideoComments,
+              'dataAnonymization': formData.dataAnonymization,
+              'foreseeableRisk': formData.foreseeableRisk,
+              'foreseeableRiskComments': formData.foreseeableRiskComments,
+            },
+            'II. Risk Assessment': {
+              'riskVulnerableGroups': formData.riskVulnerableGroups,
+              'riskVulnerableGroupsComments': formData.riskVulnerableGroupsComments,
+              'riskSensitiveTopics': formData.riskSensitiveTopics,
+              'riskSensitiveTopicsComments': formData.riskSensitiveTopicsComments,
+              'riskUseOfDrugs': formData.riskUseOfDrugs,
+              'riskUseOfDrugsComments': formData.riskUseOfDrugsComments,
+              'riskInvasiveProcedure': formData.riskInvasiveProcedure,
+              'riskInvasiveProcedureComments': formData.riskInvasiveProcedureComments,
+              'riskPhysicalDistress': formData.riskPhysicalDistress,
+              'riskPhysicalDistressComments': formData.riskPhysicalDistressComments,
+              'riskPsychologicalDistress': formData.riskPsychologicalDistress,
+              'riskPsychologicalDistressComments': formData.riskPsychologicalDistressComments,
+              'riskDeception': formData.riskDeception,
+              'riskDeceptionComments': formData.riskDeceptionComments,
+              'riskAccessData': formData.riskAccessData,
+              'riskAccessDataComments': formData.riskAccessDataComments,
+              'riskConflictInterest': formData.riskConflictInterest,
+              'riskConflictInterestComments': formData.riskConflictInterestComments,
+              'riskOtherDilemmas': formData.riskOtherDilemmas,
+              'riskOtherDilemmasComments': formData.riskOtherDilemmasComments,
+              'riskBloodSampling': formData.riskBloodSampling,
+              'riskBloodSamplingComments': formData.riskBloodSamplingComments,
+            },
+            'Decision': {
+              'decision': formData.decision,
+              'decisionJustification': formData.decisionJustification,
+            },
+          };
+        case 'iacuc-review':
+          return {
+            'Protocol Information': protocolInfo,
+            '1. SCIENTIFIC VALUE': {
+              'scientificValue': formData.scientificValue,
+              'scientificValueComments': formData.scientificValueComments,
+            },
+            '2. SCIENTIFIC SOUNDNESS': {
+              'studyObjectives': formData.studyObjectives,
+              'studyObjectivesComments': formData.studyObjectivesComments,
+              'literatureReview': formData.literatureReview,
+              'literatureReviewComments': formData.literatureReviewComments,
+              'researchDesign': formData.researchDesign,
+              'researchDesignComments': formData.researchDesignComments,
+              'dataCollection': formData.dataCollection,
+              'dataCollectionComments': formData.dataCollectionComments,
+              'facilitiesInfrastructure': formData.facilitiesInfrastructure,
+              'facilitiesInfrastructureComments': formData.facilitiesInfrastructureComments,
+              'investigatorQualifications': formData.investigatorQualifications,
+              'investigatorQualificationsComments': formData.investigatorQualificationsComments,
+            },
+            '3. JUSTIFICATION ON THE USE OF ANIMALS': {
+              'animalSource': formData.animalSource,
+              'animalSourceComments': formData.animalSourceComments,
+              'housingCare': formData.housingCare,
+              'housingCareComments': formData.housingCareComments,
+              'restraintProcedures': formData.restraintProcedures,
+              'restraintProceduresComments': formData.restraintProceduresComments,
+              'anesthesiaAnalgesia': formData.anesthesiaAnalgesia,
+              'anesthesiaAnalgesiaComments': formData.anesthesiaAnalgesiaComments,
+              'postProcedureMonitoring': formData.postProcedureMonitoring,
+              'postProcedureMonitoringComments': formData.postProcedureMonitoringComments,
+              'euthanasia': formData.euthanasia,
+              'euthanasiaComments': formData.euthanasiaComments,
+              'biologicalAgentCollection': formData.biologicalAgentCollection,
+              'biologicalAgentCollectionComments': formData.biologicalAgentCollectionComments,
+              'examinationMethods': formData.examinationMethods,
+              'examinationMethodsComments': formData.examinationMethodsComments,
+              'surgicalProcedures': formData.surgicalProcedures,
+              'surgicalProceduresComments': formData.surgicalProceduresComments,
+              'humaneEndpoints': formData.humaneEndpoints,
+              'humaneEndpointsComments': formData.humaneEndpointsComments,
+              'potentialHazards': formData.potentialHazards,
+              'potentialHazardsComments': formData.potentialHazardsComments,
+              'wasteDisposal': formData.wasteDisposal,
+              'wasteDisposalComments': formData.wasteDisposalComments,
+            },
+            'Recommendation': {
+              'recommendation': formData.recommendation,
+              'justification': formData.justification,
+            },
+          };
+        default:
+          return formData;
+      }
+    };
 
-    if (!user) {
-      toast.error("You must be logged in to make decisions");
-      return;
-    }
+    const orderedData = getOrderedStructure();
+    const dataStr = URL.createObjectURL(
+      new Blob([JSON.stringify(orderedData, null, 2)], {
+        type: "application/json",
+      })
+    );
+    const link = document.createElement("a");
+    link.href = dataStr;
+    link.download = `assessment_${submissionId}_${reviewerId}_${assessment.formType}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(dataStr);
+  };
 
-    setIsProcessing(true);
+  const handleExportTemplate = async (assessment: any) => {
     try {
-      await makeProtocolDecision(
-        submission.id,
-        decision,
-        decisionDetails,
-        user.uid,
-        timeline || undefined,
-        uploadedDocuments
+      const { exportAssessmentFormToTemplate, downloadAssessmentForm } = await import(
+        '@/lib/services/assessmentFormExportService'
       );
       
-      const decisionText = {
-        'approved': 'Approved',
-        'approved_minor_revisions': 'Approved with Minor Revisions',
-        'major_revisions_deferred': 'Major Revisions Required',
-        'disapproved': 'Disapproved'
-      }[decision];
-      
-      toast.success(`Protocol ${decisionText}`);
-      onStatusUpdate(decision === 'approved' ? 'approved' : 'accepted');
-      setDecisionDialogOpen(false);
-    } catch (error) {
-      console.error("Error making decision:", error);
-      toast.error("Failed to make decision. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+      // Ensure submittedAt is available to the template (it's stored on the assessment doc, not formData)
+      const formDataForExport = {
+        ...(assessment.formData || {}),
+        submittedAt: assessment.submittedAt || assessment.formData?.submittedAt || null,
+        status: assessment.status || assessment.formData?.status || 'draft',
+      };
 
-  const getDecisionDescription = (decisionType: string) => {
-    switch (decisionType) {
-      case 'approved':
-        return 'The research may proceed as submitted.';
-      case 'approved_minor_revisions':
-        return 'Approval granted with minor revisions required before proceeding.';
-      case 'major_revisions_deferred':
-        return 'Significant ethical issues require major revision and resubmission.';
-      case 'disapproved':
-        return 'Protocol cannot be approved due to unresolvable ethical concerns.';
-      default:
-        return '';
+      // Export form to Word template
+      const blob = await exportAssessmentFormToTemplate(
+        formDataForExport,
+        assessment.formType,
+        submission,
+        { name: assessment.reviewerName, reviewerName: assessment.reviewerName }
+      );
+      
+      // Generate filename
+      const formTypeName = assessment.formType.replace(/-/g, '_');
+      const fileName = `${submission.spupCode || submission.id}_${formTypeName}_${assessment.reviewerId || 'reviewer'}.docx`;
+      
+      // Download the file
+      downloadAssessmentForm(blob, fileName);
+    } catch (error) {
+      console.error('Error exporting assessment form to template:', error);
+      alert('Failed to export assessment form. Please try again.');
     }
   };
 
@@ -234,6 +488,9 @@ export function ChairpersonActions({
     }
   };
 
+  const isApproved =
+    submission.status === "approved" || submission.status === "archived";
+
   return (
     <>
       <Card>
@@ -242,16 +499,18 @@ export function ChairpersonActions({
             <span>Administrative Actions</span>
             <div className="flex items-center gap-2">
               {getStatusIcon(submission.status)}
-              <Badge 
+              <Badge
                 variant={
-                  submission.status === "approved" || submission.status === "accepted" 
-                    ? "default" 
-                    : submission.status === "rejected" 
-                    ? "destructive" 
+                  submission.status === "approved" ||
+                  submission.status === "accepted"
+                    ? "default"
+                    : submission.status === "rejected"
+                    ? "destructive"
                     : "secondary"
                 }
               >
-                {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
+                {submission.status.charAt(0).toUpperCase() +
+                  submission.status.slice(1)}
               </Badge>
             </div>
           </CardTitle>
@@ -260,449 +519,437 @@ export function ChairpersonActions({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Quick Info */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Application ID</p>
-              <p className="font-medium">{submission.applicationID || submission.id}</p>
+          {/* Document Status Summary for Pending Protocols */}
+          {submission.status === "pending" && (documents.length > 0 || documentRequests.length > 0) && (
+            <div className="bg-muted/50 p-4 rounded-lg border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileTextIcon className="h-5 w-5 text-muted-foreground" />
+                  <span className="font-medium">Document Review Status</span>
+                </div>
+                <div className="flex gap-2">
+                  {documents.length > 0 && (
+                    <Badge variant={documents.every((d: any) => {
+                      const status = (d as any).currentStatus || d.status;
+                      return status === "accepted";
+                    }) ? "default" : "secondary"}>
+                      {documents.filter((d: any) => {
+                        const status = (d as any).currentStatus || d.status;
+                        return status === "accepted";
+                      }).length} / {documents.length} Accepted
+                    </Badge>
+                  )}
+                  {pendingRequestsCount > 0 && (
+                    <Badge variant="destructive" className="bg-blue-100 text-blue-800 border-blue-200">
+                      {pendingRequestsCount} Requested Document{pendingRequestsCount > 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              {!allDocumentsAccepted && (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">
+                    {pendingRequestsCount > 0 && `${pendingRequestsCount} requested document(s) must be uploaded by proponent. `}
+                    {documents.some((d: any) => {
+                      const status = (d as any).currentStatus || d.status;
+                      return status !== "accepted" && status !== "requested";
+                    }) && `${documents.filter((d: any) => {
+                      const status = (d as any).currentStatus || d.status;
+                      return status !== "accepted" && status !== "requested";
+                    }).length} document(s) need review. `}
+                  </p>
+                  <p className="text-sm font-medium text-primary">
+                    Review and accept all documents before accepting the protocol.
+                  </p>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">SPUP Code</p>
-              <p className="font-medium">{submission.spupCode || submission.tempProtocolCode || "Not Assigned"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Reviewer</p>
-              <p className="font-medium">{submission.reviewerId ? "Assigned" : "Not Assigned"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Review Status</p>
-              <p className="font-medium">{submission.reviewStatus || "Pending"}</p>
-            </div>
-          </div>
+          )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2">
-            {submission.status === "pending" && (
-              <>
-                <Button 
-                  onClick={() => setApproveDialogOpen(true)}
-                  className="bg-green-600 hover:bg-green-700"
+          {/* Quick Info */}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
+              {submission.status === "pending" && (
+                <>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button
+                            onClick={() => setApproveDialogOpen(true)}
+                            className="bg-green-600 hover:bg-green-700"
+                            disabled={!allDocumentsAccepted || loadingDocuments}
+                          >
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Accept Protocol
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!allDocumentsAccepted && !loadingDocuments && (
+                        <TooltipContent>
+                          <div className="space-y-1">
+                            <p className="font-semibold">Cannot Accept Protocol</p>
+                            <p className="text-sm">
+                              {documents.length === 0 
+                                ? "No documents have been submitted yet" 
+                                : pendingRequestsCount > 0
+                                ? `${pendingRequestsCount} requested document(s) pending fulfillment by proponent`
+                                : `${documents.filter((d: any) => {
+                                    const status = (d as any).currentStatus || d.status;
+                                    return status !== "accepted";
+                                  }).length} document(s) need to be reviewed and accepted`}
+                            </p>
+                          </div>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <Button
+                    variant="destructive"
+                    onClick={() => setRejectDialogOpen(true)}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Reject Protocol
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {(submission.status === "accepted") && assignedReviewers.length === 0 && (
+                <Button
+                  onClick={() => setAssignReviewersDialogOpen(true)}
+                  className="bg-primary hover:bg-primary/80"
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  Assign Reviewers
+                </Button>
+              )}
+
+              {submission.status === "accepted" && !submission.decision && (
+                <Button
+                  onClick={() => setDecisionDialogOpen(true)}
+                  variant="outline"
                 >
                   <CheckCircle className="mr-2 h-4 w-4" />
-                  Accept Protocol
+                  Make Decision
                 </Button>
-                <Button 
-                  variant="destructive"
-                  onClick={() => setRejectDialogOpen(true)}
+              )}
+              {submission.status === "accepted" && !submission.decision && (
+                <Button
+                  onClick={() =>
+                    router.push(
+                      `/rec/chairperson/protocol/${submission.id}/generate-documents`
+                    )
+                  }
+                  variant="outline"
                 >
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Reject Protocol
+                  <FileTextIcon className="mr-2 h-4 w-4" />
+                  Generate Documents
                 </Button>
-              </>
-            )}
-            
-            {(submission.status === "accepted" || submission.status === "pending") && (
-              <Button 
-                variant="outline"
-                onClick={() => setAssignDialogOpen(true)}
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                {submission.reviewerId ? "Reassign Reviewer" : "Assign Reviewer"}
-              </Button>
-            )}
-
-            {submission.status === "accepted" && !submission.decision && (
-              <Button 
-                onClick={() => setDecisionDialogOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Make Decision
-              </Button>
-            )}
-
-            {submission.status === "accepted" && (
-              <Button 
-                variant="outline"
-                onClick={() => setDocumentUploadOpen(true)}
-              >
-                <FileText className="mr-2 h-4 w-4" />
-                Upload Documents
-              </Button>
-            )}
-
-            <Button 
-              variant="outline"
-              onClick={() => {/* TODO: Send notification */}}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Send Notification
-            </Button>
+              )}
+            </div>
           </div>
+
+          {/* Reviewer Assessments Summary */}
+          {assignedReviewers.length > 0 && (
+            <div className="bg-muted/50 p-4 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium">
+                  Reviewer Assessments Summary
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefreshAssessments}
+                  disabled={loadingAssessments}
+                  className="text-xs"
+                >
+                  {loadingAssessments ? (
+                    <>
+                      <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-1 h-3 w-3" />
+                      Refresh Status
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <Badge
+                  variant={assessments?.allCompleted ? "default" : "secondary"}
+                >
+                  {assessments ? `${assessments.totalCompleted}/${assessments.totalAssigned}` : `${assignedReviewers.filter(r => r.reviewStatus === "completed").length}/${assignedReviewers.length}`} Completed
+                </Badge>
+                {assessments && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const { formatAssessmentsToDocxData } = await import(
+                        "@/lib/services/assessmentAggregationService"
+                      );
+                      const { buildReviewerSummaryDocx } = await import(
+                        "@/lib/services/wordExportService"
+                      );
+                      const docxData = formatAssessmentsToDocxData(
+                        submission,
+                        assessments
+                      );
+                      const blob = await buildReviewerSummaryDocx(docxData);
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `Consolidated_Reviews_${submission.id}.docx`;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Export All Reviews
+                  </Button>
+                )}
+              </div>
+              <Separator className="my-2" />
+              <div className="space-y-2">
+                {assignedReviewers.map((assignment) => {
+                  const deadline =
+                    assignment.deadline?.toDate?.() ||
+                    new Date(assignment.deadline);
+                  const now = new Date();
+
+                  // Find corresponding assessment data if available
+                  const assessment = assessments?.assessments.find(
+                    (a: any) => a.reviewerId === assignment.reviewerId
+                  );
+
+                  // Determine the actual status to display
+                  const getAssessmentStatus = () => {
+                    if (assessment?.status) {
+                      switch (assessment.status) {
+                        case 'draft':
+                          return { label: 'In Progress', variant: 'secondary' as const, isCompleted: false };
+                        case 'submitted':
+                          return { label: 'Submitted', variant: 'default' as const, isCompleted: true };
+                        case 'approved':
+                          return { label: 'Approved', variant: 'default' as const, isCompleted: true };
+                        case 'returned':
+                          return { label: 'Returned', variant: 'destructive' as const, isCompleted: false };
+                        case 'completed':
+                          return { label: 'Completed', variant: 'default' as const, isCompleted: true };
+                        default:
+                          return { label: 'In Progress', variant: 'secondary' as const, isCompleted: false };
+                      }
+                    }
+                    // Fallback to assignment status if no assessment
+                    if (assignment.reviewStatus === 'completed') {
+                      return { label: 'Completed', variant: 'default' as const, isCompleted: true };
+                    }
+                    return { label: 'Not Started', variant: 'outline' as const, isCompleted: false };
+                  };
+
+                  const statusInfo = getAssessmentStatus();
+
+                  // Check if overdue - should be overdue if deadline passed and not completed
+                  const isOverdue = deadline < now && !statusInfo.isCompleted;
+                  const daysOverdue = isOverdue
+                    ? Math.ceil(
+                        (now.getTime() - deadline.getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      )
+                    : 0;
+                  const daysRemaining = !isOverdue
+                    ? Math.ceil(
+                        (deadline.getTime() - now.getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      )
+                    : 0;
+
+                  return (
+                    <div
+                      key={assignment.id}
+                      className="flex items-center justify-between p-3 bg-background rounded border text-sm"
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {assignment.reviewerName}
+                        </div>
+                        <div className="text-muted-foreground text-xs">
+                          {assessment ? `Form: ${assessment.formType} • ` : ''}
+                          Status: {statusInfo.label} • 
+                          Due: {deadline.toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            statusInfo.isCompleted
+                              ? "default"
+                              : isOverdue
+                              ? "destructive"
+                              : daysRemaining <= 3
+                              ? "secondary"
+                              : statusInfo.variant
+                          }
+                          className="text-xs"
+                        >
+                          {statusInfo.isCompleted
+                            ? statusInfo.label
+                            : isOverdue
+                            ? `${daysOverdue} days overdue`
+                            : daysRemaining <= 3
+                            ? `${daysRemaining} days left`
+                            : `${daysRemaining} days left`}
+                        </Badge>
+                        {/* Actions menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                              <span className="sr-only">Open actions</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem
+                              disabled={!assessment || !assessment.formData}
+                              onClick={() => assessment && handleViewAssessment(assessment, assignment.reviewerName)}
+                            >
+                              <FileTextIcon className="mr-2 h-4 w-4" />
+                              View Assessment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={!assessment || !assessment.formData}
+                              onClick={() => assessment && handleDownloadJson(assessment, submission.id, assignment.reviewerId)}
+                            >
+                              <FileJson className="mr-2 h-4 w-4" />
+                              Download JSON
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={!assessment || !assessment.formData}
+                              onClick={() => assessment && handleExportTemplate(assessment)}
+                            >
+                              <Download className="mr-2 h-4 w-4" />
+                              Export to Template
+                            </DropdownMenuItem>
+                            {isOverdue && !statusInfo.isCompleted && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedAssignmentToReassign(assignment);
+                                    setReassignDialogOpen(true);
+                                  }}
+                                >
+                                  <Users className="mr-2 h-4 w-4" />
+                                  Reassign Reviewer
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Research Reports - Integrated for approved protocols */}
+          {isApproved && (
+            <ProtocolReports
+              progressReports={[]}
+              onSubmitProgressReport={() => {}} // Empty function for chairperson view-only
+              onSubmitFinalReport={() => {}} // Empty function for chairperson view-only
+              isApproved={true}
+              isCompleted={submission.status === "archived"}
+              isChairpersonView={true} // New prop to indicate chairperson view
+              onGenerateArchiveNotification={async () => {
+                try {
+                  const chairName = await getCurrentChairName();
+                  const data = extractTemplateData(submission, chairName);
+                  const blob = await documentGenerator.generateDocument('archiving_notification', data);
+                  const fileName = `${submission.spupCode || submission.tempProtocolCode || 'SPUP_REC'}_Archiving_Notification_${new Date().toISOString().split('T')[0]}.docx`;
+                  documentGenerator.downloadDocument(blob, fileName);
+                } catch (e) {
+                  console.error('Failed to generate archiving notification:', e);
+                }
+              }}
+              onUploadArchiveNotification={async (file: File) => {
+                try {
+                  const fileName = `${submission.spupCode || submission.tempProtocolCode || 'SPUP_REC'}_Archiving_Notification_${file.name}`;
+                  const { storagePath, downloadUrl } = await documentGenerator.uploadToStorage(file, fileName, submission.id);
+                  console.log('Uploaded archive notification to:', storagePath, downloadUrl);
+                } catch (e) {
+                  console.error('Failed to upload archiving notification:', e);
+                }
+              }}
+            />
+          )}
+
+          {/* Action Buttons */}
         </CardContent>
       </Card>
 
-      {/* Approve Dialog */}
-      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Accept Protocol</DialogTitle>
-            <DialogDescription>
-              Review and confirm the SPUP Code for this protocol
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Protocol Info */}
-            <div className="bg-muted/50 p-3 rounded-lg space-y-2">
-              <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="space-y-1 text-sm">
-                  <p><strong>Application ID:</strong> {submission.applicationID || submission.id}</p>
-                  <p><strong>Protocol Title:</strong> {submission.information?.general_information?.protocol_title || submission.title}</p>
-                  <p><strong>Principal Investigator:</strong> {submission.information?.general_information?.principal_investigator?.name || "N/A"}</p>
-                  <p><strong>Temporary Code:</strong> {submission.tempProtocolCode}</p>
-                </div>
-              </div>
-            </div>
+      {/* Dialog Components */}
+      <ApproveDialog
+        open={approveDialogOpen}
+        onOpenChange={setApproveDialogOpen}
+        submission={submission}
+        onStatusUpdate={onStatusUpdate}
+      />
 
-            {/* Review Type Selection */}
-            <div>
-              <Label>Review Type</Label>
-              <RadioGroup value={reviewType} onValueChange={(value) => setReviewType(value as 'SR' | 'EX')}>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="SR" id="sr" />
-                  <Label htmlFor="sr" className="font-normal cursor-pointer">
-                    Standard Review (SR)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="EX" id="ex" />
-                  <Label htmlFor="ex" className="font-normal cursor-pointer">
-                    Expedited Review (EX)
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
+      <RejectDialog
+        open={rejectDialogOpen}
+        onOpenChange={setRejectDialogOpen}
+        submission={submission}
+        onStatusUpdate={onStatusUpdate}
+      />
 
-            {/* Generated SPUP Code */}
-            <div>
-              <Label htmlFor="spup-code">Generated SPUP Code</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="spup-code"
-                  value={spupCode}
-                  onChange={(e) => setSpupCode(e.target.value)}
-                  className="font-mono"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    const pi = submission.information?.general_information?.principal_investigator;
-                    const code = await generateSpupCode(pi, reviewType);
-                    setSpupCode(code);
-                  }}
-                  disabled={codeLoading}
-                >
-                  {codeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Regenerate"}
-                </Button>
-              </div>
-              <div className="text-sm text-muted-foreground mt-2 space-y-1">
-                <p><strong>Format:</strong> SPUP_YYYY_00000_SR/EX_XX</p>
-                <p><strong>Example:</strong> SPUP_2025_00437_SR_KS</p>
-                <p className="text-xs">You can manually edit the code if needed</p>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setApproveDialogOpen(false);
-                setSpupCode("");
-                setReviewType('SR');
-              }}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleApprove} 
-              className="bg-green-600 hover:bg-green-700"
-              disabled={isProcessing || !spupCode}
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Accept Protocol
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DecisionDialog
+        open={decisionDialogOpen}
+        onOpenChange={setDecisionDialogOpen}
+        submission={submission}
+        onStatusUpdate={onStatusUpdate}
+      />
 
-      {/* Reject Dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Protocol</DialogTitle>
-            <DialogDescription>
-              Provide a reason for rejecting this protocol
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="rejection-reason">Rejection Reason</Label>
-              <Textarea
-                id="rejection-reason"
-                placeholder="Enter the reason for rejection..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                rows={4}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setRejectDialogOpen(false);
-                setRejectionReason("");
-              }}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={handleReject}
-              disabled={isProcessing || !rejectionReason}
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Reject Protocol
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Assign Reviewer Dialog */}
-      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Reviewer</DialogTitle>
-            <DialogDescription>
-              Select a reviewer for this protocol
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="reviewer">Select Reviewer</Label>
-              <Select value={selectedReviewer} onValueChange={setSelectedReviewer}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a reviewer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {reviewers.map((reviewer) => (
-                    <SelectItem key={reviewer.id} value={reviewer.id}>
-                      <div>
-                        <p className="font-medium">{reviewer.name}</p>
-                        <p className="text-sm text-muted-foreground">{reviewer.expertise}</p>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAssignReviewer}>
-              Assign Reviewer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Decision Dialog */}
-      <Dialog open={decisionDialogOpen} onOpenChange={setDecisionDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Make Protocol Decision</DialogTitle>
-            <DialogDescription>
-              Make a final decision on this protocol after review
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Decision Type Selection */}
-            <div>
-              <Label>Decision Type</Label>
-              <RadioGroup value={decision} onValueChange={(value) => setDecision(value as any)}>
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
-                    <RadioGroupItem value="approved" id="approved" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="approved" className="font-medium cursor-pointer text-green-700">
-                        Approved
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {getDecisionDescription('approved')}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
-                    <RadioGroupItem value="approved_minor_revisions" id="minor" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="minor" className="font-medium cursor-pointer text-blue-700">
-                        Approved with Minor Revisions
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {getDecisionDescription('approved_minor_revisions')}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
-                    <RadioGroupItem value="major_revisions_deferred" id="major" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="major" className="font-medium cursor-pointer text-yellow-700">
-                        Major Revisions / Deferred
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {getDecisionDescription('major_revisions_deferred')}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3 p-3 border rounded-lg">
-                    <RadioGroupItem value="disapproved" id="disapproved" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="disapproved" className="font-medium cursor-pointer text-red-700">
-                        Disapproved
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {getDecisionDescription('disapproved')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {/* Decision Details */}
-            <div>
-              <Label htmlFor="decision-details">Decision Details</Label>
-              <Textarea
-                id="decision-details"
-                placeholder="Provide detailed explanation of the decision..."
-                value={decisionDetails}
-                onChange={(e) => setDecisionDetails(e.target.value)}
-                rows={4}
-              />
-            </div>
-
-            {/* Timeline (for revisions) */}
-            {(decision === 'approved_minor_revisions' || decision === 'major_revisions_deferred') && (
-              <div>
-                <Label htmlFor="timeline">Timeline for Compliance</Label>
-                <Input
-                  id="timeline"
-                  placeholder="e.g., 30 days, 2 weeks, etc."
-                  value={timeline}
-                  onChange={(e) => setTimeline(e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* Document Upload */}
-            <div>
-              <Label>Upload Decision Documents (Optional)</Label>
-              <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    setUploadedDocuments(files);
-                  }}
-                  className="hidden"
-                  id="document-upload"
-                />
-                <Label htmlFor="document-upload" className="cursor-pointer">
-                  <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm">Click to upload decision documents</p>
-                  <p className="text-xs text-muted-foreground">PDF, DOC, DOCX files accepted</p>
-                </Label>
-              </div>
-              {uploadedDocuments.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm font-medium">Selected files:</p>
-                  <ul className="text-sm text-muted-foreground">
-                    {uploadedDocuments.map((file, index) => (
-                      <li key={index}>• {file.name}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setDecisionDialogOpen(false);
-                setDecisionDetails("");
-                setTimeline("");
-                setUploadedDocuments([]);
-              }}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleMakeDecision}
-              disabled={isProcessing || !decisionDetails.trim()}
-              className={
-                decision === 'approved' ? 'bg-green-600 hover:bg-green-700' :
-                decision === 'approved_minor_revisions' ? 'bg-blue-600 hover:bg-blue-700' :
-                decision === 'major_revisions_deferred' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                'bg-red-600 hover:bg-red-700'
-              }
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Confirm Decision
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AssignReviewersDialog
+        open={assignReviewersDialogOpen}
+        onOpenChange={setAssignReviewersDialogOpen}
+        submission={submission}
+        onAssignmentsUpdate={handleAssignmentsUpdate}
+      />
+      
+      {/* Reassign Reviewer Dialog */}
+      {selectedAssignmentToReassign && (
+        <ReassignReviewerDialog
+          open={reassignDialogOpen}
+          onOpenChange={setReassignDialogOpen}
+          assignment={selectedAssignmentToReassign}
+          protocolId={submission.id}
+          onReassignmentSuccess={() => {
+            // Reload assigned reviewers and assessments
+            handleAssignmentsUpdate();
+          }}
+        />
+      )}
+      
+      {/* View Assessment Dialog */}
+      {selectedAssessmentToView && (
+        <ViewAssessmentDialog
+          open={viewAssessmentDialogOpen}
+          onOpenChange={setViewAssessmentDialogOpen}
+          assessment={selectedAssessmentToView}
+          reviewerName={selectedReviewerName}
+          protocolId={submission.id}
+          onStatusUpdate={handleRefreshAssessments}
+        />
+      )}
     </>
   );
 }

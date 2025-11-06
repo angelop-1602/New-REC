@@ -6,11 +6,12 @@
 
 // Status of the uploaded document (for review/admin workflow)
 export type DocumentStatus =
-  | "pending"     // Submitted, waiting for review
-  | "approved"    // Approved by admin/reviewer
-  | "rejected"    // Rejected (e.g. incorrect, incomplete, invalid)
-  | "revised"     // Needs revision; revision uploaded
-  | "request";    // Additional info or document requested
+  | "pending"     // Default state - Submitted, waiting for review
+  | "accepted"    // Document is good and ready for review
+  | "rejected"    // Document is rejected and needs to be resubmitted
+  | "requested"   // Document has been requested by chairperson
+  | "rework"      // Document needs adjustment/improvement (chairperson feedback)
+  | "revise";     // Document has been revised and resubmitted
 
 // Document grouping/category
 export type DocumentCategory =
@@ -47,8 +48,11 @@ export interface DocumentsType {
   storagePath: string;        // Firebase Storage path (where the file lives in storage)
   downloadUrl: string;        // Public download URL for the file
   category: DocumentCategory; // "basic", "supplementary", or "custom"
-  status?: DocumentStatus;    // Current review status (pending/approved/rejected/etc.)
+  status?: DocumentStatus;    // Current review status (pending/accepted/revise/rejected)
   remarks?: string;           // Reviewer/admin notes (optional)
+  chairpersonComment?: string; // Chairperson's review comment
+  reviewedBy?: string;        // ID of the chairperson who reviewed the document
+  reviewedAt?: string;        // ISO timestamp when document was reviewed
   version: number;            // Increment if user uploads a new version of same doc
   custom?: boolean;           // True if user-added document (not from initial requirements)
   uploadedBy?: string;        // User ID of uploader (for audit trail)
@@ -74,3 +78,85 @@ export interface DocumentsType {
 export type DocumentFileMap = {
   [requirementId: string]: DocumentsType | DocumentsType[];
 };
+
+// ===========================
+// DOCUMENT REQUESTS
+// ===========================
+
+// Represents a request for additional documents from the chairperson
+export interface DocumentRequest {
+  id: string;                 // Unique request ID
+  title: string;              // Title of the requested document
+  description: string;        // Description of what's needed
+  requestedBy: string;        // ID of chairperson who made the request
+  requestedAt: string;        // ISO timestamp when request was made
+  protocolId: string;         // Protocol this request belongs to
+  urgent?: boolean;           // Whether this is an urgent request
+  dueDate?: string;           // Optional due date for the document
+  status: 'pending' | 'fulfilled' | 'cancelled'; // Status of the request
+  fulfilledAt?: string;       // When the request was fulfilled
+  fulfilledDocumentId?: string; // ID of the document that fulfilled this request
+}
+
+// ===========================
+// ENHANCED DOCUMENT MANAGEMENT
+// ===========================
+
+// Document version history for tracking changes
+export interface DocumentVersion {
+  version: number;            // Version number (1, 2, 3, etc.)
+  uploadedAt: string;         // When this version was uploaded
+  uploadedBy: string;         // Who uploaded this version
+  status: DocumentStatus;     // Status of this specific version
+  chairpersonComment?: string; // Chairperson feedback for this version
+  reviewedBy?: string;        // Who reviewed this version
+  reviewedAt?: string;        // When this version was reviewed
+  fileType: string;           // MIME type
+  storagePath: string;        // Firebase Storage path
+  downloadUrl: string;        // Download URL
+  originalFileName?: string;  // Original filename
+  fileSize?: number;          // File size in bytes
+}
+
+// Enhanced document interface with versioning and comprehensive status tracking
+export interface EnhancedDocument {
+  id: string;                 // Unique document ID
+  title: string;              // Document title
+  description: string;        // Document description
+  category: DocumentCategory; // Document category
+  currentVersion: number;      // Current version number
+  currentStatus: DocumentStatus; // Current status
+  uploadedBy: string;         // Who uploaded the document
+  createdAt: string;           // When document was first created
+  updatedAt: string;          // When document was last updated
+  versions: DocumentVersion[]; // Version history
+  requestId?: string;         // Associated document request ID (if applicable)
+  isRequired: boolean;         // Whether this is a required document
+  multiple?: boolean;          // Whether multiple files are allowed
+  templateUrl?: string;       // Template URL if available
+  requestMetadata?: {          // Metadata for requested documents
+    urgent: boolean;
+    dueDate: string | null;
+    requestedAt: string;
+    requestedBy: string;
+  };
+}
+
+// Document request with enhanced tracking
+export interface EnhancedDocumentRequest {
+  id: string;                 // Unique request ID
+  title: string;              // Title of the requested document
+  description: string;        // Description of what's needed
+  requestedBy: string;        // ID of chairperson who made the request
+  requestedAt: string;        // ISO timestamp when request was made
+  protocolId: string;         // Protocol this request belongs to
+  urgent?: boolean;           // Whether this is an urgent request
+  dueDate?: string;           // Optional due date for the document
+  status: 'pending' | 'fulfilled' | 'cancelled'; // Status of the request
+  fulfilledAt?: string;       // When the request was fulfilled
+  fulfilledDocumentId?: string; // ID of the document that fulfilled this request
+  category: DocumentCategory; // Category of the requested document
+  isRequired: boolean;        // Whether this is a required document
+  multiple?: boolean;         // Whether multiple files are allowed
+  templateUrl?: string;       // Template URL if available
+}

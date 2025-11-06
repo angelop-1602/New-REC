@@ -8,7 +8,7 @@ const db = getFirestore(firebaseApp);
 interface SpupCodeConfig {
   year: number;
   sequenceNumber: number;
-  type: 'SR' | 'EX'; // SR = Standard Review, EX = Expedited
+  type: 'SR' | 'PR' | 'HO' | 'BS' | 'EX'; // Research Type codes
   initials: string;
 }
 
@@ -21,34 +21,27 @@ export const useSpupCodeGenerator = () => {
     try {
       setLoading(true);
       
-      // Query accepted submissions collection for current year
-      const acceptedRef = collection(db, 'submissions_accepted');
-      const approvedRef = collection(db, 'submissions_approved');
-      const archivedRef = collection(db, 'submissions_archived');
+      // Query single submissions collection for current year
+      const submissionsRef = collection(db, 'submissions');
       
       let totalCount = 0;
       
-      // Count from all collections that have SPUP codes
-      const collections = [acceptedRef, approvedRef, archivedRef];
+      const snapshot = await getDocs(submissionsRef);
       
-      for (const collectionRef of collections) {
-        const snapshot = await getDocs(collectionRef);
-        
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          // Check if it has a SPUP code and matches the year
-          if (data.spupCode && data.spupCode.includes(`SPUP_${year}_`)) {
-            // Extract sequence number from SPUP code
-            const parts = data.spupCode.split('_');
-            if (parts.length >= 3) {
-              const seqNum = parseInt(parts[2], 10);
-              if (!isNaN(seqNum) && seqNum > totalCount) {
-                totalCount = seqNum;
-              }
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        // Check if it has a SPUP code and matches the year
+        if (data.spupCode && data.spupCode.includes(`SPUP_${year}_`)) {
+          // Extract sequence number from SPUP code
+          const parts = data.spupCode.split('_');
+          if (parts.length >= 3) {
+            const seqNum = parseInt(parts[2], 10);
+            if (!isNaN(seqNum) && seqNum > totalCount) {
+              totalCount = seqNum;
             }
           }
-        });
-      }
+        }
+      });
       
       setLastSequenceNumber(totalCount);
       return totalCount;
@@ -70,7 +63,7 @@ export const useSpupCodeGenerator = () => {
   // Generate the full SPUP code
   const generateSpupCode = async (
     principalInvestigator: { name: string } | null,
-    reviewType: 'SR' | 'EX' = 'SR'
+    researchType: 'SR' | 'PR' | 'HO' | 'BS' | 'EX' = 'SR'
   ): Promise<string> => {
     const currentYear = new Date().getFullYear();
     const count = await getAcceptedProtocolsCount(currentYear);
@@ -90,14 +83,14 @@ export const useSpupCodeGenerator = () => {
       }
     }
     
-    // Format: SPUP_YYYY_0000_SR/EX_XX
+    // Format: SPUP_YYYY_0000_SR/PR/HO/BS/EX_XX
     const sequenceStr = String(nextNumber).padStart(5, '0');
-    return `SPUP_${currentYear}_${sequenceStr}_${reviewType}_${initials}`;
+    return `SPUP_${currentYear}_${sequenceStr}_${researchType}_${initials}`;
   };
 
   // Validate SPUP code format
   const validateSpupCode = (code: string): boolean => {
-    const pattern = /^SPUP_\d{4}_\d{5}_(SR|EX)_[A-Z]{2}$/;
+    const pattern = /^SPUP_\d{4}_\d{5}_(SR|PR|HO|BS|EX)_[A-Z]{2}$/;
     return pattern.test(code);
   };
 
@@ -109,7 +102,7 @@ export const useSpupCodeGenerator = () => {
     return {
       year: parseInt(parts[1], 10),
       sequenceNumber: parseInt(parts[2], 10),
-      type: parts[3] as 'SR' | 'EX',
+      type: parts[3] as 'SR' | 'PR' | 'HO' | 'BS' | 'EX',
       initials: parts[4]
     };
   };

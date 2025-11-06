@@ -23,7 +23,6 @@ export interface FormState {
   // Submission state
   isSubmitting: boolean;
   submissionError: string | null;
-  showConfirmDialog: boolean;
   
   // Draft state (internal only)
   isDraftSaved: boolean;
@@ -52,7 +51,6 @@ export type FormAction =
   | { type: "SET_FIELD_ERROR"; payload: { fieldPath: string; errors: string[] } }
   | { type: "SET_SUBMITTING"; payload: boolean }
   | { type: "SET_SUBMISSION_ERROR"; payload: string | null }
-  | { type: "SHOW_CONFIRM_DIALOG"; payload: boolean }
   | { type: "RESET_FORM" }
   | { type: "LOAD_FROM_LOCALSTORAGE"; payload: Partial<FormState> }
   | { type: "MARK_DRAFT_SAVED" };
@@ -104,13 +102,12 @@ const initialState: FormState = {
   formData: defaultFormData,
   documents: [],
   currentStep: 0,
-  totalSteps: 2,
+  totalSteps: 3,
   errors: {},
   touchedFields: new Set(),
   isFormValid: false,
   isSubmitting: false,
   submissionError: null,
-  showConfirmDialog: false,
   isDraftSaved: false,
   lastSaved: null,
 };
@@ -370,13 +367,6 @@ export const formReducer = (state: FormState, action: FormAction): FormState => 
       };
     }
 
-    case "SHOW_CONFIRM_DIALOG": {
-      return {
-        ...state,
-        showConfirmDialog: action.payload,
-      };
-    }
-
     case "RESET_FORM": {
       return {
         ...initialState,
@@ -441,7 +431,8 @@ export const useSubmissionFormReducer = () => {
         "general_information.principal_investigator.email",
         "general_information.principal_investigator.address",
         "general_information.principal_investigator.contact_number",
-        "general_information.principal_investigator.position_institution",
+        "general_information.principal_investigator.position",
+        "general_information.principal_investigator.institution",
         "general_information.adviser.name",
         "nature_and_type_of_study.level",
         "nature_and_type_of_study.type",
@@ -452,7 +443,6 @@ export const useSubmissionFormReducer = () => {
         "participants.number_of_participants",
         "participants.type_and_description",
         "technical_review_completed",
-        "submitted_to_other_committee",
         "brief_description_of_study",
       ],
       1: [], // Documents step - validate based on documents array
@@ -466,10 +456,40 @@ export const useSubmissionFormReducer = () => {
     }
     
     // Check if any required fields for current step have errors
-    return !currentStepFields.some(field => 
+    // Also check for conditional fields based on current form data
+    const conditionalFields = [];
+    
+    // Add conditional fields based on current selections
+    if (getFieldValue("study_site.location") === "outside") {
+      conditionalFields.push("study_site.outside_specify");
+    }
+    
+    if (getFieldValue("source_of_funding.selected") === "pharmaceutical_company") {
+      conditionalFields.push("source_of_funding.pharmaceutical_company_specify");
+    }
+    
+    if (getFieldValue("source_of_funding.selected") === "others") {
+      conditionalFields.push("source_of_funding.others_specify");
+    }
+    
+    // Check all required fields (including conditional ones)
+    const allRequiredFields = [...currentStepFields, ...conditionalFields];
+    
+    // Check if any required fields have errors
+    const hasErrors = allRequiredFields.some(field => 
       state.errors[field] && state.errors[field].length > 0
     );
-  }, [state.currentStep, state.errors, state.documents.length]);
+    
+    // Also check if all required fields have values
+    const hasAllValues = allRequiredFields.every(field => {
+      const value = getFieldValue(field);
+      // Handle string boolean values (e.g., "false", "true")
+      const isValid = value !== null && value !== undefined && value !== "" && value !== false && value !== "false";
+      return isValid;
+    });
+    
+    return !hasErrors && hasAllValues;
+  }, [state.currentStep, state.errors, state.documents.length, state.formData, getFieldValue]);
 
   // Navigation helpers
   const canProceed = state.currentStep < state.totalSteps - 1 && isCurrentStepValid();

@@ -1,68 +1,63 @@
 "use client";
 import DashboardCard from "@/components/rec/proponent/application/components/dashboard-card";
-import CustomBreadcrumbs from "@/components/ui/custom/breadcrum";
 import Footer from "@/components/rec/proponent/application/footer";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { getAllUserSubmissions } from "@/lib/firebase/firestore";
-import { useEffect, useState } from "react";
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+import { useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/loading";
+import { firestoreTimestampToLocaleDateString } from "@/lib/utils/firestoreUtils";
+import { MockDataInjector } from "@/components/rec/proponent/application/components/mock-data-injector";
+import { getDisplayStatus } from "@/lib/utils/statusUtils";
   
 export default function Page() {
   const router = useRouter();
   const { user } = useAuth();
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch user submissions
-  useEffect(() => {
-    const fetchSubmissions = async () => {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        const userSubmissions = await getAllUserSubmissions(user.uid);
-        setSubmissions(userSubmissions);
-        setError(null);
-      } catch (err) {
-        console.error("Error fetching submissions:", err);
-        setError("Failed to load submissions");
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Realtime query for single submissions collection
+  const submissionsQuery = useFirestoreQuery("submissions", {
+    where: [{ field: "submitBy", operator: "==", value: user?.uid || "" }]
+  });
 
-    fetchSubmissions();
-  }, [user]);
+  // Process submissions with collection information from status field
+  const submissions = useMemo(() => {
+    if (!user || !submissionsQuery.data) return [];
 
-  // Format status for display
-  const getStatusDisplay = (status: string, collection: string) => {
-    if (collection === "pending") return "Under Review";
-    if (collection === "accepted") return "Accepted";
-    if (collection === "approved") return "Approved";
-    if (collection === "archived") return "Archived";
-    return status;
+    const allSubmissions = submissionsQuery.data.map((submission: any) => ({
+      ...submission,
+      collection: submission.status || "pending", // Use status field as collection for backward compatibility
+    }));
+
+    // Sort by creation date (newest first)
+    return allSubmissions.sort((a: any, b: any) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [user, submissionsQuery.data]);
+
+  // Determine loading and error states
+  const loading = submissionsQuery.loading;
+  const error = submissionsQuery.error;
+
+  // Format status for display - use centralized utility
+  const formatStatusForDisplay = (submission: any) => {
+    return getDisplayStatus(
+      submission.status,
+      submission.decision || submission.decisionDetails?.decision,
+      false // hasReviewers - can be enhanced if needed
+    );
   };
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch {
-      return "Invalid Date";
-    }
+    return firestoreTimestampToLocaleDateString(dateString);
   };
 
   return (
-    <div className="lg:pt-20 w-full flex flex-col items-center sm:px-6 lg:px-8">
-      {/* Breadcrumbs */}
-      <div className="w-full max-w-7xl mb-4">
-        <CustomBreadcrumbs />
-      </div>
-
+    <div className="lg:pt-30 w-full flex flex-col items-center sm:px-6 lg:px-8">
       {/* Page Header */}
       <div className="flex justify-between items-center w-full max-w-7xl">
       <div className="w-full max-w-7xl mb-6 lg:mb-8">
@@ -73,7 +68,8 @@ export default function Page() {
           Manage your protocol submissions and track their progress
         </p>
       </div>
-      <div className="flex justify-end">
+      <div className="flex gap-2 justify-end">
+        <MockDataInjector />
         <Button onClick={() => router.push("/rec/proponent/application")}>
           <PlusIcon className="w-4 h-4" />
           Submit New Protocol
@@ -108,7 +104,7 @@ export default function Page() {
               <DashboardCard
                 key={submission.id}
                 title={submission.information?.general_information?.protocol_title || "Untitled Protocol"}
-                status={getStatusDisplay(submission.status, submission.collection)}
+                status={formatStatusForDisplay(submission)}
                 date={formatDate(submission.createdAt)}
                 buttonText="View Details"
                 onViewDetails={() => router.push(`/rec/proponent/dashboard/protocol/${submission.id}`)}

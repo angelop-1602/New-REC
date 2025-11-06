@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { CustomBadge } from "@/components/ui/custom/badge";
 import { Calendar, ScanBarcode, Key, Dot, MessageCircle } from "lucide-react";
 import {
@@ -11,7 +11,9 @@ import { useState } from "react";
 import ProtocolMessage from "./message";
 
 const BADGE_CONFIG = {
+  "Pending": "bg-orange-100 text-orange-800 border border-orange-300",
   "Pending Upload": "bg-gray-100 text-gray-800 border border-gray-300",
+  "Accepted": "bg-teal-100 text-teal-800 border border-teal-300",
   Submitted: "bg-blue-100 text-blue-800 border border-blue-300",
   "Under Review": "bg-indigo-100 text-indigo-800 border border-indigo-300",
   "Needs Revision": "bg-amber-100 text-amber-800 border border-amber-300",
@@ -23,12 +25,23 @@ const BADGE_CONFIG = {
   Exempted: "bg-emerald-100 text-emerald-800 border border-emerald-300",
 } as const;
 
-// Status display mapping
+// Status display mapping - will be dynamically determined based on reviewers
 const STATUS_DISPLAY = {
-  pending: "Under Review",
-  accepted: "Under Review", 
+  pending: "Pending", // Default to Pending, will change to Under Review when reviewers assigned
+  accepted: "Accepted", // Default to Accepted, will change to Under Review when reviewers assigned
   approved: "Approved",
   archived: "Archived",
+  draft: "Pending", // Draft maps to Pending
+  submitted: "Submitted",
+  under_review: "Under Review",
+  rejected: "Rejected",
+  returned: "Needs Revision", // Returned reviews need revision
+  completed: "Approved", // Completed maps to Approved
+  // Decision-based statuses
+  disapproved: "Disapproved",
+  approved_minor_revisions: "Minor Revision Required",
+  major_revisions_deferred: "Major Revision Required",
+  deferred: "Deferred",
 } as const;
 
 interface CustomBannerProps {
@@ -39,25 +52,54 @@ interface CustomBannerProps {
   tempCode?: string;
   dateSubmitted?: string;
   unreadMessageCount?: number;
+  hasReviewers?: boolean;
 }
 
-export default function CustomBanner({ 
-  title = "Protocol Title", 
-  status = "pending", 
-  submissionId, 
+export default function CustomBanner({
+  title = "Protocol Title",
+  status = "pending",
+  submissionId,
   spupCode,
   tempCode,
   dateSubmitted,
-  unreadMessageCount = 0
+  unreadMessageCount = 0,
+  hasReviewers = false,
 }: CustomBannerProps) {
   const [open, setOpen] = useState(false);
-  
+
   // Format date if not provided
   const displayDate = dateSubmitted || new Date().toLocaleDateString();
-  
-  // Get display status
-  const displayStatus = STATUS_DISPLAY[status as keyof typeof STATUS_DISPLAY] || status;
-  
+
+  // Get display status based on current status and reviewer assignment
+  const getDisplayStatus = (): keyof typeof BADGE_CONFIG => {
+    if (status === "pending") {
+      // If protocol is pending (no SPUP code yet), always show "Pending"
+      return "Pending";
+    }
+    if (status === "accepted") {
+      // If protocol is accepted (has SPUP code) but no reviewers yet, show "Accepted"
+      // If reviewers are assigned, show "Under Review"
+      return hasReviewers ? "Under Review" : "Accepted";
+    }
+    // Map status to display status
+    const mappedStatus = STATUS_DISPLAY[status as keyof typeof STATUS_DISPLAY];
+    if (mappedStatus && mappedStatus in BADGE_CONFIG) {
+      return mappedStatus as keyof typeof BADGE_CONFIG;
+    }
+    // Fallback: try to use status directly if it exists in BADGE_CONFIG
+    if (status in BADGE_CONFIG) {
+      return status as keyof typeof BADGE_CONFIG;
+    }
+    // Final fallback to "Pending"
+    return "Pending";
+  };
+
+  const displayStatus = getDisplayStatus();
+
+  // Handle SPUP code display - show SPUP code or PENDING, hide complex temp codes
+  const shouldShowCode = true; // Always show code section
+  const displayCode = spupCode || "PENDING";
+
   return (
     <section className="w-full max-w-full bg-primary rounded-lg p-4 sm:p-6 lg:p-8 flex flex-col gap-3 sm:gap-4">
       {/* Title */}
@@ -66,7 +108,7 @@ export default function CustomBanner({
           {title}
         </h1>
       </div>
-      
+
       {/* Protocol Details */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-4 items-start sm:items-center">
         {/* Submission ID */}
@@ -81,22 +123,17 @@ export default function CustomBanner({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Submission ID is the unique identifier for the submission.</p>
+                  <p>
+                    Submission ID is the unique identifier for the submission.
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Dot className="hidden sm:block w-4 h-4 text-white/90 flex-shrink-0" />
           </>
         )}
-        
-        {/* Date Submitted */}
-        <span className="text-xs sm:text-sm text-white/90 flex items-center gap-1.5 sm:gap-2">
-          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-          <span className="truncate">{displayDate}</span>
-        </span>
-        
-        {/* Protocol Code (SPUP or Temporary) */}
-        {(spupCode || tempCode) && (
+
+        {/* Protocol Code (SPUP or PENDING) */}
+        {shouldShowCode && (
           <>
             <Dot className="hidden sm:block w-4 h-4 text-white/90 flex-shrink-0" />
             <TooltipProvider>
@@ -105,34 +142,38 @@ export default function CustomBanner({
                   <span className="text-xs sm:text-sm text-white/90 flex items-center gap-1.5 sm:gap-2">
                     <Key className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                     <span className="truncate">
-                      {spupCode || tempCode}
-                      {!spupCode && tempCode && (
-                        <span className="text-yellow-200 ml-1">(Temp)</span>
-                      )}
+                      {displayCode}
                     </span>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="">
                   <p>
-                    {spupCode 
-                      ? "SPUP Protocol Code is the official identifier for the protocol." 
-                      : "Temporary code until SPUP code is assigned by REC Chairperson."
-                    }
+                    {spupCode
+                      ? "SPUP Protocol Code is the official identifier for the protocol."
+                      : "Protocol code will be assigned when accepted by REC Chairperson."}
                   </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
+            <Dot className="hidden sm:block w-4 h-4 text-white/90 flex-shrink-0" />
           </>
         )}
+
+        {/* Date Submitted */}
+        <span className="text-xs sm:text-sm text-white/90 flex items-center gap-1.5 sm:gap-2">
+          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+          <span className="truncate">{displayDate}</span>
+        </span>
       </div>
-      
+
       {/* Status and Actions */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
         <div className="flex-1">
           <CustomBadge status={displayStatus as keyof typeof BADGE_CONFIG} />
         </div>
         <div className="flex justify-end">
-          <ProtocolMessage 
+          <ProtocolMessage
             submissionId={submissionId}
             unreadCount={unreadMessageCount}
           />

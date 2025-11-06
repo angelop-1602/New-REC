@@ -20,12 +20,22 @@ import { Menu, MoveRight, X, LogOut } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import CustomAvatar from "@/components/ui/custom/avatar";
 import { useAuth } from "../../../hooks/useAuth";
 
 export const Header = () => {
   const { user, signOut } = useAuth();
   const [isOpen, setOpen] = useState(false);
+  const pathname = usePathname();
+  
+  // Helper function to check if a path is active
+  const isActive = (href: string) => {
+    if (href === "/rec/proponent") {
+      return pathname === "/rec/proponent";
+    }
+    return pathname.startsWith(href);
+  };
 
   const publicNavigationItems = [
     {
@@ -151,8 +161,24 @@ export const Header = () => {
                 <NavigationMenuItem key={item.title}>
                   {item.href ? (
                     <NavigationMenuLink asChild>
-                      <Link href={item.href}>
-                        <Button variant="ghost">{item.title}</Button>
+                      <Link href={item.href} className="relative">
+                        <Button 
+                          variant="ghost"
+                          className={`relative transition-all duration-300 ${
+                            isActive(item.href)
+                              ? "text-primary font-semibold"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <span className="relative z-10">{item.title}</span>
+                          <span 
+                            className={`absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full transition-all duration-300 ${
+                              isActive(item.href) 
+                                ? "opacity-100 scale-x-100" 
+                                : "opacity-0 scale-x-0"
+                            }`}
+                          />
+                        </Button>
                       </Link>
                     </NavigationMenuLink>
                   ) : (
@@ -184,18 +210,31 @@ export const Header = () => {
                             )}
                           </div>
                           <div className="flex flex-col gap-2">
-                            {item.items?.map((subItem) => (
-                              <NavigationMenuLink
-                                asChild
-                                key={subItem.title}
-                                className="flex flex-row justify-start hover:bg-muted py-2 px-4 rounded"
-                              >
-                                <Link href={subItem.href}>
-                                  <span>{subItem.title}</span>
-                                  <MoveRight className="w-4 h-4 text-muted-foreground ml-2" />
-                                </Link>
-                              </NavigationMenuLink>
-                            ))}
+                            {item.items?.map((subItem) => {
+                              const subActive = isActive(subItem.href) || (subItem.href.startsWith('#') && pathname.includes(subItem.href));
+                              return (
+                                <NavigationMenuLink
+                                  asChild
+                                  key={subItem.title}
+                                  className={`relative flex flex-row justify-start py-2 px-4 rounded transition-all duration-300 ${
+                                    subActive
+                                      ? "bg-primary/10 text-primary"
+                                      : "hover:bg-muted"
+                                  }`}
+                                >
+                                  <Link href={subItem.href}>
+                                    <span className={`font-medium ${subActive ? "font-semibold" : ""}`}>{subItem.title}</span>
+                                    <MoveRight 
+                                      className={`w-4 h-4 ml-2 transition-transform duration-300 ${
+                                        subActive 
+                                          ? "text-primary translate-x-1" 
+                                          : "text-muted-foreground"
+                                      }`} 
+                                    />
+                                  </Link>
+                                </NavigationMenuLink>
+                              );
+                            })}
                           </div>
                         </div>
                       </NavigationMenuContent>
@@ -275,17 +314,36 @@ export const Header = () => {
         <div className="lg:hidden absolute top-full left-0 w-full bg-background shadow-md border-t py-4 z-50">
           <div className="container mx-auto px-4 flex flex-col gap-4">
             {/* Mobile nav items */}
-            {mobileNavigationItems.map((item) => (
-              <Link
-                key={item.title}
-                href={item.href}
-                className="flex justify-between items-center py-2 text-lg font-medium hover:text-primary transition-colors"
-                onClick={() => setOpen(false)}
-              >
-                <span>{item.title}</span>
-                <MoveRight className="w-4 h-4 text-muted-foreground" />
-              </Link>
-            ))}
+            {mobileNavigationItems.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.title}
+                  href={item.href}
+                  className={`relative flex justify-between items-center py-2 px-3 rounded-lg text-lg font-medium transition-all duration-300 ${
+                    active
+                      ? "text-primary bg-primary/10 font-semibold"
+                      : "text-muted-foreground hover:text-primary hover:bg-muted"
+                  }`}
+                  onClick={() => setOpen(false)}
+                >
+                  <span className="relative z-10">{item.title}</span>
+                  <MoveRight 
+                    className={`w-4 h-4 transition-transform duration-300 ${
+                      active ? "text-primary translate-x-1" : "text-muted-foreground"
+                    }`} 
+                  />
+                  <span 
+                    className={`absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full transition-all duration-300 ${
+                      active 
+                        ? "opacity-100 scale-y-100" 
+                        : "opacity-0 scale-y-0"
+                    }`}
+                    style={{ transformOrigin: 'top' }}
+                  />
+                </Link>
+              );
+            })}
             
             {user && (
               <>

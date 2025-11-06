@@ -23,14 +23,27 @@ export default function ProtocolInformation({ information }: ProtocolInformation
   // Map the information data to display format
   const info = information ? {
     principalInvestigator: information.general_information?.principal_investigator?.name || "-",
-    courseProgram: "N/A", // This field doesn't exist in the type
+    courseProgram: information.general_information?.principal_investigator?.course_program || "-",
     adviser: information.general_information?.adviser?.name || "-",
     email: information.general_information?.principal_investigator?.email || "-",
-    position: information.general_information?.principal_investigator?.position_institution || "-",
+    // Handle both combined position_institution and separate position/institution fields
+    positionInstitution: information.general_information?.principal_investigator?.position_institution || 
+                        (((information.general_information?.principal_investigator as any)?.position && (information.general_information?.principal_investigator as any)?.institution) ? 
+                         `${(information.general_information.principal_investigator as any).position} at ${(information.general_information.principal_investigator as any).institution}` : 
+                         "-"),
     address: information.general_information?.principal_investigator?.address || "-",
     contactNumber: information.general_information?.principal_investigator?.contact_number || "-",
     coResearchers: information.general_information?.co_researchers?.map(r => r.name).filter(Boolean) || [],
-    typeOfReview: "N/A", // This field doesn't exist in the current type
+    // Set type of review based on research type (study type)
+    typeOfReview: (() => {
+      const studyType = information.nature_and_type_of_study?.type;
+      if (studyType?.includes('Social') || studyType?.includes('Behavioral')) return 'Social/Behavioral Research (SR)';
+      if (studyType?.includes('Public Health')) return 'Public Health Research (PR)';
+      if (studyType?.includes('Health Operations')) return 'Health Operations (HO)';
+      if (studyType?.includes('Biomedical')) return 'Biomedical Research (BS)';
+      if (studyType?.includes('Exempted') || studyType?.includes('Exemption')) return 'Exempted from Review (EX)';
+      return studyType || "-";
+    })(),
     studySite: information.study_site?.location || "-",
     studyLevel: information.nature_and_type_of_study?.level || "-",
     studyType: information.nature_and_type_of_study?.type || "-",
@@ -48,7 +61,7 @@ export default function ProtocolInformation({ information }: ProtocolInformation
     courseProgram: "-",
     adviser: "-",
     email: "-",
-    position: "-",
+    positionInstitution: "-",
     address: "-",
     contactNumber: "-",
     coResearchers: [],
@@ -84,7 +97,7 @@ export default function ProtocolInformation({ information }: ProtocolInformation
             <InfoField label="Course/Program" value={info.courseProgram} />
             <InfoField label="Adviser" value={info.adviser} />
             <InfoField label="Email" value={info.email} />
-            <InfoField label="Position" value={info.position} />
+            <InfoField label="Position & Institution" value={info.positionInstitution} span={2} />
             <InfoField label="Address" value={info.address} />
             <InfoField label="Contact Number" value={info.contactNumber} />
             <InfoField 

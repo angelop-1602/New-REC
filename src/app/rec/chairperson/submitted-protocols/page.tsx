@@ -17,6 +17,7 @@ import { getAllSubmissionsByStatus } from "@/lib/firebase/firestore";
 import { Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ColumnDef } from "@tanstack/react-table";
+import { getStatusBadge } from "@/lib/utils/statusUtils";
 
 // Define the protocol type
 interface Protocol {
@@ -30,6 +31,10 @@ interface Protocol {
   tempProtocolCode?: string;
   spupCode?: string;
   information?: any;
+  decision?: string;
+  decisionDetails?: {
+    decision?: string;
+  };
 }
 
 export default function SubmittedProtocolsPage() {
@@ -37,6 +42,7 @@ export default function SubmittedProtocolsPage() {
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProtocols();
@@ -83,18 +89,12 @@ export default function SubmittedProtocolsPage() {
     console.log('Send message for:', protocolId);
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusStyles = {
-      pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      accepted: 'bg-blue-100 text-blue-800 border-blue-200',
-      approved: 'bg-green-100 text-green-800 border-green-200',
-      rejected: 'bg-red-100 text-red-800 border-red-200',
-    };
-
-    return (
-      <Badge className={statusStyles[status as keyof typeof statusStyles] || 'bg-gray-100 text-gray-800'}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
+  const getProtocolStatusBadge = (protocol: Protocol) => {
+    // Use centralized status utility
+    return getStatusBadge(
+      protocol.status,
+      protocol.decision || protocol.decisionDetails?.decision,
+      false // hasReviewers - can be enhanced to check reviewers if needed
     );
   };
 
@@ -157,35 +157,50 @@ export default function SubmittedProtocolsPage() {
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => getStatusBadge(row.original.status),
+      cell: ({ row }) => getProtocolStatusBadge(row.original),
     },
     {
       id: "actions",
       header: "Actions",
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <EllipsisVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleViewProtocol(row.original.id)}>
-              <Eye className="mr-2 h-4 w-4" />
-              View Details
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAssignReviewer(row.original.id)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Assign Reviewer
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSendMessage(row.original.id)}>
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Send Message
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      cell: ({ row }) => {
+        const dropdownId = `actions-${row.original.id}`;
+        return (
+          <DropdownMenu 
+            open={openDropdownId === dropdownId}
+            onOpenChange={(open) => setOpenDropdownId(open ? dropdownId : null)}
+          >
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <EllipsisVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => {
+                handleViewProtocol(row.original.id);
+                setOpenDropdownId(null);
+              }}>
+                <Eye className="mr-2 h-4 w-4" />
+                View Details
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                handleAssignReviewer(row.original.id);
+                setOpenDropdownId(null);
+              }}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Assign Reviewer
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                handleSendMessage(row.original.id);
+                setOpenDropdownId(null);
+              }}>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Send Message
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
@@ -215,9 +230,6 @@ export default function SubmittedProtocolsPage() {
             Review and manage submitted research protocols
           </p>
         </div>
-        <Badge variant="outline" className="text-lg px-3 py-1">
-          {protocols.length} Protocol{protocols.length !== 1 ? 's' : ''}
-        </Badge>
       </div>
 
       <Card>

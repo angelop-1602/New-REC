@@ -10,13 +10,24 @@ import {
   TimerOff,
   Archive,
   ShieldCheck,
+  FileEdit,
+  Ban,
+  Clock,
 } from "lucide-react";
 import React from "react";
 
 const BADGE_CONFIG = {
+  "Pending": {
+    class: "bg-orange-100 text-orange-800 border border-orange-300",
+    icon: FileClock,
+  },
   "Pending Upload": {
     class: "bg-gray-100 text-gray-800 border border-gray-300",
     icon: FileClock,
+  },
+  "Accepted": {
+    class: "bg-teal-100 text-teal-800 border border-teal-300",
+    icon: CheckCircle2,
   },
   "Submitted": {
     class: "bg-blue-100 text-blue-800 border border-blue-300",
@@ -54,6 +65,22 @@ const BADGE_CONFIG = {
     class: "bg-emerald-100 text-emerald-800 border border-emerald-300",
     icon: ShieldCheck,
   },
+  "Disapproved": {
+    class: "bg-red-100 text-red-800 border border-red-300",
+    icon: Ban,
+  },
+  "Minor Revision Required": {
+    class: "bg-blue-100 text-blue-800 border border-blue-300",
+    icon: FileEdit,
+  },
+  "Major Revision Required": {
+    class: "bg-amber-100 text-amber-800 border border-amber-300",
+    icon: AlertCircle,
+  },
+  "Deferred": {
+    class: "bg-cyan-100 text-cyan-800 border border-cyan-300",
+    icon: Clock,
+  },
 } as const;
 
 type BadgeStatus = keyof typeof BADGE_CONFIG;
@@ -68,6 +95,35 @@ export const CustomBadge: React.FC<CustomBadgeProps> = ({
   className = "",
 }) => {
   const config = BADGE_CONFIG[status];
+  
+  // Fallback to a default config if status doesn't exist
+  if (!config) {
+    console.warn(`Unknown badge status: ${status}. Using default.`);
+    const defaultConfig = {
+      class: "bg-gray-100 text-gray-800 border border-gray-300",
+      icon: FileClock,
+    };
+    const DefaultIcon = defaultConfig.icon;
+    
+    return (
+      <Badge
+        className={[
+          "flex items-center gap-1 px-4 py-1 justify-center",
+          "rounded-full",
+          "uppercase font-bold",
+          "text-xs tracking-wide",
+          "shadow-md",
+          defaultConfig.class,
+          className,
+        ].join(" ")}
+        title={status}
+      >
+        <DefaultIcon size={14} className="mr-1" />
+        {status}
+      </Badge>
+    );
+  }
+  
   const Icon = config.icon;
 
   return (

@@ -1,55 +1,95 @@
-"use client"
+"use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import { getSubmissionWithDocuments, getUnreadMessageCount } from "@/lib/firebase/firestore";
 import { Loader2 } from "lucide-react";
+import { getSubmissionById, getSubmissionWithDocuments, SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
 import CustomBanner from "@/components/rec/proponent/application/components/protocol/banner";
-import ProtocolInformation from "@/components/rec/proponent/application/components/protocol/information";
-import ProtocolDocument from "@/components/rec/proponent/application/components/protocol/document";
-import ProtocolMessage from "@/components/rec/proponent/application/components/protocol/message";
-import ProtocolDecision from "@/components/rec/proponent/application/components/protocol/decision";
-import { ProtocolReports } from "@/components/rec/proponent/application/components/protocol/report";
-import { useAuth } from "@/hooks/useAuth";
+import { reviewerService } from "@/lib/services/reviewerService";
 import { ChairpersonActions } from "@/components/rec/chairperson/components/protocol/chairperson-actions";
+import ProtocolOverview from "@/components/rec/shared/protocol-overview";
+import { ChairpersonDecisionCard } from "@/components/rec/chairperson/components/protocol/decision-card";
+import { getUnreadMessageCount } from "@/lib/firebase/firestore";
+import { useAuth } from "@/hooks/useAuth";
+import { useFirestoreDoc } from "@/hooks/use-firestore";
+import { firestoreTimestampToLocaleDateString } from "@/lib/utils/firestoreUtils";
+import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
 
 export default function ChairpersonProtocolDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const [submission, setSubmission] = useState<any>(null);
+  const [initialSubmission, setInitialSubmission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  
+  const [hasReviewers, setHasReviewers] = useState(false);
+
   const submissionId = params.id as string;
 
+  // ⚡ Use real-time protocol hook for auto-updates
+  const { protocol: realtimeProtocol, loading: protocolLoading, error: protocolError } = useRealtimeProtocol({
+    protocolId: submissionId,
+    collectionName: SUBMISSIONS_COLLECTION,
+    enabled: !!submissionId,
+  });
+
+  // Use realtime protocol if available, fallback to initial submission
+  const submission = realtimeProtocol || initialSubmission;
+
+  // Fetch initial submission from any collection (pending, accepted, approved, archived)
   useEffect(() => {
+    const fetchSubmission = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // getSubmissionById automatically searches all collections
+        const data = await getSubmissionById(submissionId);
+        
+        if (data) {
+          // Try to get documents if available
+          const withDocs = await getSubmissionWithDocuments(submissionId);
+          setInitialSubmission(withDocs || data);
+        } else {
+          setError("Protocol not found");
+        }
+      } catch (err) {
+        console.error("Error fetching submission:", err);
+        setError("Failed to load protocol");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     if (submissionId) {
-      fetchSubmissionDetails();
-      fetchUnreadMessages();
+      fetchSubmission();
     }
   }, [submissionId]);
 
-  const fetchSubmissionDetails = async () => {
+  useEffect(() => {
+    if (submission && user) {
+      fetchUnreadMessages();
+    }
+  }, [submission, user]);
+
+  // Check reviewers when submission changes
+  useEffect(() => {
+    if (submission && (submission.status === 'pending' || submission.status === 'accepted')) {
+      checkReviewers();
+    } else {
+      setHasReviewers(false);
+    }
+  }, [submission]);
+
+  const checkReviewers = async () => {
     try {
-      setLoading(true);
-      const data = await getSubmissionWithDocuments(submissionId);
-      
-      if (!data) {
-        setError("Protocol not found");
-        return;
-      }
-      
-      setSubmission(data);
-    } catch (err) {
-      console.error("Error fetching submission:", err);
-      setError("Failed to load protocol details");
-    } finally {
-      setLoading(false);
+      const reviewers = await reviewerService.getProtocolReviewers(submissionId);
+      setHasReviewers(reviewers.length > 0);
+    } catch (reviewerError) {
+      console.error("Error checking reviewers:", reviewerError);
+      setHasReviewers(false);
     }
   };
 
@@ -57,22 +97,9 @@ export default function ChairpersonProtocolDetailPage() {
     if (!user) return;
     
     try {
-      // Detect collection based on submission status
-      const submission = await getSubmissionWithDocuments(submissionId);
-      if (!submission) return;
-      
-      const collectionMap: Record<string, string> = {
-        pending: "submissions_pending",
-        accepted: "submissions_accepted", 
-        approved: "submissions_approved",
-        archived: "submissions_archived",
-      };
-      
-      const collectionName = collectionMap[submission.status];
-      if (collectionName) {
-        const count = await getUnreadMessageCount(submissionId, collectionName, user.uid);
-        setUnreadCount(count);
-      }
+      // Use single submissions collection
+      const count = await getUnreadMessageCount(submissionId, 'submissions', user.uid);
+      setUnreadCount(count);
     } catch (error) {
       console.error("Error fetching unread messages:", error);
     }
@@ -81,15 +108,7 @@ export default function ChairpersonProtocolDetailPage() {
   const handleStatusUpdate = async (newStatus: string) => {
     // TODO: Implement status update logic
     console.log("Update status to:", newStatus);
-    // After update, refresh the submission
-    await fetchSubmissionDetails();
-  };
-
-  const handleAssignReviewer = async (reviewerId: string) => {
-    // TODO: Implement reviewer assignment logic
-    console.log("Assign reviewer:", reviewerId);
-    // After assignment, refresh the submission
-    await fetchSubmissionDetails();
+    // No longer needed - realtime updates handle this automatically
   };
 
   if (loading) {
@@ -122,8 +141,8 @@ export default function ChairpersonProtocolDetailPage() {
     );
   }
 
-  const isAccepted = submission.status === "accepted";
   const isApproved = submission.status === "approved" || submission.status === "archived";
+  const hasDecision = submission.decision || submission.status === "approved";
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -135,41 +154,36 @@ export default function ChairpersonProtocolDetailPage() {
         submissionId={submission.id}
         spupCode={submission.spupCode}
         tempCode={submission.tempProtocolCode}
-        dateSubmitted={submission.createdAt}
+        dateSubmitted={firestoreTimestampToLocaleDateString(submission.createdAt)}
         unreadMessageCount={unreadCount}
+        hasReviewers={hasReviewers}
       />
+      {/* Decision Card - Show if there's a decision or if approved */}
+      {hasDecision && (
+        <ChairpersonDecisionCard 
+          protocolId={submission.id}
+          collection={isApproved ? 'approved' : 'accepted'}
+          onDecisionUpdate={() => {}} // No longer needed - realtime updates
+        />
+      )}
       {/* Chairperson Actions Card */}
       <ChairpersonActions
         submission={submission}
         onStatusUpdate={handleStatusUpdate}
-        onAssignReviewer={handleAssignReviewer}
       />
 
-      {/* Information */}
-      <ProtocolInformation
+      {/* Protocol Overview - Information and Documents */}
+      <ProtocolOverview 
         information={submission.information}
-        isReadOnly={true}
+        documents={submission.documents || []}
+        userType="chairperson"
+        showDocuments={true}
+        protocolId={submission.id}
+        submissionId={submissionId}
+        onDocumentStatusUpdate={() => {}} // No longer needed - realtime updates
       />
 
-      {/* Documents */}
-      <ProtocolDocument documents={submission.documents || []} />
 
-
-      {/* Decision (only show if accepted or beyond) */}
-      {(isAccepted || isApproved) && (
-        <ProtocolDecision />
-      )}
-
-      {/* Reports (only show if approved or archived) */}
-      {isApproved && (
-        <ProtocolReports 
-          progressReports={[]}
-          onSubmitProgressReport={() => {}}
-          onSubmitFinalReport={() => {}}
-          isApproved={true}
-          isCompleted={submission.status === "archived"}
-        />
-      )}
     </div>
   );
 }

@@ -50,9 +50,25 @@ class LocalStorageManager {
     }
 
     try {
+      // Filter out _fileRef properties from documents before saving to localStorage
+      // File objects cannot be serialized to JSON
+      // Also mark documents as having lost their file reference
+      const documentsForStorage = (formState.documents || []).map(doc => {
+        if (doc._fileRef) {
+          const { _fileRef, ...docWithoutFileRef } = doc;
+          console.warn(`Document "${doc.title}" file reference will be lost during localStorage save`);
+          return {
+            ...docWithoutFileRef,
+            _fileRefLost: true, // Mark that file reference was lost during save
+            _lastSaved: new Date().toISOString(), // Track when it was saved
+          };
+        }
+        return doc;
+      });
+
       const draftData: SerializedDraftData = {
         formData: formState.formData || {} as InformationType,
-        documents: formState.documents || [],
+        documents: documentsForStorage,
         currentStep: formState.currentStep || 0,
         timestamp: Date.now(),
         version: this.version,
@@ -62,7 +78,7 @@ class LocalStorageManager {
       localStorage.setItem(DRAFT_STORAGE_KEY, serializedData);
       localStorage.setItem(DRAFT_TIMESTAMP_KEY, Date.now().toString());
 
-      console.log("Draft saved successfully");
+      console.log("Draft saved successfully with documents:", documentsForStorage.length);
       return true;
     } catch (error) {
       console.error("Failed to save draft:", error);
@@ -113,7 +129,7 @@ class LocalStorageManager {
         return null;
       }
 
-      console.log("Draft loaded successfully");
+      console.log("Draft loaded successfully with documents:", draftData.documents.length);
       return {
         formData: draftData.formData,
         documents: draftData.documents,

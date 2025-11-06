@@ -35,12 +35,42 @@ const STUDY_LEVELS = [
 ];
 
 const STUDY_TYPES = [
-  { value: "Social/Behavioral", label: "Social/Behavioral" },
-  { value: "Public Health Research", label: "Public Health Research" },
-  { value: "Health Operations", label: "Health Operations" },
-  { value: "Biomedical Studies", label: "Biomedical Studies" },
-  { value: "Clinical Trials", label: "Clinical Trials" },
-  { value: "Others", label: "Others" },
+  {
+    value: "Social/Behavioral",
+    label: "Social/Behavioral",
+    description:
+      "Studies of human behavior, attitudes, beliefs, culture, and social interactions (e.g., surveys, interviews, observations).",
+  },
+  {
+    value: "Public Health Research",
+    label: "Public Health Research",
+    description:
+      "Population-level research to improve health outcomes, prevent disease, and inform policy or programs.",
+  },
+  {
+    value: "Health Operations",
+    label: "Health Operations",
+    description:
+      "Evaluates how health systems/services operate—efficiency, access, quality, workflows, and program management.",
+  },
+  {
+    value: "Biomedical Studies",
+    label: "Biomedical Studies",
+    description:
+      "Basic/laboratory science exploring biological, physiological, or genetic mechanisms (cells, tissues, animal models).",
+  },
+  {
+    value: "Clinical Trials",
+    label: "Clinical Trials",
+    description:
+      "Prospective studies with human participants to assess safety/efficacy of drugs, devices, or interventions.",
+  },
+  {
+    value: "Others",
+    label: "Others",
+    description:
+      "Work that doesn’t cleanly fit the above (e.g., environmental or multidisciplinary studies).",
+  },
 ];
 
 const STUDY_SITE_OPTIONS = [
@@ -197,7 +227,7 @@ export const SubmissionInformation = () => {
             )}
 
             {/* Address & Contact - side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <ValidatedInput
                 label="Address"
                 value={
@@ -245,8 +275,6 @@ export const SubmissionInformation = () => {
                   ]?.rules
                 }
                 placeholder="Phone/mobile number"
-                format="phone"
-                required
                 fieldPath="general_information.principal_investigator.contact_number"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
@@ -254,36 +282,72 @@ export const SubmissionInformation = () => {
                   handleFieldValidation("general_information.principal_investigator.contact_number", isValid, errors)
                 }
               />
-            </div>
-
-            {/* Position, Email, Adviser */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <ValidatedInput
-                label="Position/Institution"
+                label="Institution"
                 value={
                   getFieldValue(
-                    "general_information.principal_investigator.position_institution"
+                    "general_information.principal_investigator.institution"
                   ) || ""
                 }
                 onChange={(value) =>
                   updateField(
-                    "general_information.principal_investigator.position_institution",
+                    "general_information.principal_investigator.institution",
                     value
                   )
                 }
                 validationRules={
                   informationFormValidation[
-                    "general_information.principal_investigator.position_institution"
+                    "general_information.principal_investigator.institution"
                   ]?.rules
                 }
-                placeholder="Position and institution"
+                placeholder="Institution"
                 format="proper-case"
                 required
-                fieldPath="general_information.principal_investigator.position_institution"
+                fieldPath="general_information.principal_investigator.institution"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
                 onValidationChange={(isValid, errors) =>
-                  handleFieldValidation("general_information.principal_investigator.position_institution", isValid, errors)
+                  handleFieldValidation("general_information.principal_investigator.institution", isValid, errors)
+                }
+              />
+            </div>
+
+            {/* Position, Email, Course/Program, Adviser */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              <ValidatedInput
+                label="Position"
+                value={getFieldValue("general_information.principal_investigator.position") || ""}
+                onChange={(value) =>
+                  updateField("general_information.principal_investigator.position", value)
+                }
+                validationRules={
+                  informationFormValidation["general_information.principal_investigator.position"]
+                    ?.rules
+                }
+                placeholder="Position"
+                format="proper-case"
+                required
+                fieldPath="general_information.principal_investigator.position"
+                registerValidation={registerFieldValidation}
+                unregisterValidation={unregisterFieldValidation}
+                onValidationChange={(isValid, errors) =>
+                  handleFieldValidation("general_information.principal_investigator.position", isValid, errors)
+                }
+              />
+              <ValidatedInput
+                label="Course/Program"
+                value={getFieldValue("general_information.principal_investigator.course_program") || ""}
+                onChange={(value) =>
+                  updateField("general_information.principal_investigator.course_program", value)
+                }
+                placeholder="e.g., DIT, BSIT (use abbreviation)"
+                format="proper-case"
+                fieldPath="general_information.principal_investigator.course_program"
+                registerValidation={registerFieldValidation}
+                unregisterValidation={unregisterFieldValidation}
+                onValidationChange={(isValid, errors) =>
+                  handleFieldValidation("general_information.principal_investigator.course_program", isValid, errors)
                 }
               />
               <ValidatedInput

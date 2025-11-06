@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { SubmissionInformation } from "@/components/rec/proponent/application/protocol-submission/information";
 import SubmissionDocuments from "@/components/rec/proponent/application/protocol-submission/documents";
+import SubmissionConfirmation from "@/components/rec/proponent/application/protocol-submission/confirmation";
 import Steps from "@/components/ui/custom/steps";
-import CustomBreadcrumbs from "@/components/ui/custom/breadcrum";
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/rec/proponent/application/footer";
+import GlobalBackButton from "@/components/ui/global-back-button";
+import { LoadingSpinner } from "@/components/ui/loading";
 import { SubmissionProvider, useSubmissionContext } from "@/contexts/SubmissionContext";
 
 const STEPS = [
   { label: "Protocol Information", href: "/rec/proponent/application" },
   { label: "Protocol Documents", href: "/rec/proponent/application" },
+  { label: "Review & Confirm", href: "/rec/proponent/application" },
 ];
 
 // Main Application Component with Context
@@ -23,12 +26,43 @@ function ApplicationContent() {
     previousStep,
     canProceed,
     canGoBack,
-    forceValidateAllFields,
-    showSubmissionDialog,
+    submitApplication,
+    isSubmitting,
   } = useSubmissionContext();
+
+  const [canSubmit, setCanSubmit] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [currentStep]);
+
+  // Check confirmation state for step 2 (confirmation step)
+  useEffect(() => {
+    if (currentStep === 2) {
+      const checkConfirmationState = () => {
+        try {
+          const confirmationState = sessionStorage.getItem('confirmationState');
+          if (confirmationState) {
+            const state = JSON.parse(confirmationState);
+            setCanSubmit(state.canSubmit || false);
+          } else {
+            setCanSubmit(false);
+          }
+        } catch (error) {
+          setCanSubmit(false);
+        }
+      };
+
+      // Check immediately
+      checkConfirmationState();
+
+      // Set up interval to check for changes
+      const interval = setInterval(checkConfirmationState, 100);
+      
+      return () => clearInterval(interval);
+    } else {
+      setCanSubmit(true); // Allow submission for other steps
+    }
   }, [currentStep]);
 
   const handleNext = () => {
@@ -40,28 +74,34 @@ function ApplicationContent() {
   };
 
   const handleSubmit = () => {
-    // Show confirmation dialog instead of direct submission
-    showSubmissionDialog();
+    // Submit application directly
+    submitApplication();
   };
 
 
 
   return (
-    <div className="min-h-screen pt-16 lg:pt-20 w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 pb-10">
-      {/* Breadcrumbs */}
-      <div className="w-full max-w-7xl mb-4">
-        <CustomBreadcrumbs />
-      </div>
-      
-      {/* Page Header */}
-      <div className="w-full max-w-7xl mb-6 lg:mb-8 text-center">
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground">
-          Protocol Review Application
-        </h1>
-        <p className="text-sm sm:text-base text-muted-foreground mt-2">
-          Submit your research protocol for ethics review
-        </p>
-      </div>
+    <div className="min-h-screen lg:pt-30 w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 pb-10">
+
+<div className="w-full max-w-7xl mx-auto mb-8 px-4">
+  <div className="flex items-center justify-between">
+    <GlobalBackButton />
+
+    <div className="flex-1 text-center">
+      <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
+        Protocol Review Application
+      </h1>
+      <p className="text-sm sm:text-base text-muted-foreground mt-1">
+        Submit your research protocol for ethics review
+      </p>
+    </div>
+
+    {/* Empty spacer to balance layout */}
+    <div className="w-[60px] sm:w-[80px]"></div>
+  </div>
+</div>
+
+
       
       {/* Progress Steps */}
       <div className="w-full max-w-4xl flex justify-center mb-6 lg:mb-8">
@@ -77,6 +117,7 @@ function ApplicationContent() {
         {/* Form Content */}
         {currentStep === 0 && <SubmissionInformation />}
         {currentStep === 1 && <SubmissionDocuments />}
+        {currentStep === 2 && <SubmissionConfirmation />}
         
         {/* Navigation Buttons */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 lg:mb-8">
@@ -104,9 +145,17 @@ function ApplicationContent() {
             ) : (
               <Button
                 onClick={handleSubmit}
-                className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700"
+                className="flex-1 sm:flex-none bg-primary hover:bg-primary/80"
+                disabled={isSubmitting || (currentStep === 2 && !canSubmit)}
               >
-                Submit Application
+                {isSubmitting ? (
+                  <>
+                    <LoadingSpinner size="sm" showText={false} />
+                    <span className="ml-2">Submitting...</span>
+                  </>
+                ) : (
+                  "Submit Application"
+                )}
               </Button>
             )}
           </div>
@@ -117,7 +166,12 @@ function ApplicationContent() {
           {currentStep < totalSteps - 1 ? (
             <p>Complete all required fields to proceed to the next step.</p>
           ) : (
-            <p>Review your submission and click "Submit Application" when ready.</p>
+            <p>
+              {currentStep === 2 && !canSubmit 
+                ? "Please check the confirmation checkbox and type 'CONFIRM' to enable submission."
+                : "Review your submission and click 'Submit Application' when ready."
+              }
+            </p>
           )}
         </div>
       </div>

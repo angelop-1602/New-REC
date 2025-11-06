@@ -1,4 +1,4 @@
-import { Calendar, Check, Home, Inbox, Search, Settings, User2 } from "lucide-react"
+import { Calendar, Check, Home, Inbox, Archive, Settings, User2, Users } from "lucide-react"
 import { UserAvatarProfile } from "./user-avatar-profile"
 
 import {
@@ -31,9 +31,14 @@ const items = [
     icon: Check,
   },
   {
-    title: "Archive Protocols",
-    url: "/rec/chairperson/archive-protocols",
-    icon: Search,
+    title: "Archived Protocols",
+    url: "/rec/chairperson/archived-protocols",
+    icon: Archive,
+  },
+  {
+    title: "Members",
+    url: "/rec/chairperson/members",
+    icon: Users,
   },
   {
     title: "Settings",

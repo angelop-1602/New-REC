@@ -1,0 +1,1802 @@
+# Protocol Review System Update - Task List
+
+## Assessment Form Structure Update (January 2025)
+- ✅ Updated all assessment forms to match exact question structure from assessment documents
+- ✅ Protocol Review Assessment: Fixed Section 2 (SCIENTIFIC SOUNDNESS 2.1-2.8) and Section 3 (ETHICAL SOUNDNESS 3.1-3.9)
+- ✅ Informed Consent Assessment: Updated all 17 questions to match exact wording
+- ✅ Exemption Checklist: Fixed structure and numbering to match document exactly
+- ✅ IACUC Protocol Review: Fixed Section 2 (2.1-2.6 only) and Section 3 (JUSTIFICATION ON THE USE OF ANIMALS)
+- ✅ Updated formPrepopulation.ts to match new structure (removed inclusionExclusion, withdrawalCriteria, privacyConfidentiality, conflictOfInterest from IACUC)
+- ✅ Updated ViewAssessmentDialog to reflect new form structures
+- ✅ Created assessmentFormExportService.ts for exporting forms to Word templates with correct placeholders
+- ✅ Updated handleExportTemplate in chairperson-actions.tsx to use new export service
+
+---
+
+## 🔥 MAJOR ARCHITECTURAL REFACTORING (January 2025)
+
+### Single Collection Architecture ✅ **IN PROGRESS**
+- **Old Architecture**: 4 separate collections (`submissions_pending`, `submissions_accepted`, `submissions_approved`, `submissions_archived`)
+- **New Architecture**: 1 unified collection (`submissions`) with `status` field
+- **Benefits**:
+  - ✅ No complex data transfers between collections
+  - ✅ Simpler queries (just filter by status)
+  - ✅ No data duplication or sync issues
+  - ✅ Easier to maintain and update
+  - ✅ Better performance (no batch operations needed)
+  - ✅ All subcollections (documents, messages, reviewers, decision) stay with the submission
+
+### ✅ COMPLETED Refactoring (January 18, 2025):
+- [x] **Updated collection constants** - Single `SUBMISSIONS_COLLECTION = 'submissions'`, removed all legacy collection constants
+- [x] **Added SubmissionStatus type** - `'pending' | 'accepted' | 'approved' | 'archived'` (plus legacy statuses for compatibility)
+- [x] **Updated SubmissionData interface** - Added status tracking fields (spupCode, acceptedBy, acceptedAt, approvedAt, archivedAt, etc.)
+- [x] **Refactored acceptSubmission()** - Now just updates status field instead of moving between collections (~80 lines reduced to ~30 lines)
+- [x] **Refactored makeProtocolDecision()** - Updates status to 'approved' when approved, no more transferProtocolToApproved() call
+- [x] **Updated getAllUserSubmissions()** - Single query instead of 4 separate queries (~70 lines reduced to ~20 lines)
+- [x] **Updated getAllSubmissionsByStatus()** - Queries single collection with status filter (~35 lines reduced to ~25 lines)
+- [x] **Updated getSubmissionById()** - Now queries single `submissions` collection (reduced from 30 lines to 15 lines)
+- [x] **Updated getSubmissionWithDocuments()** - Uses single collection for document retrieval
+- [x] **Updated createSubmission()** - Uses `SUBMISSIONS_COLLECTION` instead of `SUBMISSIONS_PENDING_COLLECTION`
+- [x] **Updated updateSubmission()** - Uses `SUBMISSIONS_COLLECTION` instead of `SUBMISSIONS_PENDING_COLLECTION`
+- [x] **Updated completeSubmission()** - Uses `SUBMISSIONS_COLLECTION` instead of `SUBMISSIONS_PENDING_COLLECTION`
+- [x] **Updated deleteSubmission()** - Uses `SUBMISSIONS_COLLECTION` instead of `SUBMISSIONS_PENDING_COLLECTION`
+- [x] **Updated rejectSubmission()** - Uses `SUBMISSIONS_COLLECTION` instead of `SUBMISSIONS_PENDING_COLLECTION`
+- [x] **Updated getMessagesForSubmission()** - Uses `SUBMISSIONS_COLLECTION` for message retrieval
+- [x] **Updated sendMessageToSubmission()** - Uses `SUBMISSIONS_COLLECTION` for sending messages
+- [x] **Deprecated transferProtocolToApproved()** - Marked as @deprecated, no longer used in workflow
+- [x] **Updated Service Files**:
+  - `assessmentFormsService.ts` - All references updated to `SUBMISSIONS_COLLECTION`
+  - `reviewerService.ts` - All reviewer assignment references updated to `SUBMISSIONS_COLLECTION`
+  - `documentManagementService.ts` - All document management references updated to `SUBMISSIONS_COLLECTION`
+  - `decisionService.ts` - Simplified to use single collection for all decision queries
+- [x] **Updated Hooks**:
+  - `useSpupCodeGenerator.ts` - Now queries single `submissions` collection for sequence number generation
+- [x] **NO Migration Needed** - Development environment, old data will be deleted
+
+### 📊 Impact Summary:
+- **Code Reduction**: ~300+ lines of complex collection transfer logic eliminated
+- **Performance**: Simplified queries, no batch operations needed for status changes
+- **Maintainability**: Single source of truth, easier to debug and extend
+- **Reliability**: No data sync issues between collections
+- **All Status Changes**: Now simple `updateDoc()` calls updating the `status` field
+
+---
+
+# Protocol Review System Update - Task List
+
+## 📋 Master Task Breakdown
+
+### 1. Document Upload & Notifications ✅
+- [x] Remove the "Upload Documents" button from ChairpersonActions component
+- [x] Remove the "Send Notification" button 
+- [x] Ensure only the "Make Decision" button remains in the interface
+
+### 2. Reviewer Assignment System ✅
+- [x] Create a reviewers collection in Firebase
+- [x] Implement smart reviewer assignment based on research type:
+  - Social Research: 3 reviewers
+  - Experimental Research: 2 reviewers  
+  - Exemption: 2 reviewers
+- [x] Replace dropdown with shadcn command/search component
+- [x] Add reviewer recommendation engine
+- [x] Update reviewer assignment to use real data from Firebase
+- [x] **NEW: Complete Reviewer Assignment System Implementation**
+  - [x] Add "Assign Reviewers" button in chairperson actions for accepted/pending protocols
+  - [x] Create comprehensive modal dialog for reviewer selection
+  - [x] Implement research type-based reviewer requirements with assessment types
+  - [x] Fetch active reviewers from Firestore with proper filtering
+  - [x] Create individual selection interface with assessment type badges
+  - [x] Add search functionality to filter reviewers by name/email
+  - [x] Save assignments to Firestore subcollection: submissions_accepted/{protocolId}/reviewers
+  - [x] Implement TypeScript interfaces for all data structures
+  - [x] Add comprehensive user experience features (visual feedback, loading states, error handling)
+  - [x] Automatic dialog closure after successful assignment
+- [x] **NEW: Enhanced Assessment Form Assignment System (January 2025)**
+  - [x] **Updated Research Type Mapping**: Changed from legacy system to new research type codes
+    - SR (Social/Behavioral Research): 2 Protocol Review Assessment + 1 Informed Consent Assessment
+    - PR (Public Health Research): 2 Protocol Review Assessment + 1 Informed Consent Assessment  
+    - HO (Health Operations): 2 Protocol Review Assessment + 1 Informed Consent Assessment
+    - BS (Biomedical Research): 2 Protocol Review Assessment + 1 Informed Consent Assessment
+    - EX (Exempted from Review): **Dynamic Subtype Selection**
+  - [x] **EX Protocol Subtype Selection**: Added radio button interface for exempted protocols
+    - 🔬 **Experimental Research**: 2 IACUC Protocol Review Assessment forms
+    - 📋 **Documentary/Textual Analysis**: 2 Checklist for Exemption Form Review forms
+  - [x] **Enhanced Assignment Logic**: Updated `reviewerService.assignReviewers()` to handle subtypes
+  - [x] **Improved Research Type Detection**: Enhanced `getResearchType()` to check multiple sources:
+    - Direct `researchType` field from Accept Protocol dialog (primary)
+    - Fallback to `nature_and_type_of_study.type` from submission
+    - Legacy `submissionType` support for backward compatibility
+  - [x] **Dynamic UI Updates**: Assignment dialog dynamically updates assessment types based on subtype selection
+  - [x] **Form Routing Integration**: Updated form type mapping to support all assessment forms
+  - [x] **Backward Compatibility**: Maintained support for legacy research type system
+  - [x] **Reviewer Search Fix (October 2025)**: Fixed search functionality to work with partial name matching
+    - Removed conflicting `shouldFilter` prop from Command component
+    - Search now works with first few letters of reviewer names
+    - Manual filtering handles partial matches using `.includes()`
+  - [x] **Reviewer Reassignment System (October 2025)**: Complete system for reassigning overdue reviewers
+    - **Chairperson Side**:
+      - ✅ Reassign button appears for overdue reviewers (deadline passed + status pending)
+      - ✅ ReassignReviewerDialog with reviewer selection and reason input
+      - ✅ Shows current overdue assignment details (name, assessment type, days overdue)
+      - ✅ Select new reviewer from available reviewers (excludes current reviewer)
+      - ✅ Predefined reason dropdown with 8 common options:
+        - "Missed deadline - No response"
+        - "Missed deadline - Unable to complete on time"
+        - "Conflict of interest discovered"
+        - "Reviewer requested to be removed"
+        - "Reviewer unavailable due to personal reasons"
+        - "Reviewer expertise not aligned with protocol"
+        - "Workload too high for reviewer"
+        - "Other (specify below)" - shows custom text field
+      - ✅ Conditional custom reason textarea for "Other" option
+      - ✅ Important warnings about consequences (data deletion, access removal, etc.)
+  - [x] **Assessment Progress Tracking & Viewing (October 2025)**: Enhanced visibility of reviewer progress
+    - **Progress Indicators**:
+      - ✅ "Not Started" - Reviewer hasn't opened the assessment form yet
+      - ✅ "In Progress" - Reviewer has saved a draft but not submitted (status: 'draft')
+      - ✅ "Completed" - Reviewer has submitted the assessment (status: 'submitted')
+    - **View Assessment Feature**:
+      - ✅ Blue "View" button appears when reviewer completes assessment
+      - ✅ ViewAssessmentDialog component shows completed form in readable format
+      - ✅ Organized sections: Protocol Info, Assessment Criteria, Recommendation, Comments
+      - ✅ Shows reviewer name, form type, submission date, status badge
+      - ✅ Scrollable view for long assessments
+      - ✅ Clean field labels with proper formatting
+    - **Benefits**:
+      - ✅ Chairperson can see if reviewer started but hasn't finished (draft status)
+      - ✅ Easy-to-read view of completed assessments (no more JSON downloads)
+      - ✅ Better decision-making with clear assessment visibility
+    - **Backend Services**:
+      - ✅ `reviewerService.reassignReviewer()` - handles full reassignment process
+      - ✅ Creates reassignment_history subcollection record
+      - ✅ Deletes old reviewer's assessment form data
+      - ✅ Updates reviewer loads (decrease old, increase new)
+      - ✅ Updates assignment with new reviewer and fresh 2-week deadline
+      - ✅ `reviewerService.getReassignedProtocols()` - fetches protocols removed from
+      - ✅ `reviewerAuthService` updated to filter reassigned protocols from active list
+    - **Reviewer Side**:
+      - ✅ New "Reassigned" tab in reviewer dashboard
+      - ✅ Shows SPUP code, protocol title, original deadline, reassignment date
+      - ✅ Displays reason for reassignment and days overdue
+      - ✅ Read-only view (no action buttons)
+      - ✅ Reassigned protocols disappear from active tabs
+      - ✅ Access control prevents viewing/editing reassigned protocol details
+  - [x] **Assessment Data Storage Fix (October 28, 2025)**: Fixed critical path mismatch in assessment data storage
+    - **Problem**: Assessment forms were being saved to wrong Firebase path
+      - ❌ Old path: `submissions/{protocolId}/assessment_forms/{formType}`
+      - ✅ Correct path: `submissions/{protocolId}/reviewers/{assignmentId}/assessment_forms/{formType}`
+    - **Impact**: Draft status changes were not visible because chairperson was reading from different path
+    - **Files Fixed**:
+      - ✅ `assessmentFormsService.saveDraft()` - Now finds reviewer assignment and saves to correct subcollection
+      - ✅ `assessmentFormsService.submitForm()` - Uses reviewer-scoped path
+      - ✅ `assessmentFormsService.getFormData()` - Added reviewerId parameter for correct path lookup
+      - ✅ `assessmentFormsService.updateFormStatus()` - Now requires reviewerId and uses correct path
+      - ✅ `assessmentFormsService.deleteForm()` - Now requires reviewerId and uses correct path
+      - ✅ `assessmentFormsService.getFormStatus()` - Added reviewerId parameter support
+      - ✅ `useAssessmentForm.ts` - Updated to pass reviewerId when loading form data
+    - **Result**: 
+      - ✅ Draft status now saves to Firebase correctly
+      - ✅ Chairperson can see real-time status updates (Not Started → In Progress → Completed)
+      - ✅ Refresh button works correctly
+      - ✅ All assessment CRUD operations now use consistent path structure
+    - **Additional Fix for useLocalDraft**: Updated `useLocalDraft` hook to ALSO save drafts to Firebase, not just localStorage
+      - ✅ IACUC, Protocol Review, Informed Consent, and Exemption forms now save drafts to Firebase with 'draft' status
+      - ✅ This ensures chairperson can see "In Progress" status for ALL forms (not just ones using useAssessmentForm hook)
+      - ✅ Manual "Save Draft" button and auto-save now both persist to Firebase
+      - ✅ Maintains backward compatibility with localStorage for offline support
+    - **Final Fix (October 28, 2025)**: Enhanced `useLocalDraft.loadDraft()` to sync Firebase data to localStorage
+      - ✅ When loading from Firebase, data is now also cached to localStorage as backup
+      - ✅ This ensures data persists through browser refreshes
+      - ✅ Forms now retain data properly on page reload
+      - ✅ Prefill data loads from Firebase on refresh
+    - **Prefill Fix (October 28, 2025)**: Fixed race condition between prefill and draft loading
+      - ❌ **Problem**: Forms loaded existing drafts from Firebase, which overwrote prefill data
+      - ✅ **Solution**: Modified all 4 forms to check for existing drafts FIRST, then prefill if no draft exists
+      - ✅ Priority order: Existing Draft → Prefill Data → Empty Form
+      - ✅ Updated forms: IACUC, Protocol Review, Informed Consent, Exemption Checklist
+      - ✅ Now prefill works correctly when there's no existing draft
+    - **Controlled/Uncontrolled Fix (October 28, 2025)**: Fixed React warning about uncontrolled inputs
+      - ❌ **Problem**: Form fields initialized with `undefined` caused "uncontrolled to controlled" warnings
+      - ✅ **Solution**: Initialize comment fields as empty strings (`''`) instead of `undefined`
+      - ✅ Added `removeUndefinedValues()` helper function in `useLocalDraft` to clean data before saving to Firebase
+      - ✅ Firebase rejects `undefined` values - now cleaned before saving
+      - ✅ Updated IACUC form to initialize all comment fields as empty strings
+    - **Data Structures**:
+      - ✅ ReassignmentHistory interface with full audit trail
+      - ✅ ReassignedProtocol interface for tab display
+      - ✅ Stores old/new reviewer info, reason, deadlines, timestamps
+- [x] **NEW: Improved Protocol Status Flow (January 2025)**
+  - [x] **Clarified Status Workflow**: Updated status display logic for better user understanding
+    - **Pending**: Protocol submitted but no SPUP code assigned yet (🟠 Orange)
+    - **Accepted**: Protocol has SPUP code but no reviewers assigned yet (🟢 Teal)
+    - **Under Review**: Protocol has reviewers assigned and assessment is in progress (🔵 Indigo)
+  - [x] **Enhanced Status Detection**: Updated `getDisplayStatus()` function to properly handle:
+    - Pending protocols always show "Pending" until SPUP code is assigned
+    - Accepted protocols show "Accepted" until reviewers are assigned
+    - Accepted protocols with reviewers show "Under Review"
+  - [x] **Visual Consistency**: Updated badge styling across all components
+    - Added "Accepted" status with teal styling to match new workflow
+    - Updated chairperson protocol lists for consistent color coding
+    - Enhanced badge component with proper "Accepted" status support
+  - [x] **Clear User Experience**: Status now accurately reflects protocol stage:
+    - No confusion between "accepted but waiting for reviewers" vs "under active review"
+    - Clear visual distinction between each stage of the process
+- [x] **NEW: IACUC Form Improvements & Protocol Information Enhancements (January 2025)**
+  - [x] **Fixed IACUC Form Pre-population**: Enhanced IACUC assessment form to properly receive and use protocol data
+    - Added `protocolData`, `reviewerAssignment`, and `skipFirebaseLoad` props to interface
+    - Implemented pre-population logic using existing `prePopulateFormFields` and `getFormDefaultValues` utilities
+    - Fixed form initialization order to prevent variable declaration errors
+  - [x] **IACUC Protocol Code Usage**: Simplified code system per user feedback
+    - IACUC forms now use SPUP REC codes directly (no separate IACUC code generation)
+    - Maintains consistency across all assessment forms using the same protocol identifier
+    - Simplified data structure without unnecessary code duplication
+  - [x] **Added Course/Program Field**: Enhanced principal investigator information structure
+    - Added `course_program?: string` to `PrincipalInvestigator` interface in `information.types.ts`
+    - Updated submission form to include course/program field in 4-column grid layout
+    - Added validation rules for optional course/program field (2-100 characters)
+    - Updated protocol information display components to show course/program data
+  - [x] **Fixed Protocol Information Display Inconsistencies**:
+    - **Unified Position & Institution Display**: Combined separate position/institution fields into single "Position & Institution" display
+    - **Dynamic Type of Review**: Type of review now automatically determined from research type (SR, PR, HO, BS, EX)
+    - **Flexible Data Handling**: Supports both combined `position_institution` and legacy separate `position`/`institution` fields
+    - **Enhanced Display Logic**: Updated both proponent and reviewer protocol information components
+    - **Improved User Experience**: Course/program field properly displayed alongside other principal investigator information
+    - **Consistent Data Access**: Added proper type checking and fallback values for missing data
+
+- [x] **NEW: Assessment Form Radio Button Fix (January 2025)**
+  - [x] **Removed Auto-Selected Radio Buttons**: Fixed all assessment forms to prevent automatic radio button selection
+    - **Protocol Review Assessment Form**: Changed all radio button defaults from preset values to `undefined`
+    - **IACUC Protocol Review Form**: Removed auto-selection of 'expedited', 'unable', 'approved' values
+    - **Informed Consent Assessment Form**: Cleared preset 'unable' and 'Approved' defaults
+    - **Exemption Checklist Form**: Removed auto-selection of 'no', 'anonymized', 'qualified' values
+    - **User Experience**: Reviewers now must explicitly make selections, ensuring intentional assessments
+    - **Data Integrity**: Prevents accidental submissions with unintended default values
+  - [x] **Fixed IACUC Form Pre-population Override**: Resolved issue where `getFormDefaultValues` was resetting radio buttons
+    - **Root Cause**: `formPrepopulation.ts` was setting assessment fields back to 'unable' during pre-population
+    - **Solution**: Updated `getFormDefaultValues` to use `undefined` instead of preset values for all radio buttons
+    - **Fixed Forms**: All assessment forms now consistently start with no auto-selected radio buttons
+  - [x] **Added Draft Functionality to Missing Forms**: Enhanced forms without draft saving capabilities
+    - **Exemption Checklist Form**: Added complete draft functionality with auto-save and manual save options
+    - **IACUC Protocol Review Form**: Added draft functionality while preserving pre-population logic
+    - **Features Added**: Auto-save on form changes, manual draft saving, draft loading on form mount
+    - **UI Improvements**: Added Save Draft and Submit Assessment buttons with loading states
+    - **Status Indicators**: Added auto-save status and last saved timestamp displays
+
+- [x] **NEW: Draft System Improvements (January 2025)**
+  - [x] **Added Time Limits for Assessment Form Drafts**: Set 30-minute expiration for assessment form drafts
+    - **Implementation**: Enhanced `useLocalDraft` hook to include `expiresAt` timestamp in saved drafts
+    - **Automatic Cleanup**: Drafts automatically expire and are removed after 30 minutes
+    - **User Experience**: Encourages focused review sessions and prevents stale drafts from cluttering the system
+    - **Appropriate Timing**: 30 minutes provides sufficient time for assessment completion without being excessive
+  - [x] **Fixed Document Draft Persistence Issues**: Resolved duplicate file uploads and missing file references
+    - **Root Cause**: File objects can't be serialized to localStorage, causing lost file references after page refresh
+    - **Solution**: Added `_fileRefLost` marker to track documents that lost their file references during localStorage save
+    - **Smart Replacement**: When uploading a new file for a document that lost its reference, automatically remove the old entry
+  - [x] **Fixed Document Submission Issue - File References Lost** (January 20, 2025)
+    - **Issue**: Documents were not being saved during application submission because file references were lost during localStorage serialization
+    - **Root Cause**: File objects stored in `_fileRef` property were stripped out when documents were auto-saved to localStorage (every 2 seconds)
+    - **Solution**: Created `FileReferenceManager` to keep File objects in memory separate from localStorage
+      - **New File**: `src/utils/fileReferenceManager.ts` - Singleton manager to store File objects in memory using Map<documentId, File>
+      - **Benefits**: File objects never go through JSON serialization, preventing data loss
+    - **Updated Files**:
+      - `src/contexts/SubmissionContext.tsx`:
+        - Integrated FileReferenceManager to restore file references before submission
+        - Added file reference cleanup on document removal and form reset
+        - Enhanced submission process to validate all documents have file references before uploading
+        - Added comprehensive logging for debugging file reference state
+      - `src/components/rec/proponent/application/protocol-submission/documents.tsx`:
+        - Register file references with FileReferenceManager when files are uploaded
+        - Remove file references when documents are replaced or removed
+        - Added detailed console logs for tracking file operations
+      - **Data Structure**: Documents now stored in new subcollection structure: `submissions/{applicationId}/documents/{documentId}`
+      - **Result**: Documents are now properly saved in the subcollection during application submission with all file references preserved
+  - [x] **Fixed Chairperson Protocol Detail Page Error** (January 20, 2025)
+    - **Issue**: Error "Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object"
+    - **Root Cause**: The `protocol-overview.tsx` file was corrupted (0 bytes/empty file), causing import failures
+    - **Solution**: Recreated the `ProtocolOverview` component with proper implementation
+      - **File**: `src/components/rec/shared/protocol-overview.tsx` - Recreated unified component for displaying protocol information and documents
+      - **Layout**: Two-column grid layout (Information | Documents) responsive to screen size
+      - **Features**: 
+        - Protocol information display with proper null checking for optional fields
+        - Document preview integration using InlineDocumentPreview component
+        - Support for different user types (proponent, reviewer, chairperson)
+        - Automatic document loading from Firestore subcollection
+      - **Type Safety**: Added proper optional chaining for all potentially undefined fields
+      - **Data Access**: Uses full path notation (information.field?.subfield) to avoid TypeScript undefined errors
+    - **Removed**: Unused `ProtocolReports` import from chairperson protocol detail page (reports are shown in ChairpersonActions component)
+    - **Result**: Chairperson protocol detail page now loads correctly with proper information and document display
+  - [x] **Updated PDF Display for Admin Side**: Changed from individual page display to seamless continuous view
+    - **Change**: Removed spacing and page indicators between PDF pages
+    - **Implementation**: Modified `PdfJsPreview` component to display pages seamlessly connected
+    - **Result**: PDF now displays like native viewer with continuous scrollable content
+  - [x] **Implemented React PDF Viewer**: Replaced PDF.js with react-pdf for better continuous scrolling
+    - **Library**: Installed and configured `react-pdf` package
+    - **Features**: Continuous page display, smooth scrolling, zoom controls, rotation
+    - **Components Updated**: `InlineDocumentPreview`, `DocumentPreviewDialog`
+    - **Styling**: Added proper CSS for react-pdf components in globals.css
+  - [x] **Fixed PDF Loading Issue**: Resolved stuck loading state by switching to iframe-based viewer
+    - **Issue**: React-pdf was having worker/loading conflicts
+    - **Solution**: Created `SimplePdfViewer` using iframe for reliable PDF display
+    - **Result**: PDF now loads properly with native browser scrolling behavior
+  - [x] **Removed ViewDocumentButton and Related Code**: Cleaned up deprecated view functionality
+    - **Removed Files**: `ViewDocumentButton.tsx`, `useDocumentViewer.ts`, `download-file/route.ts`, `view-document-feature.md`
+    - **Updated Components**: Removed ViewDocumentButton from all document lists (shared, proponent, reviewer)
+    - **Simplified UI**: Now only showing download option in dropdown menus
+    - **Reason**: Preview documents functionality replaces the need for separate view buttons
+  - [x] **Fixed Document Preview Selection Issue**: Resolved problem where preview always showed first document
+    - **Issue**: PDF viewer was not properly re-rendering when different documents were selected
+    - **Root Cause**: React component was reusing cached state from previous document
+    - **Solution**: Added unique `key` props to force component re-render on document change
+    - **Improvements**: Added better state cleanup and debugging logs for PDF loading
+    - **Result**: Preview now correctly shows the selected document instead of always the first one
+  - [x] **Fixed Document Preview and Dropdown Menu Issues**: Comprehensive fix for selection and UI state
+    - **Document Selection**: Added `selectedDocumentId` prop to specify which document to preview
+    - **Dropdown Control**: Implemented controlled dropdown state to close menus when preview opens
+    - **Preview Button Logic**: Updated DocumentPreviewButton to pass specific document ID for targeted preview
+    - **State Management**: Added proper state tracking for dropdown menus and document selection
+    - **Result**: Preview now shows the correct clicked document and dropdown menus close properly
+  - [x] **Fixed Action Button Clickability Issues**: Resolved dropdown menu interaction problems
+    - **Z-Index Fix**: Added higher z-index (`z-[60]`) to dropdown content to ensure it appears above overlays
+    - **State Debugging**: Added debug logging to track preview state and dropdown interactions
+    - **Controlled State Removal**: Temporarily removed controlled dropdown state to eliminate interaction blocking
+    - **Result**: Action buttons (dropdown menus) are now clickable and functional in admin view
+    - **Duplicate Prevention**: Prevents multiple entries for the same document when files are re-uploaded after refresh
+    - **Enhanced Logging**: Added detailed console logging to track document reference issues
+  - [x] **Fixed Dropdown Menu Not Closing After Action Click (January 2025)**: System-wide dropdown menu fix
+    - **Issue**: Dropdown menus remained open after clicking an action (e.g., Upload Revision, View Document)
+    - **Root Cause**: Dialogs were nested inside DropdownMenuContent, causing conflicts when dialogs opened
+    - **Solution**: Refactored to follow shadcn UI best practices - dialogs rendered outside dropdowns, controlled by state
+    - **Implementation Details (Best Practice):**
+      - **Dialogs Outside Dropdowns**: Moved all dialog components outside DropdownMenuContent
+      - **State Management**: Added `openDialogType` state to control which dialog is open
+      - **Helper Functions**: Created `openUploadDialog()`, `openReviewDialog()`, `closeDialog()` functions
+      - **Controlled Dropdowns**: Used `open` and `onOpenChange` props for dropdowns
+      - **Controlled Dialogs**: Made dialog components accept external `open` and `onOpenChange` props
+      - **Immediate Closure**: Dropdowns close immediately when action is clicked (no delays needed)
+      - **Clean Architecture**: Dialogs manage their own content, parent manages visibility
+    - **Dialog Components Updated**:
+      - `src/components/rec/shared/dialogs/document-upload-dialog.tsx` - Added external control props
+      - `src/components/rec/shared/dialogs/document-review-dialog.tsx` - Added external control props
+      - Both dialogs now support controlled and uncontrolled modes
+    - **Preview Button Fixed**:
+      - Replaced `DocumentPreviewButton` component inside dropdown with simple `DropdownMenuItem`
+      - Preview now triggers via `onClick` handler instead of nested button component
+      - Dropdown closes properly when preview is opened
+    - **Download Function Improved (System-Wide)**:
+      - Removed `target="_blank"` that was opening new tabs for downloads
+      - **Implementation**: Uses hidden iframe to trigger download without opening tabs
+      - Added loading toast with document name while preparing download
+      - Added success/error toast notifications
+      - Proper cleanup of temporary DOM elements after download
+      - Downloads start immediately without opening any tabs
+      - Works seamlessly with Firebase signed URLs
+      - **Fixed toast persistence issue**: 
+        - Moved download handler outside component to use standard `document` API
+        - Store toast ID: `const toastId = toast.loading(...)` 
+        - Explicitly dismiss by ID: `toast.dismiss(toastId)` inside setTimeout
+        - Toast dismiss and success message both happen after 1000ms delay
+        - This ensures the loading toast is properly dismissed after download starts
+      - **Applied to all download locations**:
+        - `src/components/rec/shared/protocol-overview.tsx` - Document table downloads (helper function outside component)
+        - `src/components/ui/decision-card.tsx` - Decision document downloads (helper function outside component)
+      - **Implementation details**:
+        - Create hidden iframe with `display: none`, `position: fixed`, zero width/height
+        - Set iframe `src` to Firebase signed download URL
+        - Iframe triggers browser download without opening new tab
+        - Remove iframe after 1000ms delay with toast cleanup
+        - Helper function defined outside component scope prevents scope issues with `document` API
+      - **Preview functionality preserved**: Window.open for previews remains intact (intentional new tab behavior)
+    - **Fixed Protocol Loading Issue (January 2025)**:
+      - **Issue**: Chairperson protocol page stuck on loading when viewing protocols
+      - **Root Cause**: Page was only checking `submissions_accepted` collection
+      - **Solution**: Updated to use `getSubmissionById()` which searches all collections
+      - **Collections Checked**: pending, accepted, approved, archived
+      - **Result**: Protocols now load correctly regardless of their status
+      - **File Fixed**: `src/app/rec/chairperson/protocol/[id]/page.tsx`
+    - **Fixed Decision Making Firebase Errors (January 2025)**:
+      - **Issue 1**: `serverTimestamp() is not currently supported inside arrays` error when making decisions
+        - **Root Cause**: Using `serverTimestamp()` for `uploadedAt` field inside document array
+        - **Firebase Limitation**: Firebase doesn't allow `serverTimestamp()` inside arrays
+        - **Solution**: Changed from `serverTimestamp()` to `Timestamp.now()`
+        - **Technical Explanation**: 
+          - `serverTimestamp()` is a placeholder that gets replaced on server
+          - Arrays are sent as-is to Firebase, placeholders not allowed
+          - `Timestamp.now()` creates actual timestamp on client before sending
+      - **Issue 2**: `writeBatch is not defined` error when transferring approved protocols
+        - **Root Cause**: `writeBatch` was used but not imported from firebase/firestore
+        - **Solution**: Added `writeBatch` and `WriteBatch` type to the imports
+      - **Issue 3**: `Invalid document reference. Document references must have an even number of segments, but submissions_accepted/REC_2025_QOLEZ9/decision has 3`
+        - **Root Cause**: Trying to reference `decision` as a document path (3 segments) instead of `decision/details` (4 segments)
+        - **Firebase Requirement**: Document references must have an even number of segments (collection/doc/collection/doc)
+        - **Solution**: Changed from `{ name: 'decision', type: 'document' }` to `{ name: 'decision/details', type: 'document' }`
+        - **Technical Explanation**:
+          - Firebase paths must alternate: collection → document → collection → document
+          - Odd-numbered paths (3, 5, 7) are invalid document references
+          - Even-numbered paths (2, 4, 6) are valid document references
+      - **Issue 4**: Type errors in error handling
+        - **Root Cause**: TypeScript error catching with unknown error types
+        - **Solution**: Added proper error type checking with `error instanceof Error ? error.message : 'Unknown error'`
+      - **Issue 5**: `Function doc() cannot be called with an empty path` in DecisionCard
+        - **Root Cause**: `getDecision` function expected COLLECTIONS key (e.g., 'PROTOCOLS_ACCEPTED') but was receiving actual collection name (e.g., 'submissions_accepted')
+        - **Solution**: Updated `getDecision` to accept both COLLECTIONS keys and direct collection name strings
+        - **Implementation**: Added check to determine if input is a COLLECTIONS key or direct collection name
+        - **Validation**: Added protocolId validation to provide clear error message when protocolId is empty
+        - **Technical Details**:
+          - Changed parameter type from `keyof typeof COLLECTIONS` to `keyof typeof COLLECTIONS | string`
+          - Added logic: `(collectionName in COLLECTIONS) ? COLLECTIONS[collectionName] : collectionName`
+          - Validates protocolId before creating document reference
+      - **Issue 6**: Decision card not showing for approved protocols
+        - **Root Cause**: `copyDocument` function was not properly handling nested paths like "decision/details"
+        - **Problem**: When passing "decision/details" as documentPath, Firebase's `doc()` was treating it as a single string instead of separate path segments
+        - **Solution**: Split documentPath by '/' and spread the parts as separate arguments to `doc()`
+        - **Implementation**: Changed from `doc(db, collection, submissionId, documentPath)` to `doc(db, collection, submissionId, ...documentPath.split('/'))`
+        - **Added Logging**: Console logs to track document copying success/failure during transfer
+        - **Result**: Decision documents are now properly copied to approved collection and display correctly
+      - **Result**: Decision making, protocol transfer, and decision card display now work without Firebase errors
+      - **Files Fixed**: 
+        - `src/lib/firebase/firestore.ts` - makeProtocolDecision, transferProtocolToApproved, and copyDocument functions
+        - `src/lib/services/unifiedDataService.ts` - getDecision function
+    - **Files Fixed**:
+      - `src/components/rec/shared/protocol-overview.tsx` - Document actions (desktop + mobile views)
+      - `src/components/rec/reviewer/table.tsx` - Reviewer protocol actions
+      - `src/app/rec/chairperson/submitted-protocols/page.tsx` - Chairperson submitted protocols table
+      - `src/app/rec/chairperson/approved-protocols/page.tsx` - Chairperson approved protocols table
+    - **Result**: All dropdown menus now properly close when:
+      - Dialog triggers are clicked (Upload Document, Upload Revision, Review Document, etc.)
+      - Dialogs open successfully without any timing issues
+      - Navigation actions are clicked (View Details, Review, Edit, etc.)
+      - Any action completes
+    - **Future-Proof**: Follows shadcn UI documentation best practices for dropdown+dialog integration
+    - **Technical Advantages**:
+      - No setTimeout delays needed
+      - No race conditions
+      - Proper component separation of concerns
+      - Dialogs can be controlled externally or work independently
+      - Follows React best practices for controlled components
+
+- [x] **NEW: Protocol Component Unification (January 2025)**
+  - [x] **Created Unified Protocol Overview Component**: Single component for all user types and includes documents
+    - **File**: `src/components/rec/shared/protocol-overview.tsx` - New unified component
+    - **Features**: Information display, document viewing/downloading, responsive design, collapsible sections
+    - **User Type Support**: Props for `'proponent' | 'reviewer' | 'chairperson'` to customize behavior
+    - **Document Integration**: Built-in document table with view/download capabilities
+    - **Consistent UI**: Same information layout and styling across all user types
+  - [x] **Replaced Existing Components**: Updated all user type pages to use unified component
+    - **Reviewer Pages**: `src/app/rec/reviewers/protocol/[id]/page.tsx` - Replaced separate info + document components
+    - **Proponent Pages**: `src/app/rec/proponent/dashboard/protocol/[id]/page.tsx` - Unified two-column layout
+    - **Chairperson Pages**: `src/app/rec/chairperson/protocol/[id]/page.tsx` - Streamlined protocol view
+    - **Code Reduction**: Eliminated duplicate protocol information and document components
+    - **Maintenance**: Single component to maintain instead of 3+ separate ones
+
+- [x] **NEW: Document Status Management System (January 2025)**
+  - [x] **Updated Document Types**: Simplified document status system with 3 states
+    - **Status Types**: `pending` (default), `accepted` (ready), `revise` (needs changes)
+    - **Removed**: `rejected` status - documents are either accepted or need revision
+    - **Enhanced Properties**: Added `chairpersonComment`, `reviewedBy`, `reviewedAt` fields
+    - **Document Requests**: New `DocumentRequest` interface for requesting additional documents
+    - **Version Tracking**: Automatic version incrementing when documents are replaced
+  - [x] **Document Request Integration in Chairperson Actions (January 27, 2025)**
+    - Added "Request Documents" button to chairperson protocol review page
+    - Integrated existing `DocumentRequestDialog` component for requesting missing/additional documents
+    - Enhanced validation logic: Accept Protocol button now checks for pending document requests
+    - Updated document status card to show both accepted documents count and pending requests count
+    - Added automatic document/request reload after creating new document requests
+    - Improved user feedback with tooltips explaining why accept button is disabled
+    - Ensures protocol completeness before reviewer assignment and approval
+  - [x] **User-Specific Document Capabilities**: Different functionality per user type
+    - **Proponent**: View status, edit documents, download, see comments from chairperson
+    - **Reviewer**: View and download only (no status shown) - simplified interface
+    - **Chairperson**: Full review capabilities - set status, add comments, request documents
+  - [x] **Document Management Service**: New backend service for document operations
+    - **File**: `src/lib/services/documentManagementService.ts` - Complete document workflow management
+    - **Status Updates**: Update document status with chairperson comments and timestamps
+    - **Document Requests**: Create, track, and fulfill document requests from chairperson
+    - **Document Replacement**: Handle version tracking when proponents replace documents
+    - **Status Summary**: Get overview of document states for protocols
+  - [x] **Enhanced ProtocolOverview Component**: User-specific document interfaces
+    - **Dynamic UI**: Different table columns and actions based on user type
+    - **Status Indicators**: Color-coded badges with icons for each status type
+    - **Version Badges**: Show document version numbers when > 1
+    - **Comment Display**: Show chairperson comments (truncated) in chairperson view
+    - **Responsive Design**: Mobile-friendly cards with appropriate actions per user type
+  - [x] **Document Review Dialog**: Simplified chairperson document review interface
+    - **File**: `src/components/rec/shared/dialogs/document-review-dialog.tsx`
+    - **Status Selection**: Only "Accepted" and "Needs Revision" options
+    - **Smart Comments**: Required only for revisions, optional for accepted documents
+    - **Visual Feedback**: Clear status icons and descriptions
+    - **Validation**: Enforces comment requirement only when needed
+  - [x] **Document Request Dialog**: Chairperson request additional documents
+    - **File**: `src/components/rec/shared/dialogs/document-request-dialog.tsx`
+    - **Request Creation**: Form to request specific documents from proponents
+    - **Due Dates**: Optional deadline setting for document submissions
+    - **Urgency Flags**: Mark requests as urgent for prioritization
+    - **Detailed Descriptions**: Rich descriptions of what documents are needed
+
+### 3. Decision Handling & Auto-Generated Documents ✅
+- [x] Implement document generation based on decision type:
+  - **Approved**: Certificate of Approval, Notice of SPUP REC Decision, Progress Report, Final Report
+  - **Approved with Minor Revisions**: Notice of SPUP REC Decision, Protocol Resubmission (3 days)
+  - **Major Revision/Deferred**: Notice of SPUP REC Decision, Protocol Resubmission, Compliance Data (7 days)
+- [x] Create document generation service using MS Word templates
+- [x] Auto-download generated documents when decision is made
+
+### 4. Auto-Generation Template Implementation ✅
+- [x] Set up MS Word template processing with placeholders
+- [x] Create document generator service to replace placeholders:
+  - <<DATE>>
+  - <<SPUP_REC_CODE>>
+  - <<PROTOCOL_TITLE>>
+  - <<PRINCIPAL_INVESTIGATOR>>
+  - <<ADVISER>>
+  - <<INITIAL_DATE>>
+  - <<APPROVED_DATE>>
+  - <<DURATION_APPROVAL>>
+  - <<LAST_DATE>>
+  - <<Chairperson>>
+- [x] Integrate template processing with decision workflow
+
+### 5. Decision Subcollection & Display System ✅
+- [x] **NEW: Implement Decision Subcollection Structure**
+  - [x] Create decision subcollection in Firebase: `submissions_accepted/{protocolId}/decision/`
+  - [x] Store decision details, documents, and metadata
+  - [x] Update `makeProtocolDecision` function to properly save to subcollection
+  - [x] Ensure decision data is copied when moving to `submissions_approved` collection
+- [x] **NEW: Create Decision Card Components**
+  - [x] Create `DecisionCard` component for chairperson view
+  - [x] Create `DecisionCard` component for proponent view
+  - [x] Create `DecisionCard` component for reviewer view
+  - [x] Display decision status, details, timeline, and documents
+  - [x] Show appropriate actions based on user role and decision type
+- [x] **NEW: Update Protocol Status Flow**
+  - [x] Move approved protocols to `submissions_approved` collection
+  - [x] Keep revision/disapproved protocols in `submissions_accepted` with decision
+  - [x] Update status display for all user roles
+  - [x] Ensure proper collection movement and data preservation
+
+### 6. Admin Approved Protocols Management ✅
+- [x] **NEW: Created Admin Approved Protocols Page**
+  - [x] Created `src/app/admin/approved-protocols/page.tsx`
+  - [x] Comprehensive table view of all approved protocols
+  - [x] Statistics dashboard with key metrics
+  - [x] Search and filter functionality
+  - [x] Action buttons for viewing, generating documents, and downloading
+  - [x] Real-time data fetching from Firebase
+  - [x] Responsive design with proper loading states
+  - [x] Error handling and user feedback
+
+### 7. Critical Issues Fixed ✅
+- [x] **Removed Decision Details Field (As Requested)**
+  - [x] Removed decision details input field from DecisionDialog
+  - [x] Kept empty string parameter for decisionDetails in makeProtocolDecision call
+  - [x] Document information is properly saved and displayed in decision card
+- [x] **Fixed Assessment Forms Not Being Transferred**
+  - [x] Created robust transfer system that copies ALL subcollections
+  - [x] Assessment forms now properly copied from accepted to approved collection
+  - [x] Nested assessment forms under reviewers are preserved during transfer
+- [x] **Implemented Robust Data Transfer System**
+  - [x] Created `transferProtocolToApproved` function with comprehensive logging
+  - [x] Added batch operations for atomic transfers
+  - [x] Implemented proper error handling and rollback prevention
+  - [x] Added transfer logging for debugging and monitoring
+- [x] **Fixed Research Reports Dummy Data**
+  - [x] Removed dummy data from proponent protocol page
+  - [x] Research Reports now show empty state when no real data exists
+  - [x] Proper data structure for future database integration
+- [x] **Fixed Reviewer Approved Tab Empty Issue**
+  - [x] Updated getAssignedProtocols to check both submissions_accepted and submissions_approved collections
+  - [x] Approved protocols now properly appear in reviewer's approved tab
+  - [x] Added collection reference for proper data handling
+- [x] **Replaced Current Reviewers & Status with Reviewer Assessments Summary UI**
+  - [x] Removed "Current Reviewers & Status" section
+  - [x] Enhanced "Reviewer Assessments Summary" to always show reviewer information
+  - [x] Added deadline tracking and status badges
+  - [x] Integrated assessment data display when available
+  - [x] Added individual JSON download buttons for completed assessments
+  - [x] Added "Export All Reviews" button for consolidated Word document export
+- [x] **Decision Card Display & Research Reports Integration**
+  - [x] Updated chairperson protocol detail page to properly show decision cards
+  - [x] Updated proponent protocol detail page to show decision cards with correct logic
+  - [x] Fixed decision card visibility for both accepted and approved protocols
+  - [x] Added proper collection parameter handling for decision data fetching
+  - [x] **Fixed Decision Documents Display**
+    - [x] Fixed Firebase function to properly save uploaded documents to decision subcollection
+    - [x] Documents now correctly stored in `decision/details` document with proper array structure
+    - [x] Decision card now displays uploaded documents with download functionality
+  - [x] **Integrated Research Reports into Administrative Actions**
+    - [x] Removed separate Research Reports button from Administrative Actions
+    - [x] Integrated ProtocolReports component directly into Chairperson Actions for approved protocols
+    - [x] Made Research Reports view-only for chairperson (removed submit buttons)
+    - [x] Added `isChairpersonView` prop to ProtocolReports component
+    - [x] Maintained existing Research Reports section for proponent view with upload functionality
+
+### 8. Protocol Information (General) ⏳
+- [ ] Review existing forms
+- [ ] Add missing details to General Information section
+- [ ] Update submission types and fields
+- [x] **NEW: Proponent Authentication & UI Improvements (January 2025)**
+  - [x] **Dashboard Default Redirect**: Updated proponent landing page to automatically redirect signed-in users to dashboard
+    - Added authentication check in `/rec/proponent/page.tsx`
+    - Shows loading state while checking authentication
+    - Redirects authenticated users to `/rec/proponent/dashboard`
+    - Shows landing page only for non-authenticated users
+  - [x] **Removed Breadcrumbs**: Cleaned up proponent interface by removing all breadcrumbs
+    - Removed `CustomBreadcrumbs` import and usage from all proponent pages
+    - Updated pages: `application/page.tsx`, `dashboard/page.tsx`, `dashboard/protocol/page.tsx`, `dashboard/protocol/[id]/page.tsx`
+    - Cleaner interface without navigation clutter
+  - [x] **Added Confirmation Step**: Enhanced protocol review application with 3-step process
+    - **Step 1**: Protocol Information (existing)
+    - **Step 2**: Protocol Documents (existing)  
+    - **Step 3**: Review & Confirm (new confirmation page)
+    - Created `SubmissionConfirmation` component with comprehensive review interface
+    - Shows submission summary, form data, study details, and uploaded documents
+    - Includes confirmation text input requiring "CONFIRM" to proceed
+    - Updated `STEPS` array and form reducer to support 3 steps
+    - Confirmation page replaces the dialog-based confirmation system
+  - [x] **NEW: Global Back Button Implementation (January 2025)**
+    - [x] **Created GlobalBackButton Component**: Reusable back navigation component
+      - Uses `useRouter()` from Next.js navigation
+      - Detects browser history using `useEffect` and `useRef`
+      - Goes back to previous page if history exists (`router.back()`)
+      - Falls back to `/rec/proponent/dashboard` if no history
+      - Styled with Tailwind CSS: rounded-md, px-4 py-2, border, hover effects
+      - Includes ArrowLeft icon from lucide-react
+    - [x] **Integrated into Proponent Pages**: Added to all proponent pages
+      - `application/page.tsx` - Protocol review application
+      - `dashboard/page.tsx` - Main dashboard
+      - `dashboard/protocol/page.tsx` - Protocol list page
+      - `dashboard/protocol/[id]/page.tsx` - Individual protocol details
+    - [x] **Consistent Navigation**: Provides consistent back navigation experience
+      - Users can easily return to previous page or dashboard
+      - Handles edge cases where users open pages directly
+      - Maintains user flow and reduces navigation confusion
+  - [x] **NEW: Enhanced Confirmation Step with Checkbox (January 2025)**
+    - [x] **Added Checkbox to Confirmation**: Two-step confirmation process
+      - First step: User must check "I have read and agree to the terms above"
+      - Second step: Confirmation input field appears only after checkbox is checked
+      - User must type "CONFIRM" to enable submission
+      - Prevents accidental submissions and ensures user acknowledgment
+    - [x] **Moved Submit Button**: Relocated submit button from confirmation card to main application page
+      - Submit button now appears in the main navigation area
+      - Shows loading state with spinner during submission
+      - Disabled state during submission process
+      - Better user experience with consistent button placement
+    - [x] **Improved User Flow**: Enhanced confirmation process
+      - Clear progression: Checkbox → Confirmation Input → Submit Button
+      - Visual feedback for each step
+      - Error handling and validation messages
+      - Maintains existing submission dialog functionality
+  - [x] **NEW: Submit Button Validation (January 2025)**
+    - [x] **Dynamic Submit Button State**: Submit button now responds to confirmation state
+      - Disabled when checkbox is not checked
+      - Disabled when "CONFIRM" is not typed correctly
+      - Only enabled when both conditions are met
+      - Real-time state checking using sessionStorage communication
+    - [x] **Enhanced User Guidance**: Improved help text and feedback
+      - Shows specific instructions when submit button is disabled
+      - Clear guidance: "Please check the confirmation checkbox and type 'CONFIRM' to enable submission"
+      - Dynamic help text based on current step and confirmation state
+    - [x] **Real-time Validation**: Continuous monitoring of confirmation state
+      - Uses sessionStorage to communicate between confirmation component and parent
+      - Polling mechanism to detect state changes
+      - Immediate button state updates when user completes confirmation steps
+  - [x] **NEW: Document Persistence Fix (January 2025)**
+    - [x] **Fixed Document Loss Issue**: Resolved problem where documents disappeared when navigating between steps
+      - Root cause: File objects (`_fileRef`) cannot be serialized to localStorage, causing document loss during step navigation
+      - Solution: Enhanced localStorage manager to properly handle file reference loss
+      - Added `_fileRefLost` marker and `_lastSaved` timestamp to track document state
+      - Documents now maintain their metadata even when file references are lost
+    - [x] **Step-Based Document Reloading**: Added automatic document reloading when accessing document-related steps
+      - Documents are reloaded from localStorage when user navigates to step 1 (Documents) or step 2 (Confirmation)
+      - Ensures documents are always available when needed
+      - Prevents document loss during step navigation
+    - [x] **Enhanced Debugging**: Added comprehensive logging for document state tracking
+      - Console logs for document save/load operations
+      - Document count tracking in localStorage operations
+      - Step-specific document reloading logs
+      - Better visibility into document persistence issues
+  - [x] **NEW: Removed Submission Confirmation Dialog (January 2025)**
+    - [x] **Streamlined Submission Process**: Removed redundant confirmation dialog
+      - Eliminated "Review & Submit Research Protocol Application" dialog
+      - Submit button now directly calls `submitApplication()` function
+      - Simplified submission flow with dedicated confirmation page (step 3)
+    - [x] **Updated Context Interface**: Cleaned up submission context
+      - Removed `showSubmissionDialog` and `hideSubmissionDialog` methods
+      - Removed `showConfirmDialog` state from form reducer
+      - Added `SubmissionSummary` interface directly to context
+      - Streamlined submission operations
+    - [x] **Enhanced User Experience**: Improved submission workflow
+      - Users complete confirmation on dedicated page (step 3)
+      - Submit button directly processes submission
+      - No redundant confirmation dialogs
+      - Cleaner, more intuitive flow
+- [x] **Added Confirmation Input to Submission Dialog** ✅
+  - Added confirmation text input field requiring user to type "CONFIRM"
+  - Submit button is disabled until correct confirmation text is entered
+  - Visual validation feedback with red border for incorrect input
+  - Auto-reset confirmation text when dialog opens/closes
+  - Enhanced user experience with clear instructions and error messages
+- [x] **Fixed Submission Zip File Error** ✅
+  - **Root Cause**: File objects in document `_fileRef` properties were lost during localStorage serialization
+  - **Issue**: `JSON.stringify()` cannot serialize File objects, causing `_fileRef` to become `undefined`
+  - **Solution**: Filter out documents with missing file references before submission
+  - **Implementation**:
+    - Added validation in `createCompleteSubmission` to check for valid File objects
+    - Enhanced localStorage manager to exclude `_fileRef` properties during save
+    - Added logging to warn users about skipped documents
+    - Prevented zip errors by only processing documents with valid file references
+  - **Result**: Submissions now proceed successfully even when some documents lose file references
+- [x] **Fixed SPUP Code Display and Badge Status Logic** ✅
+  - **SPUP Code Issues Fixed**:
+    - Removed complex temporary code display (no more "PENDING-20250905-094608(Temp)")
+    - Now shows only SPUP code when assigned, or "PENDING" when not yet assigned
+    - Hidden temp codes that were causing confusion
+    - Updated tooltips to provide clearer information
+  - **Badge Status Logic Enhanced**:
+    - Added new "Pending" badge status with orange styling
+    - Updated status logic to check if protocol has assigned reviewers
+    - **Smart Status Display**:
+      - Shows "Pending" when protocol submitted but no reviewers assigned yet
+      - Shows "Under Review" when reviewers are assigned to the protocol
+      - Maintains existing logic for approved/archived statuses
+  - **Implementation Details**:
+    - Added `hasReviewers` prop to CustomBanner component
+    - Integrated reviewer checking logic using `reviewerService.getProtocolReviewers()`
+    - Updated proponent and chairperson protocol detail pages
+    - Enhanced badge component with new "Pending" status configuration
+  - **User Experience**: Clear visual indication of protocol status progression
+- [x] **Fixed Chairperson Protocol Document Display** ✅
+  - **Issue**: Chairperson protocol page was not displaying documents in the Protocol Document section
+  - **Root Cause**: Page was using `getSubmissionById()` which only fetches basic submission data without documents
+  - **Solution**: Changed to use `getSubmissionWithDocuments()` which properly fetches documents from subcollection
+  - **Technical Details**:
+    - Updated import to include `getSubmissionWithDocuments` function
+    - Modified `fetchSubmissionDetails()` to use the correct function
+    - Documents are now properly loaded from Firebase subcollection structure
+  - **Result**: Chairperson can now view all uploaded documents for protocol review
+- [x] **Fixed Accept Protocol Dialog Theme & Review Types** ✅
+  - **Theme Issues Fixed**:
+    - Removed hardcoded dark theme (`bg-black text-white`) from Accept Protocol dialog
+    - Updated to use default theme styling with proper CSS classes
+    - Fixed all text colors and background colors to use theme-aware classes (`text-muted-foreground`, `bg-muted/50`)
+    - Enhanced button styling for better visibility and accessibility
+  - **Research Type System Corrected**:
+    - **Before**: Confusing SR (Standard Review) and EX (Expedited Review) options
+    - **After**: Correct research type classification:
+      - 📊 **Social/Behavioral Research (SR)** (default selection)
+      - 🏥 **Public Health Research (PR)**
+      - ⚕️ **Health Operations (HO)**
+      - 🔬 **Biomedical Research (BS)**
+      - ✅ **Exempted from Review (EX)**
+  - **SPUP Code Generation Updated**:
+    - Updated code format: `SPUP_YYYY_00000_SR/PR/HO/BS/EX_XX`
+    - SR = Social/Behavioral Research, PR = Public Health Research, HO = Health Operations, BS = Biomedical Research, EX = Exempted from Review
+    - Maintained backwards compatibility with validation patterns
+  - **Database Integration**:
+    - Added `researchType` field to store selected research type in Firebase
+    - Enhanced `acceptSubmission` function to capture research type choice
+    - Research type now preserved throughout the protocol lifecycle and included in SPUP codes
+  - **Type System Clarification**:
+    - **Research Types** are now used for both classification AND SPUP code generation
+    - **SPUP Code Format**: `SPUP_YYYY_00000_[RESEARCH_TYPE]_[PI_INITIALS]`
+    - Clear system where research type determines both categorization and code generation
+  - **User Experience Improvements**:
+    - Clear visual feedback in success messages showing selected research type
+    - Improved dialog accessibility with proper contrast and theming
+    - Intuitive radio button selection with descriptive labels and emojis
+    - Set "Social/Behavioral Research (SR)" as default selection
+    - Proper research type names displayed in notifications and success messages
+
+### 9. Unified Data Structure Implementation 🚀
+- [x] **Phase 1: Data Consolidation** ✅
+  - [x] Create unified data models in `src/types/unified.types.ts`
+  - [x] Implement data mapping functions to convert between old and new structures
+  - [x] Create data access layer that provides single source of truth
+- [x] **Phase 2: Form Refactoring** ⏭️ **SKIPPED**
+  - [x] ~~Refactor assessment forms to use unified protocol data~~ (Skipped - Development phase)
+  - [x] ~~Remove redundant fields from form schemas~~ (Skipped - Development phase)
+  - [x] ~~Implement data pre-population from unified source~~ (Skipped - Development phase)
+- [x] **Phase 3: Service Layer Updates** ✅
+  - [x] Update Firebase services to use unified data structure
+  - [x] Implement data validation at the service layer
+  - [x] Add data migration scripts for existing data
+- [x] **Form Validation Issues Fixed** ✅
+  - [x] Fixed "Next Step" button permanently disabled and "Validation Failed" message
+  - [x] Fixed field path mismatches in validation schema and form reducer
+  - [x] Added missing validation rules for conditional fields
+  - [x] Enhanced conditional validation logic to dynamically include required fields
+  - [x] Updated default form data structure to match validation requirements
+  - [x] **CRITICAL FIX: String boolean value validation issue**
+    - [x] Fixed `submitted_to_other_committee` field validation that was failing on string `"false"` vs boolean `false`
+    - [x] Updated validation logic to handle string boolean values (`"false"`, `"true"`)
+    - [x] Cleaned up debugging console logs after issue resolution
+    - [x] "Next Step" button now properly enables when all fields are valid
+  - [x] **NEW: Remove Pre-submission Status Validation**
+    - [x] Removed `submitted_to_other_committee` field from required validation fields
+    - [x] Removed validation rules for "Has the research been submitted to another research ethics committee?" question
+    - [x] This field is now optional and doesn't block form progression
+- [ ] **Phase 4: UI Updates**
+  - [ ] Update all forms to use unified data structure
+  - [ ] Implement consistent data display across all components
+  - [ ] Add data validation feedback in UI
+
+## 🚀 Implementation Status
+
+### ✅ Completed Features
+
+#### 1. UI/UX Updates
+- ✅ Removed "Upload Documents" button from chairperson actions
+- ✅ Removed "Send Notification" button
+- ✅ Kept only "Make Decision" as the primary action button
+- ✅ Added auto-generated documents info panel in decision dialog
+
+#### 2. Smart Reviewer Assignment System
+- ✅ Created ReviewerService with Firebase integration
+- ✅ Built intelligent reviewer recommendation engine
+- ✅ Replaced basic dropdown with advanced shadcn Command/Search component
+- ✅ Implemented research type-based reviewer requirements:
+  - Social Research: 3 reviewers required
+  - Experimental Research: 2 reviewers required
+  - Exemption: 2 reviewers required
+- ✅ Added reviewer workload tracking and availability status
+- ✅ Created expertise matching and scoring algorithm
+
+#### 3. Document Auto-Generation System
+- ✅ Integrated docxtemplater for MS Word template processing
+- ✅ Created comprehensive DocumentGeneratorService
+- ✅ Implemented decision-based document generation:
+  - **Approved**: 4 documents auto-generated
+  - **Minor Revisions**: 2 documents with 3-day timeline
+  - **Major Revisions**: 3 documents with 7-day timeline
+  - **Disapproved**: 1 notification document
+- ✅ Added automatic document download on decision
+- ✅ Removed Decision Details field; added standalone "Generate Documents" button in decision dialog
+- ✅ Updated template data mapping to extract protocol information fields:
+  - <<SPUP_REC_CODE>> from submission spupCode
+  - <<PROTOCOL_TITLE>> from general_information.protocol_title
+  - <<PRINCIPAL_INVESTIGATOR>> from general_information.principal_investigator.name
+  - <<CONTACT>> from general_information.principal_investigator.contact_number
+  - <<E-MAIL>> from general_information.principal_investigator.email
+  - <<INSTITUTION>> from general_information.principal_investigator.position_institution
+  - <<ADVISER>> from general_information.adviser.name
+  - <<INITIAL_DATE>> from submission acceptedAt timestamp
+- ✅ Set expedited certificate as default (most common)
+- ✅ Configured all template placeholders replacement
+- ✅ Updated duration calculation: Always 1 year from approval date
+- ✅ Fixed INITIAL_DATE to use protocol assignment date or undefined
+- ✅ Created REC Settings system for lineup management:
+  - REC Chair, Vice Chair, Secretary, Staff, Members
+  - Auto-extracts chairperson name for document templates
+  - Settings interface at `/rec/chairperson/settings` (accessible via sidebar)
+  - Initialize default REC members functionality
+- ✅ Created Members Management system:
+  - New "Members" sidebar link in chairperson navigation
+  - Members page at `/rec/chairperson/members` with two tabs:
+    - **Reviewers Tab**: Manage research ethics reviewers
+    - **REC Members Tab**: Manage REC lineup (from settings)
+  - Reviewer code generator: Auto-generates codes like "DRJF-018" (initials + sequential number)
+  - Admin functions: Add, disable/enable, delete reviewers
+  - Statistics dashboard showing total, active, and inactive reviewers
+- ✅ Enhanced Reviewer Assignment System:
+  - **Social Research**: 3 reviewers with specific assessment types:
+    - 2x Social Research Protocol Review Assessment
+    - 1x Informed Consent Assessment
+  - **Experimental Research**: 2 reviewers with assessment types:
+    - 2x IACUC Protocol Review Assessment
+  - **Exemption**: 2 reviewers with assessment types:
+    - 2x Checklist for Exemption Form Review
+  - Visual assignment display showing reviewer number and assessment type
+  - Assessment types summary with assignment status indicators
+  - Enhanced assignment storage with assessment type tracking
+  - **Individual Reviewer Input Fields**: 3 separate input fields in a row for Social Research
+    - Each field shows "Reviewer 1", "Reviewer 2", "Reviewer 3" with assessment type badges
+    - Prevents duplicate reviewer selection across positions
+    - Visual progress tracking with assignment status indicators
+  - **Fixed Reviewer Selection Issues**: Resolved array handling for proper index-based selection
+  - **Subcollection Storage**: Reviewers now saved in protocol subcollection structure:
+    - Path: `submissions_accepted/{protocolId}/reviewers/{reviewerId}`
+    - Includes assessment type, index, and reviewer details
+    - Automatic loading of existing assignments when dialog opens
+  - **Active Reviewer Filtering**: Only active reviewers appear in selection lists
+    - `isActive: false` reviewers are completely filtered out
+    - Removed confusing availability indicators (green/yellow/red dots)
+    - Clear distinction: isActive = can review, not online status
+  - **Complete Rewrite**: Built new reviewer assignment system from scratch
+    - **Simple & Clean**: Removed all complex logic and dependencies
+    - **Direct Firestore Integration**: Fetches reviewers directly from `reviewers` collection
+    - **Proper Assessment Types**: Exact requirements per research type
+      - Social Research: 2x Protocol Review + 1x Informed Consent
+      - Experimental Research: 2x IACUC Protocol Review Assessment  
+      - Exemption: 2x Checklist for Exemption Form Review
+    - **Subcollection Storage**: Saves to `submissions_accepted/{protocolId}/reviewers`
+    - **Working Selection**: Simple dropdown with click-to-select functionality
+    - **Real-time Search**: Instant filtering as you type
+    - **Assignment Summary**: Visual feedback showing selection status
+  - **NEW: Complete UI Implementation (January 2025)**
+    - **Assign Reviewers Button**: Added to chairperson actions for accepted/pending protocols
+    - **Comprehensive Dialog**: Full-featured modal with research type detection
+    - **Assessment Type Display**: Shows exactly what each reviewer will assess
+    - **Smart Selection Interface**: Click-to-select with visual feedback and validation
+    - **Search & Filter**: Real-time search by name or email
+    - **Assignment Summary**: Shows selected reviewers with their assessment types
+    - **Error Handling**: Comprehensive validation and error messages
+    - **Loading States**: Proper loading indicators during operations
+    - **Auto-close**: Dialog closes automatically after successful assignment
+    - **Data Validation**: Fixed Firebase error for reviewers with missing email fields
+    - **Fallback Values**: Provides default values for missing reviewer information
+    - **UI Cleanup**: Streamlined modal interface with simplified reviewer display
+    - **Individual Reviewer Inputs**: Replaced single selection with separate dropdowns for each reviewer position
+    - **Enhanced Search UI**: Added individual search functionality to each reviewer dropdown using Command/Popover components
+    - **Edit Reviewers Functionality**: Added edit button to modify existing reviewer assignments
+    - **2-Week Deadline System**: Automatic 2-week deadline assignment for all reviewers
+    - **Overdue Reviewer Management**: Automatic removal of overdue reviewers and audit logging
+    - **Audit Trail**: Complete audit records for reviewers who don't complete on time
+    - **Dynamic Button State**: Button changes from "Assign Reviewers" to "Edit Reviewers" when reviewers are assigned
+    - **Current Reviewers Display**: Shows assigned reviewers with their status and deadlines in the main interface
+    - **Status Indicators**: Visual badges showing completion status, days remaining, and overdue warnings
+    - **Component Refactoring**: Separated dialog components into individual files for better organization
+    - **Black Dialog Backgrounds**: Added black backgrounds to all dialogs for better visibility
+    - **Simplified Reviewer Display**: Cleaned up reviewer status display to show only name, status, and due date
+    - **Streamlined Quick Info**: Removed redundant "Reviewers" and "Review Status" from quick info section
+
+#### 4. Supporting Infrastructure
+- ✅ Created reviewer initialization endpoint (/api/init-reviewers)
+- ✅ Built admin page for reviewer data setup
+- ✅ Added Firebase storage integration for documents
+- ✅ Updated TypeScript types for all new features
+
+#### 5. Decision Subcollection & Display System ✅
+- ✅ **Created Decision Service**: `src/lib/services/decisionService.ts`
+  - Comprehensive decision data fetching from subcollections
+  - Support for both accepted and approved collections
+  - Document download URL generation
+  - Decision status and color scheme utilities
+- ✅ **Updated Firebase Functions**: `src/lib/firebase/firestore.ts`
+  - Enhanced `makeProtocolDecision` function with proper subcollection structure
+  - Decision details stored in `submissions_accepted/{protocolId}/decision/details`
+  - Decision documents stored in `submissions_accepted/{protocolId}/decision/documents`
+  - Proper subcollection copying when moving to approved collection
+  - Cleanup of decision subcollections when deleting from accepted collection
+  - **Fixed Firebase Error**: Prevented undefined timeline values from being saved to Firestore
+  - **Fixed Collection Reference Error**: Changed decision documents from collection to individual documents to avoid invalid 4-segment collection paths
+  - **Fixed Document Reference Error**: Moved decision documents to be stored as an array within the decision details document to avoid invalid 5-segment document paths
+  - **Fixed Protocol ID Validation**: Added proper validation for protocolId parameter to prevent undefined errors in Firebase document references
+- ✅ **Created Decision Card Components**:
+  - **Main DecisionCard**: `src/components/ui/decision-card.tsx` - Reusable component with role-based actions
+  - **ChairpersonDecisionCard**: `src/components/rec/chairperson/components/protocol/decision-card.tsx`
+  - **ProponentDecisionCard**: Updated `src/components/rec/proponent/application/components/protocol/decision.tsx`
+  - **ReviewerDecisionCard**: `src/components/rec/reviewer/components/decision-card.tsx`
+- ✅ **Decision Card Features**:
+  - Real-time decision data loading from Firebase subcollections
+  - Role-based action buttons (chairperson: edit/generate, proponent: submit revision)
+  - Decision status with color-coded badges and icons
+  - Timeline display for revision decisions
+  - Document download functionality with proper URLs
+  - Next steps guidance based on decision type
+  - Loading states and error handling
+- ✅ **Protocol Status Flow**:
+  - Approved protocols moved to `submissions_approved` collection
+  - Revision/disapproved protocols stay in `submissions_accepted` with decision
+  - Decision subcollections properly copied during collection movement
+  - Status display updated for all user roles
+
+### 6. Reviewer Authentication & Dashboard System ✅
+- [x] **NEW: Complete Reviewer Forms System (January 2025)**
+  - [x] Fixed filter error in ReviewerTabs component
+  - [x] Created AssessmentFormsService for form data management
+  - [x] Implemented useAssessmentForm hook with auto-save functionality
+  - [x] Created form pre-population utilities
+  - [x] Updated protocol review page to show only assigned forms
+  - [x] **Form Assignment Logic:**
+    - Each reviewer assigned to 1 protocol with 1 specific form type
+    - Form types: Protocol Review Assessment, Informed Consent Assessment, Checklist for Exemption Form Review, IACUC Protocol Review Assessment
+    - Dynamic form loading based on assessment type
+  - [x] **Auto-save Implementation:**
+    - Auto-save every 30 seconds on form changes
+    - Manual save button for immediate saving
+    - Draft status tracking and management
+  - [x] **Form Pre-population:**
+    - Auto-fill protocol information (SPUP code, title, PI name, study site, sponsor)
+    - Pre-populate submission date from protocol data
+    - Form-specific default values for all assessment fields
+  - [x] **Data Structure:**
+    - Firestore subcollection: `submissions_accepted/{protocolId}/assessment_forms/{formType}`
+    - Includes reviewer ID, form data, status, version tracking
+    - Status flow: draft → submitted → approved/rejected
+  - [x] **Form Validation:**
+    - All required fields must be filled
+    - All assessment criteria must have Yes/No/Unable selected
+    - Comments optional (not required)
+  - [x] **Submission Workflow:**
+    - Form submission updates protocol review status
+    - Notifies admin/chairperson (no email, just status update)
+    - Allows editing until approved
+    - Rejection includes reason from chairperson
+  - [x] **UI/UX Improvements (January 2025):**
+    - Fixed layout to follow original design: header, forms on left, documents and information on right
+    - Forms are scrollable, documents and information are fixed on the right panel
+    - Implemented proper form pre-population with protocol data
+    - Used consistent loading UI from proponent dashboard (LoadingSpinner component)
+    - Updated all form components to accept and use pre-populated default values
+    - Fixed form props interface to include protocolId, reviewerId, and reviewerName
+    - **Document and Information Population:**
+      - Integrated `getSubmissionWithDocuments` service to load complete protocol data
+      - Documents are now properly loaded from Firestore subcollection
+      - Protocol information is correctly passed to ProtocolInformation component
+      - Documents are correctly passed to ProtocolDocument component
+      - Both components now display real data from the protocol submission
+    - **Fixed Form Pre-population:**
+      - Reverted forms to only include original fields as specified in the form questions
+      - Updated `prePopulateFormFields` function to only extract basic protocol information
+      - Forms now correctly pre-populate with: protocolCode, submissionDate, title, studySite, principalInvestigator, sponsor
+      - Removed extra fields that were not part of the original form structure
+      - All forms now properly display pre-filled protocol information from submission data
+    - **Fixed Data Structure Mapping:**
+      - Updated `prePopulateFormFields` function to correctly map actual Firestore data structure
+      - Fixed data access paths: `protocolData.information.general_information` instead of `protocolData.general_information`
+      - Updated PrincipalInvestigator type definition to use `position_institution` field instead of separate `position` and `institution`
+      - Fixed ProtocolInformation component to correctly display PI position/institution and study site
+      - Added debugging logs to track data flow and identify mapping issues
+      - Forms and information components now correctly display all protocol data without "unknown" values
+    - **Complete Form Submission System:**
+      - Created `AssessmentSubmissionService` for handling form submissions to Firestore
+      - Implemented `useAssessmentSubmission` hook with auto-save functionality
+      - Added form validation with visual feedback for required fields
+      - Created submission confirmation dialog with important warnings
+      - Implemented auto-save draft functionality (saves every 2 seconds of inactivity)
+      - Added manual "Save Draft" and "Submit Review" buttons with loading states
+      - Forms now save to `submissions_accepted/{protocolId}/assessment_forms/{formType}` subcollection
+      - Added success/error toast notifications for user feedback
+      - Updated reviewer assignment status when assessment is submitted
+      - All forms now have complete submission workflow with proper validation
+    - **Fixed Critical Submission Error:**
+      - Fixed "No document to update" error in assessment submission
+      - Issue was trying to update reviewer document using reviewerId as document ID
+      - Corrected to query reviewers subcollection and find document by reviewerId field
+      - Assessment submission now properly updates reviewer assignment status
+      - Added proper error handling for missing reviewer assignments
+    - **Complete Form System Overhaul (January 2025):**
+      - **LocalStorage Draft System:** Implemented localStorage-based draft persistence instead of immediate Firebase saves
+      - **Field Validation Highlighting:** Added red highlighting for missed/required fields with visual error indicators
+      - **Enhanced Submission Confirmation:** Improved confirmation dialog with comprehensive validation checklist
+      - **Fixed Reviewer Table Error:** Resolved TypeError when accessing undefined 'name' property in ReviewerTable
+      - **Fixed Authentication Persistence:** Created ReviewerAuthContext to maintain authentication state across page navigation
+      - **Form Status Management:** Fixed status not updating to submitted after form submission
+      - **Auto-save Improvements:** Drafts now save to localStorage every 2 seconds and persist across page refreshes
+      - **Validation System:** Added comprehensive client-side validation with error highlighting and scroll-to-error functionality
+      - **User Experience:** Enhanced submission flow with better error messages and confirmation dialogs
+    - **Fixed Firebase Data Loading (January 2025):**
+      - **Issue:** Forms were not showing previously submitted assessment data from Firebase
+      - **Solution:** Updated `useLocalDraft` hook to load Firebase data first, then fall back to localStorage
+      - **Implementation:** Forms now check `submissions_accepted/{protocolId}/assessment_forms/{formType}` for existing data
+      - **Status Indicators:** Added visual status indicators showing assessment state (draft/submitted/approved/rejected)
+      - **Loading States:** Added loading indicators while fetching existing assessment data
+      - **Data Priority:** Firebase data takes precedence over localStorage drafts
+      - **Form Population:** All form fields now properly populate with existing assessment data
+      - **Status Display:** Users can see the current status of their assessment with appropriate color coding
+    - **Added Dashboard Navigation (January 2025):**
+      - **Feature:** Automatic navigation back to reviewer dashboard after successful form submission
+      - **Implementation:** Added `onSubmissionSuccess` callback to form components
+      - **User Experience:** Seamless workflow - submit form → success message → redirect to dashboard
+      - **Confirmation Dialog:** Updated to inform users about automatic redirection
+      - **Navigation:** Uses Next.js router to navigate to `/rec/reviewers` after submission
+      - **Forms Updated:** Both Protocol Review and Informed Consent forms now include this functionality
+    - **Fixed Reviewed Protocol Data Display (January 2025):**
+      - **Issue:** When viewing/editing reviewed protocols, forms showed pre-populated protocol data instead of actual saved assessment data
+      - **Root Cause:** Page was setting defaultValues with protocol info, overriding Firebase assessment data
+      - **Solution:** Updated data loading priority to check Firebase first, then use protocol data as fallback
+      - **Implementation:** Added `skipFirebaseLoad` flag to prevent duplicate data loading
+      - **Data Flow:** Page loads Firebase assessment data → Sets as defaultValues → Form uses provided data
+      - **Fallback Logic:** If no Firebase data exists, falls back to pre-populated protocol fields
+      - **Status Detection:** Properly detects and displays assessment status (draft/submitted/approved/rejected)
+      - **User Experience:** Reviewed protocols now show the actual saved assessment data, not protocol information
+    - **Fixed Form Editing Permissions (January 2025):**
+      - **Issue:** Reviewers couldn't edit their submitted assessments, forms were read-only after submission
+      - **Root Cause:** Form read-only logic was checking `reviewerAssignment.reviewStatus === 'completed'` instead of assessment status
+      - **Solution:** Updated read-only logic to check assessment status (`approved` or `rejected`) instead of reviewer assignment status
+      - **Business Logic:** Reviewers can edit their assessments until chairperson approves/rejects them
+      - **Status Flow:** `draft` → `submitted` (editable) → `approved`/`rejected` (read-only)
+      - **Implementation:** Added `assessmentStatus` state to track actual assessment status
+      - **User Experience:** Reviewers can now edit their submitted assessments until final approval
+    - **Fixed Reviewer Table Data Display (January 2025):**
+      - **Issue:** Principal Investigator showing as "Unknown" and Title showing as "Untitled Protocol" in reviewer table
+      - **Root Cause:** Data mapping in `reviewerAuthService.getAssignedProtocols` was using incorrect field paths
+      - **Solution:** Updated field paths to match actual Firestore data structure with nested `information.general_information`
+      - **Data Mapping:** Fixed paths for `protocolTitle`, `principalInvestigator`, and `researchType`
+      - **Fallback Logic:** Added fallback to `protocolData.title` for protocol title
+      - **User Experience:** Reviewer table now displays correct protocol information and principal investigator names
+- [x] **NEW: Complete Reviewer Authentication System (January 2025)**
+  - [x] Create reviewer code validation service to check if code exists and is active
+  - [x] Implement reviewer authentication state management with localStorage persistence
+  - [x] Create reviewer dashboard with assigned protocols table
+  - [x] Remove navigation links from reviewer page navbar (custom layout)
+  - [x] Add current signed-in reviewer display in header
+  - [x] Implement comprehensive error handling and best practices
+  - [x] **Authentication Features:**
+    - Code validation against reviewers collection
+    - Active status checking (isActive: true)
+    - Persistent login state with localStorage
+    - Automatic logout on inactive accounts
+    - Real-time assigned protocols loading
+  - [x] **Dashboard Features:**
+    - Clean, navigation-free interface
+    - Assigned protocols table with full details
+    - Status badges (pending, completed, overdue)
+    - Deadline tracking with days remaining
+    - Protocol information display (title, code, research type, assessment type)
+    - Principal investigator information
+    - Review action buttons (ready for implementation)
+  - [x] **Error Handling:**
+    - Input validation for reviewer codes
+    - Network error handling
+    - User-friendly error messages
+    - Loading states and disabled inputs during authentication
+    - Graceful fallbacks for missing data
+  - [x] **Tab-Based Protocol Management System:**
+    - **Submitted Protocols Tab**: Shows protocols assigned for initial review
+    - **Re-Submitted Protocols Tab**: Shows protocols that were resubmitted for review
+    - **Reviewed Protocols Tab**: Shows completed reviews with edit functionality
+    - **Approved Protocols Tab**: Shows protocols that have been approved
+    - **Dynamic Tab Counts**: Real-time badge counts for each protocol category
+    - **Context-Aware Actions**: Different action buttons based on protocol status
+    - **Enhanced Table Display**: Shows assessment type, deadline tracking, and status badges
+    - **Protocol Action Handling**: Ready for review, view, and edit functionality
+
+## 🚀 Implementation Status
+
+### ✅ Completed Features
+
+#### 1. UI/UX Updates
+- ✅ Removed "Upload Documents" button from chairperson actions
+- ✅ Removed "Send Notification" button
+- ✅ Kept only "Make Decision" as the primary action button
+- ✅ Added auto-generated documents info panel in decision dialog
+
+#### 2. Smart Reviewer Assignment System
+- ✅ Created ReviewerService with Firebase integration
+- ✅ Built intelligent reviewer recommendation engine
+- ✅ Replaced basic dropdown with advanced shadcn Command/Search component
+- ✅ Implemented research type-based reviewer requirements:
+  - Social Research: 3 reviewers required
+  - Experimental Research: 2 reviewers required
+  - Exemption: 2 reviewers required
+- ✅ Added reviewer workload tracking and availability status
+- ✅ Created expertise matching and scoring algorithm
+
+#### 3. Document Auto-Generation System
+- ✅ Integrated docxtemplater for MS Word template processing
+- ✅ Created comprehensive DocumentGeneratorService
+- ✅ Implemented decision-based document generation:
+  - **Approved**: 4 documents auto-generated
+  - **Minor Revisions**: 2 documents with 3-day timeline
+  - **Major Revisions**: 3 documents with 7-day timeline
+  - **Disapproved**: 1 notification document
+- ✅ Added automatic document download on decision
+- ✅ Removed Decision Details field; added standalone "Generate Documents" button in decision dialog
+- ✅ Updated template data mapping to extract protocol information fields:
+  - <<SPUP_REC_CODE>> from submission spupCode
+  - <<PROTOCOL_TITLE>> from general_information.protocol_title
+  - <<PRINCIPAL_INVESTIGATOR>> from general_information.principal_investigator.name
+  - <<CONTACT>> from general_information.principal_investigator.contact_number
+  - <<E-MAIL>> from general_information.principal_investigator.email
+  - <<INSTITUTION>> from general_information.principal_investigator.position_institution
+  - <<ADVISER>> from general_information.adviser.name
+  - <<INITIAL_DATE>> from submission acceptedAt timestamp
+- ✅ Set expedited certificate as default (most common)
+- ✅ Configured all template placeholders replacement
+- ✅ Updated duration calculation: Always 1 year from approval date
+- ✅ Fixed INITIAL_DATE to use protocol assignment date or undefined
+- ✅ Created REC Settings system for lineup management:
+  - REC Chair, Vice Chair, Secretary, Staff, Members
+  - Auto-extracts chairperson name for document templates
+  - Settings interface at `/rec/chairperson/settings` (accessible via sidebar)
+  - Initialize default REC members functionality
+- ✅ Created Members Management system:
+  - New "Members" sidebar link in chairperson navigation
+  - Members page at `/rec/chairperson/members` with two tabs:
+    - **Reviewers Tab**: Manage research ethics reviewers
+    - **REC Members Tab**: Manage REC lineup (from settings)
+  - Reviewer code generator: Auto-generates codes like "DRJF-018" (initials + sequential number)
+  - Admin functions: Add, disable/enable, delete reviewers
+  - Statistics dashboard showing total, active, and inactive reviewers
+- ✅ Enhanced Reviewer Assignment System:
+  - **Social Research**: 3 reviewers with specific assessment types:
+    - 2x Social Research Protocol Review Assessment
+    - 1x Informed Consent Assessment
+  - **Experimental Research**: 2 reviewers with assessment types:
+    - 2x IACUC Protocol Review Assessment
+  - **Exemption**: 2 reviewers with assessment types:
+    - 2x Checklist for Exemption Form Review
+  - Visual assignment display showing reviewer number and assessment type
+  - Assessment types summary with assignment status indicators
+  - Enhanced assignment storage with assessment type tracking
+  - **Individual Reviewer Input Fields**: 3 separate input fields in a row for Social Research
+    - Each field shows "Reviewer 1", "Reviewer 2", "Reviewer 3" with assessment type badges
+    - Prevents duplicate reviewer selection across positions
+    - Visual progress tracking with assignment status indicators
+  - **Fixed Reviewer Selection Issues**: Resolved array handling for proper index-based selection
+  - **Subcollection Storage**: Reviewers now saved in protocol subcollection structure:
+    - Path: `submissions_accepted/{protocolId}/reviewers/{reviewerId}`
+    - Includes assessment type, index, and reviewer details
+    - Automatic loading of existing assignments when dialog opens
+  - **Active Reviewer Filtering**: Only active reviewers appear in selection lists
+    - `isActive: false` reviewers are completely filtered out
+    - Removed confusing availability indicators (green/yellow/red dots)
+    - Clear distinction: isActive = can review, not online status
+  - **Complete Rewrite**: Built new reviewer assignment system from scratch
+    - **Simple & Clean**: Removed all complex logic and dependencies
+    - **Direct Firestore Integration**: Fetches reviewers directly from `reviewers` collection
+    - **Proper Assessment Types**: Exact requirements per research type
+      - Social Research: 2x Protocol Review + 1x Informed Consent
+      - Experimental Research: 2x IACUC Protocol Review Assessment  
+      - Exemption: 2x Checklist for Exemption Form Review
+    - **Subcollection Storage**: Saves to `submissions_accepted/{protocolId}/reviewers`
+    - **Working Selection**: Simple dropdown with click-to-select functionality
+    - **Real-time Search**: Instant filtering as you type
+    - **Assignment Summary**: Visual feedback showing selection status
+  - **NEW: Complete UI Implementation (January 2025)**
+    - **Assign Reviewers Button**: Added to chairperson actions for accepted/pending protocols
+    - **Comprehensive Dialog**: Full-featured modal with research type detection
+    - **Assessment Type Display**: Shows exactly what each reviewer will assess
+    - **Smart Selection Interface**: Click-to-select with visual feedback and validation
+    - **Search & Filter**: Real-time search by name or email
+    - **Assignment Summary**: Shows selected reviewers with their assessment types
+    - **Error Handling**: Comprehensive validation and error messages
+    - **Loading States**: Proper loading indicators during operations
+    - **Auto-close**: Dialog closes automatically after successful assignment
+    - **Data Validation**: Fixed Firebase error for reviewers with missing email fields
+    - **Fallback Values**: Provides default values for missing reviewer information
+    - **UI Cleanup**: Streamlined modal interface with simplified reviewer display
+    - **Individual Reviewer Inputs**: Replaced single selection with separate dropdowns for each reviewer position
+    - **Enhanced Search UI**: Added individual search functionality to each reviewer dropdown using Command/Popover components
+    - **Edit Reviewers Functionality**: Added edit button to modify existing reviewer assignments
+    - **2-Week Deadline System**: Automatic 2-week deadline assignment for all reviewers
+    - **Overdue Reviewer Management**: Automatic removal of overdue reviewers and audit logging
+    - **Audit Trail**: Complete audit records for reviewers who don't complete on time
+    - **Dynamic Button State**: Button changes from "Assign Reviewers" to "Edit Reviewers" when reviewers are assigned
+    - **Current Reviewers Display**: Shows assigned reviewers with their status and deadlines in the main interface
+    - **Status Indicators**: Visual badges showing completion status, days remaining, and overdue warnings
+    - **Component Refactoring**: Separated dialog components into individual files for better organization
+    - **Black Dialog Backgrounds**: Added black backgrounds to all dialogs for better visibility
+    - **Simplified Reviewer Display**: Cleaned up reviewer status display to show only name, status, and due date
+    - **Streamlined Quick Info**: Removed redundant "Reviewers" and "Review Status" from quick info section
+
+#### 4. Supporting Infrastructure
+- ✅ Created reviewer initialization endpoint (/api/init-reviewers)
+- ✅ Built admin page for reviewer data setup
+- ✅ Added Firebase storage integration for documents
+- ✅ Updated TypeScript types for all new features
+
+### 6. Reviewer Authentication & Dashboard System ✅
+- [x] **NEW: Complete Reviewer Forms System (January 2025)**
+  - [x] Fixed filter error in ReviewerTabs component
+  - [x] Created AssessmentFormsService for form data management
+  - [x] Implemented useAssessmentForm hook with auto-save functionality
+  - [x] Created form pre-population utilities
+  - [x] Updated protocol review page to show only assigned forms
+  - [x] **Form Assignment Logic:**
+    - Each reviewer assigned to 1 protocol with 1 specific form type
+    - Form types: Protocol Review Assessment, Informed Consent Assessment, Checklist for Exemption Form Review, IACUC Protocol Review Assessment
+    - Dynamic form loading based on assessment type
+  - [x] **Auto-save Implementation:**
+    - Auto-save every 30 seconds on form changes
+    - Manual save button for immediate saving
+    - Draft status tracking and management
+  - [x] **Form Pre-population:**
+    - Auto-fill protocol information (SPUP code, title, PI name, study site, sponsor)
+    - Pre-populate submission date from protocol data
+    - Form-specific default values for all assessment fields
+  - [x] **Data Structure:**
+    - Firestore subcollection: `submissions_accepted/{protocolId}/assessment_forms/{formType}`
+    - Includes reviewer ID, form data, status, version tracking
+    - Status flow: draft → submitted → approved/rejected
+  - [x] **Form Validation:**
+    - All required fields must be filled
+    - All assessment criteria must have Yes/No/Unable selected
+    - Comments optional (not required)
+  - [x] **Submission Workflow:**
+    - Form submission updates protocol review status
+    - Notifies admin/chairperson (no email, just status update)
+    - Allows editing until approved
+    - Rejection includes reason from chairperson
+  - [x] **UI/UX Improvements (January 2025):**
+    - Fixed layout to follow original design: header, forms on left, documents and information on right
+    - Forms are scrollable, documents and information are fixed on the right panel
+    - Implemented proper form pre-population with protocol data
+    - Used consistent loading UI from proponent dashboard (LoadingSpinner component)
+    - Updated all form components to accept and use pre-populated default values
+    - Fixed form props interface to include protocolId, reviewerId, and reviewerName
+    - **Document and Information Population:**
+      - Integrated `getSubmissionWithDocuments` service to load complete protocol data
+      - Documents are now properly loaded from Firestore subcollection
+      - Protocol information is correctly passed to ProtocolInformation component
+      - Documents are correctly passed to ProtocolDocument component
+      - Both components now display real data from the protocol submission
+    - **Fixed Form Pre-population:**
+      - Reverted forms to only include original fields as specified in the form questions
+      - Updated `prePopulateFormFields` function to only extract basic protocol information
+      - Forms now correctly pre-populate with: protocolCode, submissionDate, title, studySite, principalInvestigator, sponsor
+      - Removed extra fields that were not part of the original form structure
+      - All forms now properly display pre-filled protocol information from submission data
+    - **Fixed Data Structure Mapping:**
+      - Updated `prePopulateFormFields` function to correctly map actual Firestore data structure
+      - Fixed data access paths: `protocolData.information.general_information` instead of `protocolData.general_information`
+      - Updated PrincipalInvestigator type definition to use `position_institution` field instead of separate `position` and `institution`
+      - Fixed ProtocolInformation component to correctly display PI position/institution and study site
+      - Added debugging logs to track data flow and identify mapping issues
+      - Forms and information components now correctly display all protocol data without "unknown" values
+    - **Complete Form Submission System:**
+      - Created `AssessmentSubmissionService` for handling form submissions to Firestore
+      - Implemented `useAssessmentSubmission` hook with auto-save functionality
+      - Added form validation with visual feedback for required fields
+      - Created submission confirmation dialog with important warnings
+      - Implemented auto-save draft functionality (saves every 2 seconds of inactivity)
+      - Added manual "Save Draft" and "Submit Review" buttons with loading states
+      - Forms now save to `submissions_accepted/{protocolId}/assessment_forms/{formType}` subcollection
+      - Added success/error toast notifications for user feedback
+      - Updated reviewer assignment status when assessment is submitted
+      - All forms now have complete submission workflow with proper validation
+    - **Fixed Critical Submission Error:**
+      - Fixed "No document to update" error in assessment submission
+      - Issue was trying to update reviewer document using reviewerId as document ID
+      - Corrected to query reviewers subcollection and find document by reviewerId field
+      - Assessment submission now properly updates reviewer assignment status
+      - Added proper error handling for missing reviewer assignments
+    - **Complete Form System Overhaul (January 2025):**
+      - **LocalStorage Draft System:** Implemented localStorage-based draft persistence instead of immediate Firebase saves
+      - **Field Validation Highlighting:** Added red highlighting for missed/required fields with visual error indicators
+      - **Enhanced Submission Confirmation:** Improved confirmation dialog with comprehensive validation checklist
+      - **Fixed Reviewer Table Error:** Resolved TypeError when accessing undefined 'name' property in ReviewerTable
+      - **Fixed Authentication Persistence:** Created ReviewerAuthContext to maintain authentication state across page navigation
+      - **Form Status Management:** Fixed status not updating to submitted after form submission
+      - **Auto-save Improvements:** Drafts now save to localStorage every 2 seconds and persist across page refreshes
+      - **Validation System:** Added comprehensive client-side validation with error highlighting and scroll-to-error functionality
+      - **User Experience:** Enhanced submission flow with better error messages and confirmation dialogs
+    - **Fixed Firebase Data Loading (January 2025):**
+      - **Issue:** Forms were not showing previously submitted assessment data from Firebase
+      - **Solution:** Updated `useLocalDraft` hook to load Firebase data first, then fall back to localStorage
+      - **Implementation:** Forms now check `submissions_accepted/{protocolId}/assessment_forms/{formType}` for existing data
+      - **Status Indicators:** Added visual status indicators showing assessment state (draft/submitted/approved/rejected)
+      - **Loading States:** Added loading indicators while fetching existing assessment data
+      - **Data Priority:** Firebase data takes precedence over localStorage drafts
+      - **Form Population:** All form fields now properly populate with existing assessment data
+      - **Status Display:** Users can see the current status of their assessment with appropriate color coding
+    - **Added Dashboard Navigation (January 2025):**
+      - **Feature:** Automatic navigation back to reviewer dashboard after successful form submission
+      - **Implementation:** Added `onSubmissionSuccess` callback to form components
+      - **User Experience:** Seamless workflow - submit form → success message → redirect to dashboard
+      - **Confirmation Dialog:** Updated to inform users about automatic redirection
+      - **Navigation:** Uses Next.js router to navigate to `/rec/reviewers` after submission
+      - **Forms Updated:** Both Protocol Review and Informed Consent forms now include this functionality
+    - **Fixed Reviewed Protocol Data Display (January 2025):**
+      - **Issue:** When viewing/editing reviewed protocols, forms showed pre-populated protocol data instead of actual saved assessment data
+      - **Root Cause:** Page was setting defaultValues with protocol info, overriding Firebase assessment data
+      - **Solution:** Updated data loading priority to check Firebase first, then use protocol data as fallback
+      - **Implementation:** Added `skipFirebaseLoad` flag to prevent duplicate data loading
+      - **Data Flow:** Page loads Firebase assessment data → Sets as defaultValues → Form uses provided data
+      - **Fallback Logic:** If no Firebase data exists, falls back to pre-populated protocol fields
+      - **Status Detection:** Properly detects and displays assessment status (draft/submitted/approved/rejected)
+      - **User Experience:** Reviewed protocols now show the actual saved assessment data, not protocol information
+    - **Fixed Form Editing Permissions (January 2025):**
+      - **Issue:** Reviewers couldn't edit their submitted assessments, forms were read-only after submission
+      - **Root Cause:** Form read-only logic was checking `reviewerAssignment.reviewStatus === 'completed'` instead of assessment status
+      - **Solution:** Updated read-only logic to check assessment status (`approved` or `rejected`) instead of reviewer assignment status
+      - **Business Logic:** Reviewers can edit their assessments until chairperson approves/rejects them
+      - **Status Flow:** `draft` → `submitted` (editable) → `approved`/`rejected` (read-only)
+      - **Implementation:** Added `assessmentStatus` state to track actual assessment status
+      - **User Experience:** Reviewers can now edit their submitted assessments until final approval
+    - **Fixed Reviewer Table Data Display (January 2025):**
+      - **Issue:** Principal Investigator showing as "Unknown" and Title showing as "Untitled Protocol" in reviewer table
+      - **Root Cause:** Data mapping in `reviewerAuthService.getAssignedProtocols` was using incorrect field paths
+      - **Solution:** Updated field paths to match actual Firestore data structure with nested `information.general_information`
+      - **Data Mapping:** Fixed paths for `protocolTitle`, `principalInvestigator`, and `researchType`
+      - **Fallback Logic:** Added fallback to `protocolData.title` for protocol title
+      - **User Experience:** Reviewer table now displays correct protocol information and principal investigator names
+- [x] **NEW: Complete Reviewer Authentication System (January 2025)**
+  - [x] Create reviewer code validation service to check if code exists and is active
+  - [x] Implement reviewer authentication state management with localStorage persistence
+  - [x] Create reviewer dashboard with assigned protocols table
+  - [x] Remove navigation links from reviewer page navbar (custom layout)
+  - [x] Add current signed-in reviewer display in header
+  - [x] Implement comprehensive error handling and best practices
+  - [x] **Authentication Features:**
+    - Code validation against reviewers collection
+    - Active status checking (isActive: true)
+    - Persistent login state with localStorage
+    - Automatic logout on inactive accounts
+    - Real-time assigned protocols loading
+  - [x] **Dashboard Features:**
+    - Clean, navigation-free interface
+    - Assigned protocols table with full details
+    - Status badges (pending, completed, overdue)
+    - Deadline tracking with days remaining
+    - Protocol information display (title, code, research type, assessment type)
+    - Principal investigator information
+    - Review action buttons (ready for implementation)
+  - [x] **Error Handling:**
+    - Input validation for reviewer codes
+    - Network error handling
+    - User-friendly error messages
+    - Loading states and disabled inputs during authentication
+    - Graceful fallbacks for missing data
+  - [x] **Tab-Based Protocol Management System:**
+    - **Submitted Protocols Tab**: Shows protocols assigned for initial review
+    - **Re-Submitted Protocols Tab**: Shows protocols that were resubmitted for review
+    - **Reviewed Protocols Tab**: Shows completed reviews with edit functionality
+    - **Approved Protocols Tab**: Shows protocols that have been approved
+    - **Dynamic Tab Counts**: Real-time badge counts for each protocol category
+    - **Context-Aware Actions**: Different action buttons based on protocol status
+    - **Enhanced Table Display**: Shows assessment type, deadline tracking, and status badges
+    - **Protocol Action Handling**: Ready for review, view, and edit functionality
+- [x] **NEW: Enhanced Document Request System with Tab Interface (January 2025)**
+  - [x] **Tab-Based Document Selection**: Added tab system to document request dialog
+    - **Missing Required Documents Tab**: Shows required documents from protocol application that are missing/not submitted
+    - **New Documents Tab**: Shows additional documents that can be requested (not part of initial submission)
+    - **Smart Document Filtering**: Automatically identifies missing required documents vs submitted ones
+  - [x] **Enhanced User Experience**: Improved document request workflow
+    - Clear separation between missing required documents and additional document requests
+    - Visual tab interface for easy navigation
+    - Context-aware document selection based on protocol stage
+  - [x] **Document Management Integration**: Seamless integration with existing document system
+    - Maintains existing document request functionality
+    - Preserves document status tracking and comments
+    - Compatible with current chairperson workflow
+  - [x] **Missing Required Documents Logic**: Shows only documents that are missing from protocol application
+    - **Basic Required Documents**: Informed Consent Form, Endorsement Letter, Research Proposal, Minutes of Proposal Defense, Curriculum Vitae
+    - **Supplementary Documents**: Abstract, Questionnaire, Data Collection Forms, Technical Review Approval, Proof of Payment of Ethics Review Fee
+    - **Smart Detection**: Compares submitted documents against complete required document list (basic + supplementary)
+    - **Visual Indicators**: Red warning icons for missing documents
+    - **Multiple Selection**: Checkbox interface for selecting multiple missing documents
+  - [x] **Template-Based New Documents**: Pre-defined document templates for common requests
+    - **Regulatory Documents**: Updated IRB Approval, Site Authorization Letter
+    - **Legal Documents**: Data Sharing Agreement, Collaboration Agreement
+    - **Ethical Documents**: Conflict of Interest Declaration
+    - **Financial Documents**: Funding Documentation
+    - **Safety Documents**: Safety Monitoring Plan
+    - **Technical Documents**: Data Management Plan
+  - [x] **Multiple Document Request Support**: Enhanced request creation for multiple documents
+    - **Bulk Requests**: Create multiple document requests simultaneously
+    - **Individual Processing**: Each missing document creates a separate request
+    - **Dynamic Button Text**: Shows count of selected documents
+    - **Success Feedback**: Confirms number of requests created
+  - [x] **Simplified Initial Documents Interface**: Removed form inputs from missing documents tab
+    - **No Manual Entry**: Only document selection, no title/description inputs
+    - **Auto-Generated Requests**: Uses predefined document information
+    - **Clean Interface**: Focus on document selection only
+    - **Due Date & Urgency**: Optional settings apply to all selected documents
+- [x] **NEW: Enhanced Document Management System with Subcollections (January 2025)**
+  - [x] **Subcollection Structure**: Created proper document management with subcollections
+    - **Document Requests**: `submissions_accepted/{protocolId}/document_requests/` subcollection
+    - **Documents**: `submissions_accepted/{protocolId}/documents/` subcollection
+    - **No Main Collection**: Documents no longer stored in main collections
+    - **Organized Structure**: Clear separation of requests and actual documents
+  - [x] **Comprehensive Status System**: Enhanced document status tracking
+    - **Pending**: Default state - Submitted, waiting for review
+    - **Accepted**: Document is good and ready for review
+    - **Rejected**: Document is rejected and needs to be resubmitted
+    - **Requested**: Document has been requested by chairperson
+    - **Rework**: Document needs adjustment/improvement (chairperson feedback)
+    - **Revise**: Document has been revised and resubmitted
+  - [x] **Document Versioning System**: Complete version tracking and history
+    - **Version History**: Each document maintains complete version history
+    - **Version Tracking**: Automatic version incrementing (1, 2, 3, etc.)
+    - **Status Per Version**: Each version has its own status and review history
+    - **Chairperson Comments**: Comments tracked per version
+    - **Review History**: Complete audit trail of who reviewed what and when
+  - [x] **Enhanced Document Interface**: New comprehensive document structure
+    - **EnhancedDocument**: Complete document with versioning and status tracking
+    - **DocumentVersion**: Individual version with file info and review history
+    - **EnhancedDocumentRequest**: Request with category and requirement tracking
+    - **File Information**: File size, type, storage path, download URL per version
+  - [x] **Smart Document Management**: Intelligent document handling
+    - **Request Fulfillment**: Automatic linking of requests to submitted documents
+    - **Status Updates**: Comprehensive status management with version tracking
+    - **Missing Document Detection**: Smart detection of missing required documents
+    - **Document Readiness**: Check if all required documents are ready for review
+  - [x] **Service Integration**: Updated document request dialog to use enhanced system
+    - **Enhanced Service**: Uses new `enhancedDocumentManagementService`
+    - **Subcollection Storage**: All requests stored in protocol subcollections
+    - **Category Tracking**: Proper category and requirement tracking
+    - **Template Support**: Template URL support for document requests
+
+### 9. Realtime Firestore Integration ✅
+- [x] **NEW: Firebase Singleton Setup (January 2025)**
+  - [x] **Created `src/lib/firebase.ts`**: Proper singleton Firebase initialization using `getApps().length ? getApp() : initializeApp(config)`
+  - [x] **Exported Services**: Both `app` and `db` using `getFirestore(app)` for consistent access
+  - [x] **Service Integration**: Auth, Firestore, and Storage services properly initialized
+  - [x] **Backward Compatibility**: Maintains compatibility with existing Firebase configuration
+- [x] **NEW: Realtime Firestore Hooks (January 2025)**
+  - [x] **Created `src/hooks/use-firestore.ts`**: Comprehensive realtime hooks for Firestore integration
+  - [x] **useFirestoreQuery Hook**: Reusable hook for collection queries with `onSnapshot()` internally
+    - Supports `where`, `orderBy`, and `limit` options
+    - Automatically unsubscribes on component unmount
+    - Returns `{ data, loading, error }` state
+  - [x] **useFirestoreDoc Hook**: Hook for listening to single documents
+    - Real-time document updates without page refresh
+    - Proper error handling and loading states
+  - [x] **useFirestoreSubcollection Hook**: Hook for subcollection queries
+    - Supports complex nested data structures
+    - Proper path handling for subcollections
+  - [x] **TypeScript Support**: Fully TypeScript-compatible with proper type definitions
+- [x] **NEW: Component Integration (January 2025)**
+  - [x] **Converted Proponent Dashboard**: Updated `src/app/rec/proponent/dashboard/page.tsx` to use realtime hooks
+    - Replaced `getAllUserSubmissions()` with multiple `useFirestoreQuery()` calls
+    - Real-time updates across all submission collections (pending, accepted, approved, archived)
+    - Automatic UI updates when data changes without page refresh
+  - [x] **Created Realtime Reviewer Context**: `src/contexts/ReviewerAuthContextRealtime.tsx`
+    - Realtime assigned protocols loading
+    - Automatic updates when reviewer assignments change
+    - Maintains authentication state with realtime data sync
+  - [x] **Example Component**: Created `src/app/test/realtime-example/page.tsx`
+    - Demonstrates all realtime hook usage patterns
+    - Shows collection queries, document queries, and subcollection queries
+    - Includes usage examples and documentation
+- [x] **NEW: Protocol Detail Page Real-time Updates (January 27, 2025)**
+  - [x] **Issue**: Protocol status not updating after approval in chairperson and proponent views
+  - [x] **Root Cause**: Protocol detail pages were using one-time data fetch without real-time listeners
+  - [x] **Solution**: Integrated `useRealtimeProtocol` hook into both detail pages
+  - [x] **Updated Files**:
+    - `src/app/rec/chairperson/protocol/[id]/page.tsx` - Added real-time protocol listener
+    - `src/app/rec/proponent/dashboard/protocol/[id]/page.tsx` - Added real-time protocol listener
+  - [x] **Functionality**:
+    - Status badge updates instantly when decision is made (ACCEPTED → APPROVED)
+    - SPUP code updates automatically when assigned
+    - All protocol fields sync in real-time across all user views
+    - No page refresh needed for status changes
+    - Works for chairperson, proponent, and reviewer views
+  - [x] **User Experience**: Both tabs (chairperson + proponent) update simultaneously when decision is made
+- [x] **NEW: Edit Decision & Progress Reports Features (January 27, 2025)**
+  - [x] **Edit Decision for Chairperson**:
+    - **Issue**: Chairperson could not edit protocol decisions after making them
+    - **Solution**: Wired up "Edit Decision" button in `DecisionCard` component
+    - **Updated File**: `src/components/ui/decision-card.tsx`
+    - **Functionality**:
+      - Chairperson can click "Edit Decision" button in decision card
+      - Opens `DecisionDialog` with current decision pre-filled
+      - Can change decision type, timeline, and upload new documents
+      - Real-time updates after editing (decision card refreshes automatically)
+      - Success/error toast notifications for user feedback
+    - **Technical Implementation**:
+      - Added `editDialogOpen` state to control dialog visibility
+      - Added `submission` state to store protocol data for dialog
+      - Imported `DecisionDialog` and `getSubmissionById` 
+      - Implemented `handleEditDecision()` to open dialog
+      - Implemented `handleDecisionUpdated()` to refresh data after edit
+  - [x] **Auto-show Progress & Final Reports for Proponents**:
+    - **Issue**: Proponents needed automatic display of Progress & Final Reports section
+    - **Solution**: Already implemented! Reports section auto-shows when protocol is approved
+    - **Location**: `src/app/rec/proponent/dashboard/protocol/[id]/page.tsx`
+    - **Functionality**:
+      - `ProtocolReports` component automatically displayed when `status === 'approved' || status === 'archived'`
+      - Shows three tabs: Progress Reports, Final Report, Archive
+      - "Submit Progress Report" button available when approved
+      - "Submit Final Report" button available when approved
+      - View submitted reports with status badges (Pending, Approved, Needs Revision)
+      - Archive tab shows final archiving status
+    - **Technical Details**:
+      - Condition: `shouldShowReports = submission.status === "approved" || submission.status === "archived"`
+      - Component: `<ProtocolReports>` at lines 194-207
+      - Props: `progressReports`, `finalReport`, `archiving`, `isApproved`, `isCompleted`
+  - [x] **Download Progress & Final Report Forms (Proponent) (January 27, 2025)**:
+    - **Issue**: Proponents had to wait for admin to upload Progress and Final Report forms
+    - **Solution**: Added auto-generate & download buttons directly in Decision Card
+    - **Updated File**: `src/components/ui/decision-card.tsx`
+    - **Functionality**:
+      - **Two download buttons** appear in Decision Card when protocol is approved
+      - **"Download Progress Report"** button - generates Form 09B Progress Report Application Form
+      - **"Download Final Report"** button - generates Form 14A Final Report Form
+      - Forms are **auto-filled** with protocol data (SPUP code, title, PI name, etc.)
+      - **Instant download** - no admin upload needed
+      - Loading toast notifications during generation
+      - Success/error feedback messages
+      - Buttons only show for `decision === 'approved'`
+    - **Technical Implementation**:
+      - Imported `documentGenerator` service from `@/lib/services/documentGenerator`
+      - Added `generateTemplateData()` function to prepare protocol data:
+        - Extracts protocol information from correct path: `submission.information.general_information`
+        - Gets PI data from: `principal_investigator.name`, `.email`, `.contact_number`, `.address`
+        - Gets adviser from: `adviser.name`
+        - Formats dates (current date, approved date) - handles Firestore Timestamp objects
+        - Returns `TemplateData` object for template filling
+        - **Includes legacy field names** (`CONTACT`, `EMAIL`) for backward compatibility with old templates
+      - Added `handleDownloadProgressReport()` function:
+        - Calls `documentGenerator.generateDocument('progress_report', templateData)`
+        - Creates blob and triggers download
+        - Filename: `Progress_Report_Form_{SPUP_CODE}.docx`
+      - Added `handleDownloadFinalReport()` function:
+        - Calls `documentGenerator.generateDocument('final_report', templateData)`
+        - Creates blob and triggers download
+        - Filename: `Final_Report_Form_{SPUP_CODE}.docx`
+      - UI Layout: Two-column grid with responsive design
+      - Helper text: "Download these forms, fill them out, and submit them when required by the REC."
+    - **Data Mapping Fix (January 27, 2025)**:
+      - **Issue**: Contact number and email showing as "N/A" and "undefined" in generated documents
+      - **Root Cause**: Word templates use legacy placeholder names (`<<CONTACT>>`, `<<EMAIL>>`) but code only provided new names (`CONTACT_NUMBER`, `E_MAIL`)
+      - **Solution**: Added both legacy and new field names to template data:
+        - `CONTACT: pi.contact_number` - for templates using `<<CONTACT>>`
+        - `EMAIL: pi.email` - for templates using `<<EMAIL>>`
+        - `CONTACT_NUMBER: pi.contact_number` - for templates using `<<CONTACT_NUMBER>>`
+        - `E_MAIL: pi.email` - for templates using `<<E_MAIL>>`
+      - **Date Handling**: Added proper Firestore Timestamp conversion for `approvedAt` field
+    - **User Experience**:
+      - Proponents see the download buttons immediately after approval
+      - One-click download with loading indicator
+      - Forms are pre-filled with all available protocol data
+      - No waiting for chairperson to generate/upload forms
+      - All fields properly filled including contact number and email address
+  - [x] **Generate Documents Page Integration (Chairperson) (January 27, 2025)**:
+    - **Issue**: "Generate Documents" button in Decision Card was not functional
+    - **Solution**: Connected button to existing generate-documents page
+    - **Updated File**: `src/components/ui/decision-card.tsx`
+    - **Functionality**:
+      - Added `useRouter` import for navigation
+      - Wired up onClick handler to "Generate Documents" button
+      - Navigates to: `/rec/chairperson/protocol/{protocolId}/generate-documents`
+    - **Existing Generate Documents Page Features**:
+      - **Location**: `src/app/rec/chairperson/protocol/[id]/generate-documents/page.tsx`
+      - **Protocol Summary Card**: Shows SPUP REC Code, Title, Status, Principal Investigator
+      - **Decision Configuration**: Select decision type, set timeline for revisions
+      - **Template Selection**: Checkboxes for each document template:
+        - Certificate of Approval
+        - Notice of SPUP REC Decision
+        - Progress Report Form
+        - Final Report Form
+        - Protocol Resubmission Form (for revisions)
+      - **Data Preview & Editing**: See all placeholder values, edit any field before generating
+      - **Generate & Download**: Select and download multiple documents at once
+      - **Pre-filled Data**: All templates auto-filled with protocol information
+    - **Access Points**:
+      - Via Chairperson Actions card (for protocols without decision)
+      - Via Decision Card "Generate Documents" button (after decision made)
+    - **User Experience**:
+      - Full-page interface with proper layout
+      - Can edit any data before generating
+      - Select which documents to generate
+      - Batch download all selected documents
+      - Professional UI with icons and proper formatting
+- [x] **NEW: Security & Performance (January 2025)**
+  - [x] **Firestore Security Rules**: Created comprehensive `firestore-security-rules.rules`
+    - Read/write access only for authenticated users
+    - Role-based permissions (proponent, reviewer, chairperson)
+    - Proper data isolation and security
+    - Helper functions for authentication and authorization
+  - [x] **Cleanup Implementation**: All hooks include proper `unsubscribe()` cleanup
+    - Prevents memory leaks and unnecessary listeners
+    - Automatic cleanup on component unmount
+    - Proper error handling and state management
+- [x] **NEW: SSR Preservation (January 2025)**
+  - [x] **Client-Side Components**: All realtime components marked with `"use client"`
+  - [x] **Server-Side Compatibility**: Maintains existing server-side fetching for initial page loads
+  - [x] **Hydration Support**: Realtime sync activates after client-side hydration
+  - [x] **Next.js 15+ Compatibility**: Works with App Router and latest Next.js features
+
+### 📁 Files Created/Modified
+
+#### New Files:
+- `src/lib/services/documentGenerator.ts` - Document generation service
+- `src/lib/services/reviewerService.ts` - Reviewer management service
+- `src/lib/services/reviewerAuthService.ts` - Reviewer authentication service
+- `src/hooks/useReviewerAuth.ts` - Reviewer authentication hook
+- `src/app/rec/reviewers/layout.tsx` - Custom layout without navigation
+- `src/components/rec/chairperson/components/reviewer-selector.tsx` - Smart reviewer selector
+- `src/app/api/init-reviewers/route.ts` - API endpoint for reviewer initialization
+- `src/app/admin/init-reviewers/page.tsx` - Admin UI for reviewer setup
+
+#### Realtime Integration Files (January 2025):
+- `src/lib/firebase.ts` - Singleton Firebase initialization with proper app management
+- `src/hooks/use-firestore.ts` - Realtime Firestore hooks (useFirestoreQuery, useFirestoreDoc, useFirestoreSubcollection)
+- `src/contexts/ReviewerAuthContextRealtime.tsx` - Realtime version of reviewer authentication context
+- `src/app/test/realtime-example/page.tsx` - Example component demonstrating realtime functionality
+- `firestore-security-rules.rules` - Comprehensive Firestore security rules for authenticated users
+
+#### Modified Files:
+- `src/app/rec/reviewers/page.tsx` - Complete rewrite with authentication and tab-based dashboard
+- `src/components/rec/reviewer/tabs.tsx` - Updated to work with real data and authentication system
+- `src/components/rec/reviewer/table.tsx` - Enhanced with real protocol data and context-aware actions
+- `src/components/rec/chairperson/components/protocol/chairperson-actions.tsx` - Updated with new features
+- `src/app/rec/proponent/dashboard/page.tsx` - Converted to use realtime Firestore hooks
+- `TASKING.md` - Task tracking document
+
+### 🔄 Next Steps
+
+1. **Initialize Reviewers**: Navigate to `/admin/init-reviewers` to populate reviewer data
+2. **Test Workflow**: Test the complete decision-making process
+3. **Protocol Information**: Review and update submission forms if needed
+4. **Document Management**: Add edit/remove capabilities for generated documents
+
+### 📝 Usage Instructions
+
+1. **For Chairperson:**
+   - Accept protocol to assign SPUP code
+   - Click "Assign Reviewers" to open comprehensive reviewer selection dialog
+   - Select required number of reviewers based on research type:
+     - Social Research: 3 reviewers (2x Protocol Review + 1x Informed Consent)
+     - Experimental Research: 2 reviewers (2x IACUC Protocol Review)
+     - Exemption: 2 reviewers (2x Checklist for Exemption Form Review)
+   - Use search to filter reviewers by name or email
+   - Review assignment summary before confirming
+   - Click "Make Decision" to trigger auto-document generation
+   - Documents will auto-download after decision
+
+2. **For Reviewers:**
+   - Navigate to `/rec/reviewers` to access the reviewers portal
+   - Enter your reviewer code (e.g., "XXXXX-000") in the authentication form
+   - System validates code against reviewers collection and checks if account is active
+   - Upon successful authentication, view tab-based protocol dashboard:
+     - **Submitted Protocols**: Protocols assigned for initial review
+     - **Re-Submitted Protocols**: Protocols that need re-review after revisions
+     - **Reviewed Protocols**: Completed reviews (can view and edit)
+     - **Approved Protocols**: Protocols that have been approved
+   - Each tab shows relevant protocols with:
+     - Protocol title, SPUP code, research type
+     - Assessment type and principal investigator
+     - Assignment date and deadline with days remaining
+     - Current review status with color-coded badges
+   - Context-aware action buttons:
+     - "Review" for new submissions
+     - "View Review" and "Edit Review" for completed reviews
+   - Logout anytime to return to authentication screen
+
+3. **For System Admin:**
+   - Visit `/admin/init-reviewers` to set up sample reviewers
+   - Reviewers can be managed through Firebase console
+   - Use the Members Management system at `/rec/chairperson/members` to manage reviewers
+   - Ensure reviewer codes follow format: [INITIALS]-[NUMBER] (e.g., "MRRBD-013")
+   - Set isActive: true for active reviewers, false for inactive ones
+
+---
+*Implementation Completed: January 2025*
+*All major requirements have been successfully implemented*
+
+### Reviewer UX Decision (Nov 2025)
+
+- [x] Define how to display rejected review form
+  - Show the same assigned form in read-only when assessmentStatus === 'rejected'
+  - Show a persistent top alert/banner: Rejected badge, decision date, and reason (expandable)
+  - Hide editing controls; keep Download Decision and Back to Dashboard actions
+  - Auto-expand sections with failed/negative criteria; collapse others for scanability
+  - Add a concise reviewer comments summary panel above the form
+  - Keep Protocol Overview visible for context
+
+### Reviewer Deadlines Policy (Nov 2025)
+
+- [x] Dynamic reviewer deadlines based on review type
+  - Exemption: 7 days
+  - Expedited: 14 days
+  - Full Board: 30 days
+- [x] Applied in `reviewerService.assignReviewers` using protocol `typeOfReview` and `researchType`
+- [x] Updated assignment toast to say "appropriate deadlines"
+
+### Archiving Notification Generator (Nov 2025)
+
+- [x] Added archiving notification document generator
+  - Button in Administrative Actions (Chairperson) to generate and download
+  - Uses `documentGenerator` with `archiving_notification` template
+  - Populates data via `extractTemplateData` and chair name from settings
+- [ ] Optional: Upload generated file to Storage and attach to protocol
+
+### Decision Card Improvements (January 2025)
+
+- [x] Added 'deferred' decision type
+  - New decision type for incomplete submissions or resubmissions that don't meet requirements
+  - Added to DecisionDialog with 7-day default timeline
+  - Updated all type definitions and services
+- [x] Meeting Reference / Tracking ID for full board protocols
+  - Format: sequential-mm-yyyy (e.g., 001-03-2025)
+  - Chairperson assigns month and year in DecisionDialog
+  - Sequential number auto-generated based on existing decisions for that month-year
+  - Only displayed for full board review protocols
+  - Stored in decision data and displayed in decision card header
+- [x] Exempted from Review display logic
+  - Shows "Exempted from Review" when decision is 'approved' AND researchType is 'EX'
+  - Uses exemption-specific instructions from the improved format
+  - Distinct styling and messaging
+- [x] Improved decision card format with blockquote-style instructions
+  - New header format: Decision Status, Meeting Reference (full board only), Decision Date
+  - Blockquote-style instruction boxes with numbered lists
+  - Decision-specific instructions per doc/decission-card-improvement.md
+  - Footer note summarizing decision card purpose
+- [x] Form 16 Appeal Form download for disapproved decisions
+  - Added 'appeal_form' to documentGenerator
+  - Download button appears for proponents when decision is 'disapproved'
+  - Generates Form 16 with protocol data pre-filled
+  - Includes appeal instructions and timeline (10 working days)

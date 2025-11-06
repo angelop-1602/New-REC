@@ -16,17 +16,30 @@ import {
   getDraftAge 
 } from "@/utils/localStorageManager";
 import { 
+  fileReferenceManager,
+  getFileReference,
+  removeFileReference,
+  clearAllFileReferences,
+  logFileReferences
+} from "@/utils/fileReferenceManager";
+import { 
   createCompleteSubmission,
   updateSubmission, 
   submitDraft,
 } from "@/lib/firebase/firestore";
-import { 
-  SubmissionSummary,
-  SubmissionConfirmationDialog 
-} from "@/components/ui/custom/submission-confirmation-dialog";
 import { customToast } from "@/components/ui/custom/toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { validateForm, informationFormValidation } from "@/lib/validation/form-validation";
+
+// Submission summary interface
+export interface SubmissionSummary {
+  formData: InformationType;
+  documents: DocumentsType[];
+  totalFields: number;
+  completedFields: number;
+  requiredDocuments: number;
+  uploadedDocuments: number;
+}
 
 // Enhanced context interface
 export interface SubmissionContextType {
@@ -93,8 +106,6 @@ export interface SubmissionContextType {
   clearDraftData: () => void;
   
   // Submission operations
-  showSubmissionDialog: () => void;
-  hideSubmissionDialog: () => void;
   submitApplication: () => void;
   getSubmissionSummary: () => SubmissionSummary;
   
@@ -166,9 +177,39 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
   useEffect(() => {
     const draftData = loadDraft();
     if (draftData) {
+      console.log("Loading draft data:", draftData);
       dispatch({ type: "LOAD_FROM_LOCALSTORAGE", payload: draftData });
     }
   }, []);
+
+  // Reload documents from localStorage when accessing documents step or confirmation step
+  // Also restore file references from memory
+  useEffect(() => {
+    if (state.currentStep === 1 || state.currentStep === 2) { // Documents step or Confirmation step
+      const draftData = loadDraft();
+      if (draftData && draftData.documents && draftData.documents.length > 0) {
+        console.log(`Reloading documents for step ${state.currentStep}:`, draftData.documents);
+        
+        // Restore file references from memory
+        const documentsWithFiles = draftData.documents.map(doc => {
+          const fileRef = getFileReference(doc.id);
+          if (fileRef) {
+            console.log(`✅ Restored file reference for document: ${doc.title}`);
+            return {
+              ...doc,
+              _fileRef: fileRef,
+              _fileRefLost: false,
+            };
+          } else if ((doc as any)._fileRefLost) {
+            console.warn(`⚠️ File reference not found for document: ${doc.title}`);
+          }
+          return doc;
+        });
+        
+        dispatch({ type: "SET_DOCUMENTS", payload: documentsWithFiles });
+      }
+    }
+  }, [state.currentStep]);
 
   // Form field operations
   const updateField = useCallback((fieldPath: string, value: any) => {
@@ -196,6 +237,8 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
 
   const removeDocument = useCallback((documentId: string) => {
     dispatch({ type: "REMOVE_DOCUMENT", payload: documentId });
+    // Also remove file reference from memory
+    removeFileReference(documentId);
   }, [dispatch]);
 
   const updateDocument = useCallback((documentId: string, updates: Partial<DocumentsType>) => {
@@ -258,6 +301,7 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
   const nextStep = useCallback(() => {
     // Validate current step before proceeding
     const isValid = forceValidateAllFields();
+    
     if (isValid) {
       dispatch({ type: "NEXT_STEP" });
     } else {
@@ -296,14 +340,6 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
   }, [dispatch]);
 
   // Submission operations
-  const showSubmissionDialog = useCallback(() => {
-    dispatch({ type: "SHOW_CONFIRM_DIALOG", payload: true });
-  }, [dispatch]);
-
-  const hideSubmissionDialog = useCallback(() => {
-    dispatch({ type: "SHOW_CONFIRM_DIALOG", payload: false });
-  }, [dispatch]);
-
   const getSubmissionSummary = useCallback((): SubmissionSummary => {
     // Calculate form completion
     const allFields = Object.keys(state.errors);
@@ -334,15 +370,53 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     try {
       dispatch({ type: "SET_SUBMITTING", payload: true });
 
+      // Restore file references from memory for all documents
+      console.log("📋 Preparing documents for submission...");
+      logFileReferences(); // Log current state for debugging
+      
+      const documentsWithRestoredFiles = state.documents.map(doc => {
+        // First check if document already has a file reference
+        if (doc._fileRef instanceof File) {
+          console.log(`✅ Document "${doc.title}" already has file reference`);
+          return doc;
+        }
+        
+        // Try to get file reference from memory
+        const fileRef = getFileReference(doc.id);
+        if (fileRef) {
+          console.log(`✅ Restored file reference for "${doc.title}" from memory`);
+          return {
+            ...doc,
+            _fileRef: fileRef,
+          };
+        }
+        
+        console.warn(`⚠️ No file reference found for document "${doc.title}"`);
+        return doc;
+      });
+
+      // Check for documents without file references
+      const documentsWithFiles = documentsWithRestoredFiles.filter(doc => doc._fileRef instanceof File);
+      const skippedDocuments = documentsWithRestoredFiles.length - documentsWithFiles.length;
+      
+      if (skippedDocuments > 0) {
+        console.error(`❌ ${skippedDocuments} documents will be skipped during submission due to missing file references`);
+        throw new Error(`${skippedDocuments} document(s) are missing file references. Please re-upload these documents before submitting.`);
+      }
+
+      console.log(`✅ All ${documentsWithFiles.length} documents have valid file references`);
+
       // Create complete submission with documents in one transaction
       const submissionId = await createCompleteSubmission(
         user.uid, 
         state.formData, 
-        state.documents
+        documentsWithRestoredFiles
       );
 
-      // Clear localStorage draft after successful submission
+      // Clear localStorage draft and file references after successful submission
       clearDraft();
+      clearAllFileReferences();
+      console.log("🎉 Submission successful! Cleared draft and file references.");
 
       // Update state
       dispatch({ type: "SET_SUBMITTING", payload: false });
@@ -363,6 +437,8 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
   const resetForm = useCallback(() => {
     dispatch({ type: "RESET_FORM" });
     clearDraft();
+    clearAllFileReferences();
+    console.log("🔄 Form reset complete");
   }, [dispatch]);
 
   // Context value
@@ -425,8 +501,6 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     clearDraftData,
     
     // Submission operations
-    showSubmissionDialog,
-    hideSubmissionDialog,
     submitApplication,
     getSubmissionSummary,
     
@@ -437,17 +511,6 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
   return (
     <SubmissionContext.Provider value={contextValue}>
       {children}
-      <SubmissionConfirmationDialog
-        isOpen={state.showConfirmDialog}
-        onOpenChange={hideSubmissionDialog}
-        onConfirm={submitApplication}
-        onCancel={hideSubmissionDialog}
-        isSubmitting={state.isSubmitting}
-        submissionError={state.submissionError}
-        submissionSuccess={false} // This would be managed by state
-        submissionId={undefined} // This would come from successful submission
-        summary={getSubmissionSummary()}
-      />
     </SubmissionContext.Provider>
   );
 }; 

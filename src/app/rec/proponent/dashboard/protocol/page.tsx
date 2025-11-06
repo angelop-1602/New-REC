@@ -1,11 +1,11 @@
 "use client";
-import CustomBreadcrumbs from "@/components/ui/custom/breadcrum";
 import CustomBanner from "@/components/rec/proponent/application/components/protocol/banner";
 import ProtocolInformation from "@/components/rec/proponent/application/components/protocol/information";
-import ProtocolDocument from "@/components/rec/proponent/application/components/protocol/document";
+// ProtocolDocument component removed - using ProtocolOverview instead
 import ProtocolDecision from "@/components/rec/proponent/application/components/protocol/decision";
 import { ProtocolReports } from "@/components/rec/proponent/application/components/protocol/report";
 import Footer from "@/components/rec/proponent/application/footer";
+import GlobalBackButton from "@/components/ui/global-back-button";
 
 export default function Page() {
   const progressReports = [
@@ -29,9 +29,9 @@ export default function Page() {
 
   return (
     <div className="min-h-screen pt-16 lg:pt-20 w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 pb-10">
-      {/* Breadcrumbs */}
+      {/* Global Back Button */}
       <div className="w-full max-w-7xl mb-4">
-        <CustomBreadcrumbs />
+        <GlobalBackButton />
       </div>
 
       {/* Protocol Banner */}
@@ -62,7 +62,12 @@ export default function Page() {
             <ProtocolInformation />
           </div>
           <div className="space-y-6">
-            <ProtocolDocument />
+            {/* ProtocolDocument component removed - using ProtocolOverview in [id]/page.tsx instead */}
+            <div className="p-4 border rounded-lg bg-muted/50">
+              <p className="text-muted-foreground text-center">
+                Document management is now handled in the individual protocol view.
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -38,7 +38,8 @@ export interface PrincipalInvestigator {
   email: string;                  // Email address
   address: string;                // Complete mailing address
   contact_number: string;         // Phone or mobile number
-  position_institution: string;   // Job position and institution name
+  position_institution: string;   // Job position and institution combined
+  course_program?: string;        // Course or program of study (for students)
 }
 
 // Research adviser or mentor (can be multiple)
