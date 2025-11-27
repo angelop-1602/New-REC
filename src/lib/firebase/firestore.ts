@@ -18,11 +18,7 @@ import {
   WriteBatch
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes } from "firebase/storage";
-import { InformationType } from "@/types/information.types";
-import { DocumentsType } from "@/types/documents.types";
-import { SubmissionsType } from "@/types/submissions.type";
-import { MessagesType, MessageType } from "@/types/message.types";
-import { PendingSubmissionDoc } from "@/types/firestore.types";
+import { InformationType, DocumentsType, MessagesType, MessageType, PendingSubmissionDoc } from "@/types";
 import { uploadFile as uploadToStorage } from "@/lib/firebase/storage";
 import { zipSingleFile } from "@/lib/utils/zip";
 import firebaseApp from "@/lib/firebaseConfig";
@@ -241,7 +237,7 @@ export const createCompleteSubmission = async (
   documents: DocumentsType[]
 ): Promise<string> => {
   let submissionId: string | null = null;
-  let uploadedFiles: string[] = [];
+  const uploadedFiles: string[] = [];
 
   try {
     // Step 1: Create submission first
@@ -280,6 +276,7 @@ export const createCompleteSubmission = async (
             uploadedFiles.push(uploadResult.storagePath);
             
             // Create final document metadata with actual URLs (remove _fileRef completely)
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { _fileRef, ...documentWithoutFileRef } = document;
             const finalDocument: DocumentsType = {
               ...documentWithoutFileRef,
@@ -398,8 +395,8 @@ export const getAllUserSubmissions = async (userId: string): Promise<any[]> => {
         id: doc.id,
         collection: data.status || "pending", // For backward compatibility
         ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+        createdAt: data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt === 'object' && 'toDate' in data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       });
     });
 
@@ -533,8 +530,8 @@ export const getSubmissionById = async (submissionId: string): Promise<any | nul
         id: docSnap.id,
         collection: data.status || "pending", // For backward compatibility
         ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+        createdAt: data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt === 'object' && 'toDate' in data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       };
     }
 
@@ -556,8 +553,8 @@ export const getSubmissionDocuments = async (submissionId: string, collectionNam
       documents.push({
         id: doc.id,
         ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
+        createdAt: doc.data().createdAt && typeof doc.data().createdAt === 'object' && 'toDate' in doc.data().createdAt && typeof doc.data().createdAt.toDate === 'function' ? doc.data().createdAt.toDate().toISOString() : doc.data().createdAt,
+        updatedAt: doc.data().updatedAt && typeof doc.data().updatedAt === 'object' && 'toDate' in doc.data().updatedAt && typeof doc.data().updatedAt.toDate === 'function' ? doc.data().updatedAt.toDate().toISOString() : doc.data().updatedAt,
       });
     });
 
@@ -605,16 +602,39 @@ export const sendMessage = async (
   try {
     const messagesRef = collection(db, collectionName, submissionId, MESSAGES_COLLECTION);
     
+    // Ensure all required metadata is present
+    if (!senderId || !senderName) {
+      throw new Error("senderId and senderName are required");
+    }
+    
     const messageData: Omit<MessagesType, 'id'> = {
-      senderId,
-      senderName,
-      content,
+      senderId: senderId.trim(), // Ensure no whitespace
+      senderName: senderName.trim(), // Ensure no whitespace
+      content: content.trim(),
       createdAt: new Date().toISOString(),
       type: type || "reply",
       status: "sent"
     };
 
+    console.log('📤 Sending message with metadata:', {
+      submissionId,
+      senderId: messageData.senderId,
+      senderName: messageData.senderName,
+      type: messageData.type,
+      status: messageData.status
+    });
+
     const docRef = await addDoc(messagesRef, messageData);
+    
+    // Update protocol activity when message is sent
+    try {
+      const { updateProtocolActivity } = await import("@/lib/services/core/archivingService");
+      await updateProtocolActivity(submissionId);
+    } catch (activityError) {
+      // Non-critical error, don't fail the message send
+      console.warn("Failed to update protocol activity:", activityError);
+    }
+    
     return docRef.id;
   } catch (error) {
     console.error("Error sending message:", error);
@@ -658,9 +678,44 @@ export const markMessageAsRead = async (
     await updateDoc(messageRef, {
       status: "read"
     });
+    console.log('✅ Message marked as read:', messageId);
   } catch (error) {
     console.error("Error marking message as read:", error);
     throw new Error("Failed to mark message as read");
+  }
+};
+
+// Mark all messages as read for a submission (convenience function)
+export const markAllMessagesAsRead = async (
+  submissionId: string,
+  userId: string
+): Promise<void> => {
+  try {
+    const messagesRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, MESSAGES_COLLECTION);
+    const messagesQuery = query(messagesRef);
+    const querySnapshot = await getDocs(messagesQuery);
+    
+    const updatePromises: Promise<void>[] = [];
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      // Only mark messages as read if they're not sent by the current user and not already read
+      if (data.senderId !== userId && data.status !== "read") {
+        const messageRef = doc(db, SUBMISSIONS_COLLECTION, submissionId, MESSAGES_COLLECTION, docSnap.id);
+        updatePromises.push(
+          updateDoc(messageRef, {
+            status: "read"
+          }).then(() => {
+            console.log('✅ Message marked as read:', docSnap.id);
+          })
+        );
+      }
+    });
+    
+    await Promise.all(updatePromises);
+    console.log(`✅ Marked ${updatePromises.length} messages as read for submission ${submissionId}`);
+  } catch (error) {
+    console.error("Error marking all messages as read:", error);
+    throw new Error("Failed to mark messages as read");
   }
 };
 
@@ -755,8 +810,8 @@ export const getAllSubmissionsByStatus = async (status: SubmissionStatus): Promi
         id: doc.id,
         ...data,
         // Convert Firestore timestamps to serializable format
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        createdAt: data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt === 'object' && 'toDate' in data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       });
     });
     
@@ -807,6 +862,14 @@ export const acceptSubmission = async (
       "system"
     );
     
+    // Update protocol activity
+    try {
+      const { updateProtocolActivity } = await import("@/lib/services/core/archivingService");
+      await updateProtocolActivity(submissionId);
+    } catch (activityError) {
+      console.warn("Failed to update protocol activity:", activityError);
+    }
+    
     console.log(`✅ Submission ${submissionId} status updated to 'accepted' (no collection transfer)`);
   } catch (error) {
     console.error("Error accepting submission:", error);
@@ -841,6 +904,14 @@ export const rejectSubmission = async (
       `Your protocol has been rejected. Reason: ${rejectionReason}. Please address the issues and resubmit.`,
       "system"
     );
+    
+    // Update protocol activity
+    try {
+      const { updateProtocolActivity } = await import("@/lib/services/core/archivingService");
+      await updateProtocolActivity(submissionId);
+    } catch (activityError) {
+      console.warn("Failed to update protocol activity:", activityError);
+    }
     
   } catch (error) {
     console.error("Error rejecting submission:", error);
@@ -881,7 +952,7 @@ const generateMeetingReference = async (month: number, year: number): Promise<st
             }
           }
         }
-      } catch (error) {
+      } catch {
         // Skip if decision doesn't exist or error reading
         continue;
       }
@@ -911,7 +982,7 @@ export const makeProtocolDecision = async (
 ): Promise<void> => {
   try {
     // Upload documents to decision subfolder if provided
-    let uploadedDocuments = [];
+    const uploadedDocuments = [];
     if (documents && documents.length > 0) {
       for (const file of documents) {
         const fileName = `decision_documents/${file.name}`;

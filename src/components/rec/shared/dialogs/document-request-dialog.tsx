@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Plus, 
@@ -23,8 +22,8 @@ import {
   CheckCircle,
   Clock
 } from "lucide-react";
-import { enhancedDocumentManagementService } from "@/lib/services/enhancedDocumentManagementService";
-import { DocumentsType, DocumentCategory } from "@/types/documents.types";
+import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
+import { DocumentsType, DocumentCategory } from "@/types";
 import { toast } from "sonner";
 
 interface DocumentRequestDialogProps {
@@ -289,11 +288,11 @@ export default function DocumentRequestDialog({
         )}
       </DialogTrigger>
       
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Request Additional Document
+            <FileText className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Request Additional Document</span>
           </DialogTitle>
           <DialogDescription>
             Request specific documents from the proponent. Choose from missing required documents or request new ones.
@@ -449,6 +448,7 @@ export default function DocumentRequestDialog({
             variant="outline"
             onClick={() => setOpen(false)}
             disabled={isSubmitting}
+            className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
           >
             Cancel
           </Button>
@@ -459,6 +459,7 @@ export default function DocumentRequestDialog({
               (activeTab === "initial" && selectedRequiredDocs.length === 0) ||
               (activeTab === "new" && (!title.trim() || !description.trim()))
             }
+            className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
           >
             {isSubmitting 
               ? 'Creating...' 

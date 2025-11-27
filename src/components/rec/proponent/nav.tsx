@@ -16,8 +16,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Menu, MoveRight, X, LogOut } from "lucide-react";
-import { useState } from "react";
+import { Menu, MoveRight, X, LogOut, LayoutDashboard, Moon, Sun, Monitor } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -28,6 +29,13 @@ export const Header = () => {
   const { user, signOut } = useAuth();
   const [isOpen, setOpen] = useState(false);
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Avoid hydration mismatch for theme
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Helper function to check if a path is active
   const isActive = (href: string) => {
@@ -71,28 +79,13 @@ export const Header = () => {
       description: "",
     },
     {
-      title: "Dashboard",
-      href: "/rec/proponent/dashboard",
-      description: "",
-    },
-    {
-      title: "About us",
+      title: "About Us",
+      href: "/rec/proponent/about",
       description: "Learn about our research ethics committee",
-      items: [
-        { title: "Members", href: "#members" },
-        { title: "Processes", href: "#processes" },
-        { title: "Fees", href: "#fees" },
-      ],
     },
-    {
-      title: "Resources",
-      description: "Helpful information and updates",
-      items: [
-        { title: "Guidelines", href: "/guidelines" },
-        { title: "Forms", href: "/forms" },
-        { title: "FAQ", href: "/faq" },
-        { title: "Contact", href: "/contact" },
-      ],
+    {    title:"Process",
+      href:"/rec/proponent/process",
+      description:"Learn about the process of ethics review",
     },
   ];
   
@@ -103,18 +96,17 @@ export const Header = () => {
       description: "",
     },
     {
+      title: "About Us",
+      href: "/rec/proponent/about",
+      description: "Learn about our research ethics committee",
+    },
+    {    title:"Process",
+      href:"/rec/proponent/process",
+      description:"Learn about the process of ethics review",
+    },
+    {
       title: "Dashboard",
       href: "/rec/proponent/dashboard",
-      description: "",
-    },
-    {
-      title: "Application",
-      href: "/rec/proponent/application",
-      description: "",
-    },
-    {
-      title: "Profile",
-      href: "/rec/proponent/profile",
       description: "",
     },
   ] : [
@@ -143,7 +135,7 @@ export const Header = () => {
         <div className="hidden lg:flex items-center">
           <Link href="/rec/proponent">
             <Image
-              src="/SPUP-REC-logo-light.png"
+              src={mounted && theme === "dark" ? "/SPUP-REC-logo-light.png" : "/SPUP-REC-logo-dark.png"}
               alt="SPUP REC Logo"
               width={160}
               height={50}
@@ -210,7 +202,7 @@ export const Header = () => {
                             )}
                           </div>
                           <div className="flex flex-col gap-2">
-                            {item.items?.map((subItem) => {
+                            {(item as { items?: { title: string; href: string }[] }).items?.map((subItem) => {
                               const subActive = isActive(subItem.href) || (subItem.href.startsWith('#') && pathname.includes(subItem.href));
                               return (
                                 <NavigationMenuLink
@@ -247,7 +239,34 @@ export const Header = () => {
         </div>
 
         {/* CTA (right - desktop only) */}
-        <div className="hidden lg:flex justify-end">
+        <div className="hidden lg:flex justify-end items-center gap-3">
+          {/* Theme Toggle */}
+          {mounted && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 border border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20">
+                  <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-[#036635] dark:text-[#FECC07]" />
+                  <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-[#036635] dark:text-[#FECC07]" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer">
+                  <Sun className="mr-2 h-4 w-4" />
+                  Light
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer">
+                  <Moon className="mr-2 h-4 w-4" />
+                  Dark
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer">
+                  <Monitor className="mr-2 h-4 w-4" />
+                  System
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -274,8 +293,9 @@ export const Header = () => {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/rec/proponent/profile">
-                    Profile
+                  <Link href="/rec/proponent/dashboard">
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    Dashboard
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -296,7 +316,7 @@ export const Header = () => {
         <div className="flex lg:hidden w-full justify-between items-center">
           <Link href="/rec/proponent">
             <Image
-              src="/SPUP-REC-logo-light.png"
+              src={mounted && theme === "dark" ? "/SPUP-REC-logo-light.png" : "/SPUP-REC-logo-dark.png"}
               alt="SPUP REC Logo"
               width={130}
               height={40}
@@ -334,16 +354,51 @@ export const Header = () => {
                     }`} 
                   />
                   <span 
-                    className={`absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full transition-all duration-300 ${
+                    className={`absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full transition-all duration-300 origin-top ${
                       active 
                         ? "opacity-100 scale-y-100" 
                         : "opacity-0 scale-y-0"
                     }`}
-                    style={{ transformOrigin: 'top' }}
                   />
                 </Link>
               );
             })}
+            
+            {/* Theme Toggle - Mobile */}
+            {mounted && (
+              <>
+                <hr className="border-t border-muted" />
+                <div className="flex items-center justify-between py-2 px-3">
+                  <span className="text-sm font-medium">Theme</span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={theme === "light" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTheme("light")}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Sun className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTheme("dark")}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Moon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={theme === "system" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTheme("system")}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Monitor className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
             
             {user && (
               <>

@@ -16,11 +16,14 @@ import { XCircle, Loader2 } from "lucide-react";
 import { rejectSubmission } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { 
+  toChairpersonProtocol
+} from '@/types';
 
 interface RejectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  submission: any;
+  submission: Record<string, unknown>;
   onStatusUpdate: (status: string) => void;
 }
 
@@ -31,6 +34,10 @@ export function RejectDialog({
   onStatusUpdate 
 }: RejectDialogProps) {
   const { user } = useAuth();
+  
+  // Convert to typed protocol at the top
+  const typedSubmission = toChairpersonProtocol(submission);
+  
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -47,7 +54,7 @@ export function RejectDialog({
     
     setIsProcessing(true);
     try {
-      await rejectSubmission(submission.id, rejectionReason, user.uid);
+      await rejectSubmission(String(typedSubmission.id), rejectionReason, user.uid);
       toast.success("Protocol rejected");
       onStatusUpdate("rejected");
       onOpenChange(false);
@@ -61,23 +68,23 @@ export function RejectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black text-white border-gray-700">
+      <DialogContent className="border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
-          <DialogTitle className="text-white">Reject Protocol</DialogTitle>
-          <DialogDescription className="text-gray-300">
+          <DialogTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Reject Protocol</DialogTitle>
+          <DialogDescription>
             Provide a reason for rejecting this protocol
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label htmlFor="rejection-reason" className="text-white">Rejection Reason</Label>
+            <Label htmlFor="rejection-reason">Rejection Reason</Label>
             <Textarea
               id="rejection-reason"
               placeholder="Enter the reason for rejection..."
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
               rows={4}
-              className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+              className="border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300"
             />
           </div>
         </div>
@@ -89,7 +96,7 @@ export function RejectDialog({
               setRejectionReason("");
             }}
             disabled={isProcessing}
-            className="border-gray-600 text-white hover:bg-gray-700"
+            className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
           >
             Cancel
           </Button>

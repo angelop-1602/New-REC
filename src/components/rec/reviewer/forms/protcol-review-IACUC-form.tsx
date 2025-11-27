@@ -103,9 +103,11 @@ export default function IACUCForm({
   defaultValues = {},
   protocolId,
   reviewerId,
-  reviewerName,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  reviewerName: _reviewerName,
   protocolData,
-  reviewerAssignment,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  reviewerAssignment: _reviewerAssignment,
   skipFirebaseLoad = false
 }: IACUCFormProps) {
   const router = useRouter();
@@ -248,6 +250,7 @@ export default function IACUCForm({
     };
     
     loadOrPrefill();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadDraft, form, readOnly, protocolId, reviewerId, protocolData, skipFirebaseLoad]);
 
   // Auto-save on form changes
@@ -486,7 +489,7 @@ export default function IACUCForm({
                 variant="outline" 
                 onClick={handleSaveDraft}
                 disabled={isAutoSaving}
-                className="flex-1"
+                className="flex-1 border-[#036635] dark:border-[#FECC07] text-[#036635] dark:text-[#FECC07] hover:bg-[#036635] dark:hover:bg-[#FECC07] hover:text-white dark:hover:text-black"
               >
                 <Save className="w-4 h-4 mr-2" />
                 Save Draft
@@ -494,7 +497,7 @@ export default function IACUCForm({
               <Button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="flex-1"
+                className="flex-1 bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black"
               >
                 <Send className="w-4 h-4 mr-2" />
                 {isSubmitting ? 'Submitting...' : 'Submit Assessment'}

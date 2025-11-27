@@ -25,7 +25,7 @@ export const useDocumentIdGenerator = () => {
 
   // Generate multiple unique IDs (useful for batch operations)
   const generateMultipleDocumentIds = useCallback((count: number): string[] => {
-    const ids: string[] = [];
+    // const ids: string[] = []; // Currently not used
     const idsSet = new Set<string>();
     
     while (idsSet.size < count) {

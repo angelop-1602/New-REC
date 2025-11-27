@@ -1,26 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { useParams } from "next/navigation";
+import { PageLoading } from "@/components/ui/loading";
 import { getSubmissionById, getSubmissionWithDocuments, SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
 import CustomBanner from "@/components/rec/proponent/application/components/protocol/banner";
-import { reviewerService } from "@/lib/services/reviewerService";
+import { reviewerService } from "@/lib/services/reviewers/reviewerService";
 import { ChairpersonActions } from "@/components/rec/chairperson/components/protocol/chairperson-actions";
 import ProtocolOverview from "@/components/rec/shared/protocol-overview";
 import { ChairpersonDecisionCard } from "@/components/rec/chairperson/components/protocol/decision-card";
 import { getUnreadMessageCount } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
-import { useFirestoreDoc } from "@/hooks/use-firestore";
-import { firestoreTimestampToLocaleDateString } from "@/lib/utils/firestoreUtils";
 import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
+import { checkArchivingConditions, archiveProtocol, updateProtocolActivity } from "@/lib/services/core/archivingService";
+import { 
+  ChairpersonProtocol, 
+  toChairpersonProtocol,
+  getProtocolTitle,
+  toLocaleDateString,
+  InformationType,
+  DocumentsType
+} from '@/types';
 
 export default function ChairpersonProtocolDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const { user } = useAuth();
-  const [initialSubmission, setInitialSubmission] = useState<any>(null);
+  const [initialSubmission, setInitialSubmission] = useState<ChairpersonProtocol | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -29,14 +34,17 @@ export default function ChairpersonProtocolDetailPage() {
   const submissionId = params.id as string;
 
   // ⚡ Use real-time protocol hook for auto-updates
-  const { protocol: realtimeProtocol, loading: protocolLoading, error: protocolError } = useRealtimeProtocol({
+  const { protocol: realtimeProtocol } = useRealtimeProtocol({
     protocolId: submissionId,
     collectionName: SUBMISSIONS_COLLECTION,
     enabled: !!submissionId,
   });
 
   // Use realtime protocol if available, fallback to initial submission
-  const submission = realtimeProtocol || initialSubmission;
+  // Convert realtime protocol to typed if needed
+  const submission: ChairpersonProtocol | null = realtimeProtocol 
+    ? toChairpersonProtocol(realtimeProtocol) 
+    : initialSubmission;
 
   // Fetch initial submission from any collection (pending, accepted, approved, archived)
   useEffect(() => {
@@ -51,7 +59,37 @@ export default function ChairpersonProtocolDetailPage() {
         if (data) {
           // Try to get documents if available
           const withDocs = await getSubmissionWithDocuments(submissionId);
-          setInitialSubmission(withDocs || data);
+          const rawData = withDocs || data;
+          // Convert to typed protocol
+          const typedProtocol = toChairpersonProtocol(rawData);
+          setInitialSubmission(typedProtocol);
+          
+          // Check archiving conditions for non-archived protocols
+          if (data.status !== "archived") {
+            const archivingCheck = await checkArchivingConditions(submissionId);
+            if (archivingCheck.shouldArchive && archivingCheck.reason) {
+              // Automatically archive if conditions are met
+              try {
+                await archiveProtocol(
+                  submissionId,
+                  archivingCheck.reason,
+                  archivingCheck.details,
+                  user?.uid || "system"
+                );
+                // Refresh the submission after archiving
+                const updatedData = await getSubmissionById(submissionId);
+                const updatedWithDocs = await getSubmissionWithDocuments(submissionId);
+                const rawUpdated = updatedWithDocs || updatedData;
+                const typedUpdated = toChairpersonProtocol(rawUpdated);
+                setInitialSubmission(typedUpdated);
+              } catch (archiveError) {
+                console.error("Error archiving protocol:", archiveError);
+              }
+            }
+          }
+          
+          // Update activity timestamp
+          await updateProtocolActivity(submissionId);
         } else {
           setError("Protocol not found");
         }
@@ -66,44 +104,50 @@ export default function ChairpersonProtocolDetailPage() {
     if (submissionId) {
       fetchSubmission();
     }
-  }, [submissionId]);
+  }, [submissionId, user]);
 
+  // Fetch unread messages when submission changes
   useEffect(() => {
+    const fetchUnreadMessages = async () => {
+      if (!user || !submission) return;
+      
+      try {
+        // Use single submissions collection
+        const count = await getUnreadMessageCount(submissionId, 'submissions', user.uid);
+        setUnreadCount(count);
+      } catch (error) {
+        console.error("Error fetching unread messages:", error);
+      }
+    };
+
     if (submission && user) {
       fetchUnreadMessages();
     }
-  }, [submission, user]);
+  }, [submission, user, submissionId]);
 
   // Check reviewers when submission changes
   useEffect(() => {
+    const checkReviewers = async () => {
+      if (!submission || (submission.status !== 'pending' && submission.status !== 'accepted')) {
+        setHasReviewers(false);
+        return;
+      }
+
+      try {
+        const reviewers = await reviewerService.getProtocolReviewers(submissionId);
+        setHasReviewers(reviewers.length > 0);
+      } catch (reviewerError) {
+        console.error("Error checking reviewers:", reviewerError);
+        setHasReviewers(false);
+      }
+    };
+
     if (submission && (submission.status === 'pending' || submission.status === 'accepted')) {
       checkReviewers();
     } else {
       setHasReviewers(false);
     }
-  }, [submission]);
-
-  const checkReviewers = async () => {
-    try {
-      const reviewers = await reviewerService.getProtocolReviewers(submissionId);
-      setHasReviewers(reviewers.length > 0);
-    } catch (reviewerError) {
-      console.error("Error checking reviewers:", reviewerError);
-      setHasReviewers(false);
-    }
-  };
-
-  const fetchUnreadMessages = async () => {
-    if (!user) return;
-    
-    try {
-      // Use single submissions collection
-      const count = await getUnreadMessageCount(submissionId, 'submissions', user.uid);
-      setUnreadCount(count);
-    } catch (error) {
-      console.error("Error fetching unread messages:", error);
-    }
-  };
+  }, [submission, submissionId]);
 
   const handleStatusUpdate = async (newStatus: string) => {
     // TODO: Implement status update logic
@@ -112,76 +156,74 @@ export default function ChairpersonProtocolDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
+    return <PageLoading text="Loading protocol..." />;
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen">
+      <div className="flex flex-col items-center justify-center h-screen animate-in fade-in duration-500">
         <p className="text-destructive mb-4">{error}</p>
-        <Button onClick={() => router.push("/rec/chairperson/submitted-protocols")}>
-          Back to Protocols
-        </Button>
       </div>
     );
   }
 
   if (!submission) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen">
+      <div className="flex flex-col items-center justify-center h-screen animate-in fade-in duration-500">
         <p className="text-muted-foreground mb-4">Protocol not found</p>
-        <Button onClick={() => router.push("/rec/chairperson/submitted-protocols")}>
-          Back to Protocols
-        </Button>
       </div>
     );
   }
 
   const isApproved = submission.status === "approved" || submission.status === "archived";
-  const hasDecision = submission.decision || submission.status === "approved";
+  const hasDecision = submission.decision || submission.decisionDetails || submission.status === "approved";
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="container mx-auto py-6 px-4 md:px-6 space-y-6 animate-in fade-in duration-500">
 
       {/* Banner */}
+      <div className="animate-in fade-in slide-in-from-top-4 duration-500">
       <CustomBanner
-        title={submission.information?.general_information?.protocol_title || submission.title || "Untitled Protocol"}
+        title={getProtocolTitle(submission)}
         status={submission.status}
         submissionId={submission.id}
         spupCode={submission.spupCode}
         tempCode={submission.tempProtocolCode}
-        dateSubmitted={firestoreTimestampToLocaleDateString(submission.createdAt)}
+        dateSubmitted={toLocaleDateString(submission.createdAt)}
         unreadMessageCount={unreadCount}
         hasReviewers={hasReviewers}
       />
+      </div>
       {/* Decision Card - Show if there's a decision or if approved */}
       {hasDecision && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
         <ChairpersonDecisionCard 
           protocolId={submission.id}
           collection={isApproved ? 'approved' : 'accepted'}
           onDecisionUpdate={() => {}} // No longer needed - realtime updates
         />
+        </div>
       )}
       {/* Chairperson Actions Card */}
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
       <ChairpersonActions
-        submission={submission}
+        submission={submission as unknown as Record<string, unknown>}
         onStatusUpdate={handleStatusUpdate}
       />
+      </div>
 
       {/* Protocol Overview - Information and Documents */}
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-450">
       <ProtocolOverview 
-        information={submission.information}
-        documents={submission.documents || []}
+        information={submission.information as unknown as InformationType}
+        documents={((submission as unknown as { documents?: DocumentsType[] }).documents || []) as DocumentsType[]}
         userType="chairperson"
         showDocuments={true}
         protocolId={submission.id}
         submissionId={submissionId}
         onDocumentStatusUpdate={() => {}} // No longer needed - realtime updates
       />
+      </div>
 
 
     </div>

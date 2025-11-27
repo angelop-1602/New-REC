@@ -3,13 +3,13 @@ import CustomFileUpload from "@/components/ui/custom/file-input";
 import {
   DocumentRequirement as DocumentRequirementType,
   DocumentsType,
-} from "@/types/documents.types";
+} from "@/types";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { AddDocumentDialog } from "./components/add-document-dialog";
 import { useSubmissionContext } from "@/contexts/SubmissionContext";
-import { setFileReference, removeFileReference } from "@/utils/fileReferenceManager";
+import { setFileReference, removeFileReference } from "@/lib/utils/fileReferenceManager";
 
 const basicRequirements: DocumentRequirementType[] = [
   {

@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FileText } from "lucide-react";
-import { DocumentRequirement } from "@/types/documents.types";
+import { DocumentRequirement } from "@/types";
 
 export interface AddDocumentDialogProps {
   open: boolean;

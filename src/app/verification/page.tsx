@@ -1,22 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getAuth, applyActionCode } from "firebase/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-export default function Page({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+import { useTheme } from "next-themes";
+
+// Separate component that uses useSearchParams
+function VerificationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { theme } = useTheme();
   const [status, setStatus] = useState<"verifying" | "success" | "error">("verifying");
+  const [mounted, setMounted] = useState(false);
 
   const oobCode = searchParams.get("oobCode");
+
+  // Avoid hydration mismatch for theme
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -29,7 +35,7 @@ export default function Page({
         const auth = getAuth();
         await applyActionCode(auth, oobCode);
         setStatus("success");
-      } catch (err) {
+      } catch {
         setStatus("error");
       }
     };
@@ -42,13 +48,12 @@ export default function Page({
   }
 
   return (
-    
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div className="flex flex-col gap-6">
       <Card className="overflow-hidden p-0 min-h-svh">
         <CardContent className="grid p-0 md:grid-cols-2">
             <div  className="p-6 md:p-8">
             <Image
-                src="/SPUP-REC-logo-light.png"
+                src={mounted && theme === "dark" ? "/SPUP-REC-logo-light.png" : "/SPUP-REC-logo-dark.png"}
                 alt="SPUP REC Logo"
                 width={200}
                 height={200}
@@ -83,5 +88,24 @@ export default function Page({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function Page() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col gap-6">
+        <Card className="overflow-hidden p-0 min-h-svh">
+          <CardContent className="grid p-0 md:grid-cols-2">
+            <div className="p-6 md:p-8">
+              <p>Loading verification...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <VerificationContent />
+    </Suspense>
   );
 }

@@ -1,9 +1,8 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useMemo, useState } from 'react';
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/custom/data-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu, 
@@ -11,79 +10,47 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { EllipsisVertical, Eye, FileText, Download, Archive } from "lucide-react";
+import { EllipsisVertical, Eye, Archive, Download, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getAllSubmissionsByStatus } from "@/lib/firebase/firestore";
-import { Loader2 } from "lucide-react";
+import { PageLoading } from "@/components/ui/loading";
 import { formatDistanceToNow } from "date-fns";
 import { ColumnDef } from "@tanstack/react-table";
 import { getStatusBadge } from "@/lib/utils/statusUtils";
-
-// Define the archived protocol type
-interface ArchivedProtocol {
-  id: string;
-  applicationID: string;
-  title: string;
-  spupCode: string;
-  submitBy: string;
-  submittedByName?: string;
-  status: string;
-  createdAt: any;
-  approvedAt: any;
-  archivedAt?: any;
-  information?: any;
-}
+import { useRealtimeProtocols } from "@/hooks/useRealtimeProtocols";
+import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
+import { Input } from "@/components/ui/input";
+import { 
+  ChairpersonProtocol, 
+  toChairpersonProtocols, 
+  getProtocolTitle,
+  getProtocolCode,
+  getPIName,
+  toDate
+} from '@/types';
 
 export default function ArchivedProtocolsPage() {
   const router = useRouter();
-  const [protocols, setProtocols] = useState<ArchivedProtocol[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [searchValue, setSearchValue] = useState("");
 
-  useEffect(() => {
-    fetchArchivedProtocols();
-  }, []);
+  // ⚡ Real-time data for archived protocols
+  const { protocols: archivedProtocols, loading, error } = useRealtimeProtocols({
+    collectionName: SUBMISSIONS_COLLECTION,
+    statusFilter: 'archived',
+    enabled: true,
+  });
 
-  const fetchArchivedProtocols = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const archivedProtocols = await getAllSubmissionsByStatus('archived');
-      
-      // Transform the data to include proper typing
-      const transformedProtocols: ArchivedProtocol[] = archivedProtocols.map((protocol: any) => ({
-        id: protocol.id,
-        applicationID: protocol.applicationID || protocol.id,
-        title: protocol.title || protocol.information?.general_information?.protocol_title || 'Untitled Protocol',
-        spupCode: protocol.spupCode || 'N/A',
-        submitBy: protocol.submitBy || 'Unknown',
-        submittedByName: protocol.information?.general_information?.principal_investigator?.name,
-        status: protocol.status || 'archived',
-        createdAt: protocol.createdAt,
-        approvedAt: protocol.approvedAt,
-        archivedAt: protocol.archivedAt,
-        information: protocol.information
-      }));
-      
-      // Sort by archived date (most recent first), fallback to approved date
-      transformedProtocols.sort((a, b) => {
-        const dateA = a.archivedAt ? (a.archivedAt.toDate ? a.archivedAt.toDate() : new Date(a.archivedAt)) : 
-                      (a.approvedAt ? (a.approvedAt.toDate ? a.approvedAt.toDate() : new Date(a.approvedAt)) : new Date(0));
-        const dateB = b.archivedAt ? (b.archivedAt.toDate ? b.archivedAt.toDate() : new Date(b.archivedAt)) : 
-                      (b.approvedAt ? (b.approvedAt.toDate ? b.approvedAt.toDate() : new Date(b.approvedAt)) : new Date(0));
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      setProtocols(transformedProtocols);
-    } catch (err) {
-      console.error('Error fetching archived protocols:', err);
-      setError('Failed to load archived protocols');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Transform protocols data using new type system
+  const protocols = useMemo(() => {
+    const typedProtocols = toChairpersonProtocols(archivedProtocols);
+    // Sort by decision date (most recent first), fallback to createdAt
+    return typedProtocols.sort((a, b) => {
+      const dateA = toDate(a.decisionDetails?.decisionDate || a.createdAt);
+      const dateB = toDate(b.decisionDetails?.decisionDate || b.createdAt);
+      if (!dateA || !dateB) return 0;
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [archivedProtocols]);
 
   const handleViewProtocol = (protocolId: string) => {
     router.push(`/rec/chairperson/protocol/${protocolId}`);
@@ -99,27 +66,13 @@ export default function ArchivedProtocolsPage() {
     console.log('View archive notification for:', protocolId);
   };
 
-  const formatDate = (date: any) => {
-    if (!date) return "—";
-    try {
-      const dateObj = date.toDate ? date.toDate() : new Date(date);
-      return dateObj.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return "—";
-    }
-  };
-
-  const columns: ColumnDef<ArchivedProtocol>[] = [
+  const columns: ColumnDef<ChairpersonProtocol>[] = [
     {
       accessorKey: "spupCode",
       header: "Code",
       cell: ({ row }) => (
         <div className="font-mono text-sm">
-          {row.original.spupCode || "—"}
+          {getProtocolCode(row.original) || "—"}
         </div>
       ),
     },
@@ -128,9 +81,7 @@ export default function ArchivedProtocolsPage() {
       header: "Submitted By",
       cell: ({ row }) => (
         <div className="text-sm">
-          {row.original.submittedByName || 
-           row.original.information?.general_information?.principal_investigator?.name || 
-           "Unknown"}
+          {row.original.submittedByName || getPIName(row.original) || "Unknown"}
         </div>
       ),
     },
@@ -139,7 +90,7 @@ export default function ArchivedProtocolsPage() {
       header: "Protocol Title",
       cell: ({ row }) => (
         <div className="max-w-[300px] truncate">
-          {row.original.title || row.original.information?.general_information?.protocol_title || "Untitled Protocol"}
+          {getProtocolTitle(row.original)}
         </div>
       ),
     },
@@ -152,11 +103,9 @@ export default function ArchivedProtocolsPage() {
       accessorKey: "createdAt",
       header: "Submitted",
       cell: ({ row }) => {
-        const date = row.original.createdAt;
-        if (!date) return <span className="text-muted-foreground">—</span>;
-        
         try {
-          const dateObj = date.toDate ? date.toDate() : new Date(date);
+          const dateObj = toDate(row.original.createdAt);
+          if (!dateObj) return <span className="text-muted-foreground">—</span>;
           return (
             <div className="text-sm text-muted-foreground">
               {formatDistanceToNow(dateObj, { addSuffix: true })}
@@ -215,7 +164,7 @@ export default function ArchivedProtocolsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <PageLoading text="Loading protocols..." />
       </div>
     );
   }
@@ -223,38 +172,37 @@ export default function ArchivedProtocolsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px] text-center">
-        <p className="text-destructive mb-4">{error}</p>
-        <Button onClick={fetchArchivedProtocols}>Try Again</Button>
+        <p className="text-destructive mb-4">Error: {error.message || 'Failed to load archived protocols'}</p>
+        <p className="text-sm text-muted-foreground">Real-time updates will resume automatically</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Archived Protocols</h1>
-          <p className="text-muted-foreground">
-            View and manage all archived research protocols
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6 p-4 md:p-6 animate-in fade-in duration-500">
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Archived Protocols</CardTitle>
-          <CardDescription>
-            Protocols that have been completed and archived
-          </CardDescription>
+      <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150 overflow-hidden p-0">
+        <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 dark:to-card p-6">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#036635] dark:text-[#FECC07] h-4 w-4" />
+          <Input
+            placeholder="Search archived protocols..."
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            className="pl-10 border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300"
+          />
+        </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6 pb-6">
           <DataTable
             columns={columns}
             data={protocols}
             searchPlaceholder="Search archived protocols..."
-            showSearch={true}
+            showSearch={false}
             showPagination={true}
             pageSize={10}
+            externalSearchValue={searchValue}
+            onSearchChange={setSearchValue}
           />
         </CardContent>
       </Card>

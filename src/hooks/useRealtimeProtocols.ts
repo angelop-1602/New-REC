@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where, orderBy, QueryConstraint } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import firebaseApp from '@/lib/firebaseConfig';
+import { toDate } from '@/types';
 
 const db = getFirestore(firebaseApp);
 
@@ -60,8 +61,14 @@ export function useRealtimeProtocols({
         constraints.push(where('createdBy', '==', userIdFilter));
       }
       
-      // Add ordering - sort by most recent
-      constraints.push(orderBy('createdAt', 'desc'));
+      // Track if we need to sort client-side
+      // Only use orderBy if there are no filters (to avoid composite index requirement)
+      const hasFilters = constraints.length > 0;
+      const needsClientSort = hasFilters;
+      
+      if (!hasFilters) {
+        constraints.push(orderBy('createdAt', 'desc'));
+      }
 
       const protocolsQuery = query(protocolsRef, ...constraints);
 
@@ -78,6 +85,16 @@ export function useRealtimeProtocols({
               ...doc.data(),
             });
           });
+
+          // Sort client-side if we have filters (to avoid index requirement)
+          if (needsClientSort) {
+            updatedProtocols.sort((a, b) => {
+              const dateA = toDate(a.createdAt);
+              const dateB = toDate(b.createdAt);
+              if (!dateA || !dateB) return 0;
+              return dateB.getTime() - dateA.getTime(); // Most recent first
+            });
+          }
 
           setProtocols(updatedProtocols);
           setLoading(false);

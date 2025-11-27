@@ -23,11 +23,14 @@ import { CheckCircle, Loader2, Upload, X } from "lucide-react";
 import { makeProtocolDecision } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { 
+  toChairpersonProtocol
+} from '@/types';
 
 interface DecisionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  submission: any;
+  submission: Record<string, unknown>;
   onStatusUpdate: (status: string) => void;
 }
 
@@ -38,6 +41,10 @@ export function DecisionDialog({
   onStatusUpdate 
 }: DecisionDialogProps) {
   const { user } = useAuth();
+  
+  // Convert to typed protocol at the top
+  const typedSubmission = toChairpersonProtocol(submission);
+  
   const [decision, setDecision] = useState<'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved' | 'deferred'>('approved');
   const [timeline, setTimeline] = useState("");
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, File>>({}); // Map document name to file
@@ -46,8 +53,8 @@ export function DecisionDialog({
   const [meetingYear, setMeetingYear] = useState<string>("");
   
   // Check if this is a full board review
-  const typeOfReview = submission?.information?.general_information?.typeOfReview || submission?.typeOfReview || '';
-  const isFullBoard = typeOfReview?.toString().toLowerCase() === 'full' || typeOfReview?.toString().toLowerCase() === 'full board';
+  const typeOfReview = typedSubmission.information?.reviewType || typedSubmission.researchType || '';
+  const isFullBoard = String(typeOfReview).toLowerCase() === 'full' || String(typeOfReview).toLowerCase() === 'full board';
   
   // Reset form when dialog opens
   useEffect(() => {
@@ -86,7 +93,7 @@ export function DecisionDialog({
       
       // Make the decision in Firebase
       await makeProtocolDecision(
-        submission.id,
+        String(typedSubmission.id),
         decision,
         "",
         user.uid,
@@ -163,8 +170,9 @@ export function DecisionDialog({
 
   const getRequiredDocuments = (decisionType: string) => {
     // Check if this is an exemption protocol
-    const researchType = submission?.researchType || 
-                         submission?.information?.nature_and_type_of_study?.type || '';
+    const info = submission?.information as Record<string, unknown> | undefined;
+    const researchType = submission?.researchType ||
+      (info?.nature_and_type_of_study as { type?: string } | undefined)?.type || '';
     const isExemption = researchType === 'EX' || researchType?.toString().toUpperCase() === 'EX' || 
                         researchType?.toString().toLowerCase().includes('exempt');
 
@@ -206,10 +214,10 @@ export function DecisionDialog({
 
   return (
 <Dialog open={open} onOpenChange={onOpenChange}>
-  <DialogContent className="max-w-2xl border border-gray-200 bg-white">
+  <DialogContent className="max-w-2xl border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
     <DialogHeader>
-      <DialogTitle className="text-gray-900">Make Protocol Decision</DialogTitle>
-      <DialogDescription className="text-gray-600">
+      <DialogTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Make Protocol Decision</DialogTitle>
+      <DialogDescription>
         Make a final decision on this protocol after review
       </DialogDescription>
     </DialogHeader>
@@ -217,9 +225,9 @@ export function DecisionDialog({
       {/* Decision Type Selection */}
       <div>
         <Label className="text-gray-800">Decision Type</Label>
-        <RadioGroup value={decision} onValueChange={(value) => setDecision(value as any)}>
+        <RadioGroup value={decision} onValueChange={(value) => setDecision(value as typeof decision)}>
           <div className="space-y-3">
-            <div className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg">
+            <div className="flex items-start space-x-3 p-3 border border-[#036635]/10 dark:border-[#FECC07]/20 rounded-lg hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200">
               <RadioGroupItem value="approved" id="approved" className="mt-1" />
               <div className="flex-1">
                 <Label htmlFor="approved" className="font-medium cursor-pointer text-green-600">
@@ -231,7 +239,7 @@ export function DecisionDialog({
               </div>
             </div>
 
-            <div className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg">
+            <div className="flex items-start space-x-3 p-3 border border-[#036635]/10 dark:border-[#FECC07]/20 rounded-lg hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200">
               <RadioGroupItem value="approved_minor_revisions" id="minor" className="mt-1" />
               <div className="flex-1">
                 <Label htmlFor="minor" className="font-medium cursor-pointer text-blue-600">
@@ -243,7 +251,7 @@ export function DecisionDialog({
               </div>
             </div>
 
-            <div className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg">
+            <div className="flex items-start space-x-3 p-3 border border-[#036635]/10 dark:border-[#FECC07]/20 rounded-lg hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200">
               <RadioGroupItem value="major_revisions_deferred" id="major" className="mt-1" />
               <div className="flex-1">
                 <Label htmlFor="major" className="font-medium cursor-pointer text-yellow-600">
@@ -255,7 +263,7 @@ export function DecisionDialog({
               </div>
             </div>
 
-            <div className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg">
+            <div className="flex items-start space-x-3 p-3 border border-[#036635]/10 dark:border-[#FECC07]/20 rounded-lg hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200">
               <RadioGroupItem value="deferred" id="deferred" className="mt-1" />
               <div className="flex-1">
                 <Label htmlFor="deferred" className="font-medium cursor-pointer text-cyan-600">
@@ -267,7 +275,7 @@ export function DecisionDialog({
               </div>
             </div>
 
-            <div className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg">
+            <div className="flex items-start space-x-3 p-3 border border-[#036635]/10 dark:border-[#FECC07]/20 rounded-lg hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200">
               <RadioGroupItem value="disapproved" id="disapproved" className="mt-1" />
               <div className="flex-1">
                 <Label htmlFor="disapproved" className="font-medium cursor-pointer text-red-600">
@@ -474,7 +482,7 @@ export function DecisionDialog({
           setMeetingYear("");
         }}
         disabled={isProcessing}
-        className="border-gray-200 hover:bg-gray-100"
+        className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
       >
         Cancel
       </Button>
@@ -484,14 +492,14 @@ export function DecisionDialog({
         disabled={isProcessing}
         className={
           decision === "approved"
-            ? "bg-green-600 hover:bg-green-700 text-white"
+            ? "bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
             : decision === "approved_minor_revisions"
-            ? "bg-blue-600 hover:bg-blue-700 text-white"
+            ? "bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
             : decision === "major_revisions_deferred"
-            ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+            ? "bg-[#FECC07] hover:bg-[#E6B800] dark:bg-[#036635] dark:hover:bg-[#024A28] text-black dark:text-white transition-all duration-300 hover:scale-105"
             : decision === "deferred"
-            ? "bg-cyan-500 hover:bg-cyan-600 text-white"
-            : "bg-red-600 hover:bg-red-700 text-white"
+            ? "bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
+            : "bg-red-600 hover:bg-red-700 text-white transition-all duration-300 hover:scale-105"
         }
       >
         {isProcessing ? (

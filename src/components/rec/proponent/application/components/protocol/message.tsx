@@ -3,9 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
-  DrawerClose,
   DrawerContent,
-  DrawerDescription,
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
@@ -16,16 +14,23 @@ import { Separator } from "@/components/ui/separator";
 import { MessageCircle, SendHorizonal } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { getMessagesForSubmission, sendMessageToSubmission } from "@/lib/firebase/firestore";
-import { MessagesType } from "@/types/message.types";
-import { LoadingSimple, InlineLoading } from "@/components/ui/loading";
+import { sendMessageToSubmission, markAllMessagesAsRead, getUnreadMessageCount } from "@/lib/firebase/firestore";
+import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
+import { MessagesType } from "@/types";
+import { LoadingSimple } from "@/components/ui/loading";
+import { isMessageFromUser, getMessageSenderDisplayName } from "@/lib/utils/messageUtils";
+import { reviewersManagementService } from "@/lib/services/reviewers/reviewersManagementService";
+import { useChairpersonPresence } from "@/hooks/usePresence";
+
+// SPUP Logo for chairperson
+const CHAIRPERSON_LOGO = '/SPUP-Logo-with-yellow.png';
 
 interface ProtocolMessageProps {
   submissionId?: string;
   unreadCount?: number;
 }
 
-export default function ProtocolMessage({ submissionId, unreadCount = 0 }: ProtocolMessageProps) {
+export default function ProtocolMessage({ submissionId, unreadCount: initialUnreadCount = 0 }: ProtocolMessageProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -33,6 +38,13 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
   const [direction, setDirection] = useState<"right" | "bottom">("right");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [chairpersonName, setChairpersonName] = useState<string>("SPUP REC Chair");
+  const [chairpersonImage, setChairpersonImage] = useState<string>(CHAIRPERSON_LOGO);
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  
+  // Use real-time presence hook for chairperson
+  const { presence: chairpersonPresence } = useChairpersonPresence();
+  const chairpersonStatus: "online" | "offline" = chairpersonPresence?.status === "online" ? "online" : "offline";
 
   useEffect(() => {
     const updateDirection = () => {
@@ -44,24 +56,100 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
     return () => window.removeEventListener('resize', updateDirection);
   }, []);
 
-  // Fetch messages when drawer opens
+  // Fetch chairperson information
   useEffect(() => {
-    const fetchMessages = async () => {
-      if (!open || !submissionId) return;
-      
+    const fetchChairpersonInfo = async () => {
       try {
-        setLoading(true);
-        const fetchedMessages = await getMessagesForSubmission(submissionId);
-        setMessages(fetchedMessages);
+        const reviewers = await reviewersManagementService.getAllReviewers();
+        const chairperson = reviewers.find(r => r.role === 'chairperson' && r.isActive);
+        
+        if (chairperson) {
+          setChairpersonName(chairperson.name);
+          // Always use SPUP logo for chairperson
+          setChairpersonImage(CHAIRPERSON_LOGO);
+        }
       } catch (error) {
-        console.error("Error fetching messages:", error);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching chairperson info:', error);
       }
     };
 
-    fetchMessages();
-  }, [open, submissionId]);
+    fetchChairpersonInfo();
+  }, []);
+
+  // Chairperson presence is now handled by useChairpersonPresence hook
+  // It automatically updates in real-time when chairperson comes online/offline
+
+  // Real-time messages for proponent
+  const { messages: realtimeMessages, loading: messagesLoading } = useRealtimeMessages({
+    submissionId: open && submissionId ? submissionId : null,
+    enabled: open && !!submissionId,
+  });
+
+  // Update messages when real-time messages change and recalculate unread count
+  useEffect(() => {
+    if (realtimeMessages.length > 0) {
+      setMessages(realtimeMessages);
+      setLoading(false);
+      
+      // Update unread count based on real-time messages
+      if (user) {
+        const unread = realtimeMessages.filter(
+          (msg) => msg.senderId !== user.uid && msg.status !== "read"
+        ).length;
+        setUnreadCount(unread);
+      }
+    }
+  }, [realtimeMessages, user]);
+
+  // Fetch unread count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      if (!submissionId || !user) {
+        setUnreadCount(0);
+        return;
+      }
+
+      try {
+        const count = await getUnreadMessageCount(submissionId, 'submissions', user.uid);
+        setUnreadCount(count);
+      } catch (error) {
+        console.error("Error fetching unread count:", error);
+        setUnreadCount(0);
+      }
+    };
+
+    fetchUnreadCount();
+    // Refresh count periodically and when drawer closes
+    const interval = setInterval(fetchUnreadCount, 5000); // Check every 5 seconds
+    return () => clearInterval(interval);
+  }, [submissionId, user]);
+
+  // Update unread count when initial prop changes
+  useEffect(() => {
+    setUnreadCount(initialUnreadCount);
+  }, [initialUnreadCount]);
+
+  // Mark messages as read when drawer opens and update count
+  useEffect(() => {
+    const markAsRead = async () => {
+      if (!open || !submissionId || !user) return;
+      
+      try {
+        await markAllMessagesAsRead(submissionId, user.uid);
+        // Immediately update the count to 0 after marking as read
+        setUnreadCount(0);
+        // Also fetch to ensure it's accurate
+        const count = await getUnreadMessageCount(submissionId, 'submissions', user.uid);
+        setUnreadCount(count);
+      } catch (error) {
+        console.error("Error marking messages as read:", error);
+      }
+    };
+
+    if (open) {
+      markAsRead();
+      }
+  }, [open, submissionId, user]);
 
   const addMessage = async (messageText: string) => {
     if (!messageText.trim() || !submissionId || !user) return;
@@ -69,19 +157,24 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
     try {
       setSending(true);
       
+      // Ensure we have proper sender metadata
+      const senderId = user.uid;
+      const senderName = user.displayName || user.email || "User";
+      
+      if (!senderId) {
+        throw new Error("User ID is required to send messages");
+      }
+      
       // Send message to Firestore
       await sendMessageToSubmission(
         submissionId,
-        user.uid,
-        user.displayName || user.email || "User",
+        senderId,
+        senderName,
         messageText,
         "reply"
       );
       
-      // Refresh messages to include the new one
-      const updatedMessages = await getMessagesForSubmission(submissionId);
-      setMessages(updatedMessages);
-      
+      // Don't need to refresh - real-time hook will update automatically
       setInput("");
     } catch (error) {
       console.error("Error sending message:", error);
@@ -122,16 +215,22 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
       .toUpperCase();
   };
 
+  // Get chairperson initials for avatar fallback
+  const getChairpersonInitials = () => {
+    return getUserInitials(chairpersonName);
+  };
+
   return (
     <Drawer open={open} onOpenChange={setOpen} direction={direction}>
       <DrawerTrigger asChild>
         <div className="relative">
           <Button 
             size="sm"
-            className="bg-primary text-white hover:bg-primary/90 hover:text-white rounded-full h-9 w-9 sm:h-10 sm:w-10 p-0"
+            className="bg-primary text-white hover:bg-primary/90 hover:text-white h-9 w-9 sm:h-full sm:w-full p-2"
             disabled={!submissionId}
           >
             <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Open chat</span>
           </Button>
           {unreadCount > 0 && (
             <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
@@ -152,15 +251,34 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
           <DrawerTitle>
             <div className="flex flex-row gap-3 items-center">
               <div className="relative">
-                <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
-                  <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
-                  <AvatarFallback>CN</AvatarFallback>
+                <Avatar className="h-8 w-8 sm:h-10 sm:w-10 ring-2 ring-[#036635]/20 dark:ring-[#FECC07]/30">
+                  <AvatarImage 
+                    src={chairpersonImage} 
+                    alt={chairpersonName}
+                    className="object-contain bg-white p-1"
+                  />
+                  <AvatarFallback className="bg-[#036635] text-white dark:bg-[#FECC07] dark:text-[#036635]">
+                    {getChairpersonInitials()}
+                  </AvatarFallback>
                 </Avatar>
-                <div className="h-2.5 w-2.5 ring-2 ring-white rounded-full bg-green-500 absolute -bottom-0.5 -right-0.5"></div>
+                <div 
+                  className={`h-2.5 w-2.5 ring-2 ring-white rounded-full absolute -bottom-0.5 -right-0.5 ${
+                    chairpersonStatus === 'online' 
+                      ? 'bg-green-500' 
+                      : 'bg-gray-400'
+                  }`}
+                  title={chairpersonStatus === 'online' ? 'Online' : 'Offline'}
+                ></div>
               </div>
               <div>
-                <p className="text-sm sm:text-base font-semibold text-primary">SPUP REC Chair</p>
-                <p className="text-xs text-muted-foreground">Online</p>
+                <p className="text-sm sm:text-base font-semibold text-primary">{chairpersonName}</p>
+                <p className={`text-xs ${
+                  chairpersonStatus === 'online' 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {chairpersonStatus === 'online' ? 'Online' : 'Offline'}
+                </p>
               </div>
             </div>
           </DrawerTitle>
@@ -169,7 +287,7 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
         
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4 min-h-0">
-          {loading ? (
+          {loading || messagesLoading ? (
             <div className="flex justify-center items-center h-32">
               <LoadingSimple size="md" text="Loading messages..." />
             </div>
@@ -179,8 +297,10 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
             </div>
           ) : (
             messages.map(msg => {
-              const isCurrentUser = msg.senderId === user?.uid;
+              // Use utility function for reliable sender comparison
+              const isCurrentUser = isMessageFromUser(msg, user?.uid);
               const isSystemMessage = msg.type === "system";
+              const senderDisplayName = getMessageSenderDisplayName(msg, user?.uid);
               
               return (
                 <div
@@ -191,14 +311,14 @@ export default function ProtocolMessage({ submissionId, unreadCount = 0 }: Proto
                     {!isCurrentUser && (
                       <Avatar className="h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0">
                         <AvatarFallback className="text-xs">
-                          {getUserInitials(msg.senderName || "Unknown")}
+                          {getUserInitials(senderDisplayName)}
                         </AvatarFallback>
                       </Avatar>
                     )}
                     <div className={`flex flex-col ${isCurrentUser ? "items-end" : "items-start"}`}>
                       {!isCurrentUser && (
                         <span className="text-xs text-muted-foreground mb-1">
-                          {msg.senderName}
+                          {senderDisplayName}
                         </span>
                       )}
                       <div className={`

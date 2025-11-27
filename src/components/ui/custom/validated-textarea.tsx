@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ValidationRule } from "@/types/validation.types";
+import { ValidationRule } from "@/types";
 import { validateField } from "@/lib/validation/form-validation";
 import { AlertCircle } from "lucide-react";
 
@@ -64,7 +64,6 @@ export const ValidatedTextarea: React.FC<ValidatedTextareaProps> = ({
   const [isTouched, setIsTouched] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [animationKey, setAnimationKey] = useState(0);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -94,7 +93,6 @@ export const ValidatedTextarea: React.FC<ValidatedTextareaProps> = ({
     if (force && !result.isValid) {
       setIsTouched(true);
       setShowAnimation(true);
-      setAnimationKey(prev => prev + 1);
       
       // Focus the textarea if it's invalid during forced validation
       if (textareaRef.current) {

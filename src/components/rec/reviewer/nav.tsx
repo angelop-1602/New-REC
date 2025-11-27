@@ -17,7 +17,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Menu, MoveRight, X, LogOut } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import Link from "next/link";
 import Image from "next/image";
 import CustomAvatar from "@/components/ui/custom/avatar";
@@ -26,6 +27,13 @@ import { useAuth } from "../../../hooks/useAuth";
 export const Header = () => {
   const { user, signOut } = useAuth();
   const [isOpen, setOpen] = useState(false);
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Avoid hydration mismatch for theme
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const publicNavigationItems = [
     {
@@ -128,7 +136,7 @@ export const Header = () => {
         <div className="hidden lg:flex items-center">
           <Link href="/rec/proponent">
             <Image
-              src="/SPUP-REC-logo-light.png"
+              src={mounted && theme === "dark" ? "/SPUP-REC-logo-light.png" : "/SPUP-REC-logo-dark.png"}
               alt="SPUP REC Logo"
               width={160}
               height={50}
@@ -252,7 +260,7 @@ export const Header = () => {
         <div className="flex lg:hidden w-full justify-between items-center">
           <Link href="/rec/proponent">
             <Image
-              src="/SPUP-REC-logo-light.png"
+              src={mounted && theme === "dark" ? "/SPUP-REC-logo-light.png" : "/SPUP-REC-logo-dark.png"}
               alt="SPUP REC Logo"
               width={130}
               height={40}

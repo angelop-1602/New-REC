@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import firebaseApp from '@/lib/firebaseConfig';
-import type { DocumentsType } from '@/types/documents.types';
+import type { DocumentsType } from '@/types';
 
 const db = getFirestore(firebaseApp);
 

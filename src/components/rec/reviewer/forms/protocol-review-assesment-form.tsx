@@ -88,7 +88,8 @@ export default function ProtocolReviewForm({
   defaultValues = {},
   protocolId,
   reviewerId,
-  reviewerName,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  reviewerName: _reviewerName,
   skipFirebaseLoad = false
 }: ProtocolReviewFormProps) {
   const router = useRouter();
@@ -186,7 +187,7 @@ export default function ProtocolReviewForm({
             console.log('✅ Form loaded with existing data from Firebase/localStorage');
             
             // Check assessment status
-            const { default: AssessmentSubmissionService } = await import('@/lib/services/assessmentSubmissionService');
+            const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
             const assessment = await AssessmentSubmissionService.getAssessment(protocolId, 'protocol-review', reviewerId || '');
             if (assessment) {
               setAssessmentStatus(assessment.status);
@@ -287,7 +288,7 @@ export default function ProtocolReviewForm({
     return (
       <FormField name={name} render={({ field }) => (
         <FormItem className="space-y-1">
-          <FormLabel className={hasError ? "text-red-600" : ""}>{label}</FormLabel>
+          <FormLabel className={hasError ? "text-destructive" : ""}>{label}</FormLabel>
           <p className="text-sm">{description}</p>
           <FormControl>
             <RadioGroup 
@@ -321,12 +322,12 @@ export default function ProtocolReviewForm({
         
         {/* Validation Errors Display */}
         {validationErrors.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 mb-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
               <div>
-                <h4 className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</h4>
-                <ul className="text-sm text-red-700 space-y-1">
+                <h4 className="text-sm font-medium text-destructive mb-2">Please fix the following errors:</h4>
+                <ul className="text-sm text-destructive/90 space-y-1">
                   {validationErrors.map((error, index) => (
                     <li key={index}>• {error}</li>
                   ))}
@@ -338,33 +339,33 @@ export default function ProtocolReviewForm({
 
         {/* Assessment Status Indicator */}
         {isLoadingExistingData ? (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="bg-[#036635]/10 dark:bg-[#FECC07]/20 border border-[#036635]/20 dark:border-[#FECC07]/30 rounded-lg p-4 mb-4">
             <div className="flex items-center gap-3">
-              <Clock className="w-5 h-5 text-blue-600 animate-spin" />
+              <Clock className="w-5 h-5 text-[#036635] dark:text-[#FECC07] animate-spin" />
               <div>
-                <h4 className="text-sm font-medium text-blue-800">Loading existing assessment...</h4>
-                <p className="text-xs text-blue-600">Please wait while we load your previous work.</p>
+                <h4 className="text-sm font-medium text-[#036635] dark:text-[#FECC07]">Loading existing assessment...</h4>
+                <p className="text-xs text-[#036635]/80 dark:text-[#FECC07]/80">Please wait while we load your previous work.</p>
               </div>
             </div>
           </div>
         ) : assessmentStatus ? (
-          <div className={`border rounded-lg p-4 mb-6 ${
-            assessmentStatus === 'submitted' ? 'bg-green-50 border-green-200' :
-            assessmentStatus === 'approved' ? 'bg-blue-50 border-blue-200' :
-            assessmentStatus === 'returned' ? 'bg-red-50 border-red-200' :
-            'bg-yellow-50 border-yellow-200'
+          <div className={`border rounded-lg p-4 mb-4 ${
+            assessmentStatus === 'submitted' ? 'bg-[#036635]/10 dark:bg-[#FECC07]/20 border-[#036635]/20 dark:border-[#FECC07]/30' :
+            assessmentStatus === 'approved' ? 'bg-[#036635]/10 dark:bg-[#FECC07]/20 border-[#036635]/20 dark:border-[#FECC07]/30' :
+            assessmentStatus === 'returned' ? 'bg-destructive/10 border-destructive/30' :
+            'bg-[#036635]/5 dark:bg-[#FECC07]/10 border-[#036635]/20 dark:border-[#FECC07]/30'
           }`}>
             <div className="flex items-center gap-3">
-              {assessmentStatus === 'submitted' && <CheckCircle className="w-5 h-5 text-green-600" />}
-              {assessmentStatus === 'approved' && <CheckCircle className="w-5 h-5 text-blue-600" />}
-              {assessmentStatus === 'returned' && <AlertTriangle className="w-5 h-5 text-red-600" />}
-              {assessmentStatus === 'draft' && <Clock className="w-5 h-5 text-yellow-600" />}
+              {assessmentStatus === 'submitted' && <CheckCircle className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />}
+              {assessmentStatus === 'approved' && <CheckCircle className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />}
+              {assessmentStatus === 'returned' && <AlertTriangle className="w-5 h-5 text-destructive" />}
+              {assessmentStatus === 'draft' && <Clock className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />}
               <div>
                 <h4 className={`text-sm font-medium ${
-                  assessmentStatus === 'submitted' ? 'text-green-800' :
-                  assessmentStatus === 'approved' ? 'text-blue-800' :
-                  assessmentStatus === 'returned' ? 'text-red-800' :
-                  'text-yellow-800'
+                  assessmentStatus === 'submitted' ? 'text-[#036635] dark:text-[#FECC07]' :
+                  assessmentStatus === 'approved' ? 'text-[#036635] dark:text-[#FECC07]' :
+                  assessmentStatus === 'returned' ? 'text-destructive' :
+                  'text-[#036635] dark:text-[#FECC07]'
                 }`}>
                   Assessment Status: {
                     assessmentStatus === 'draft' ? 'In Progress' :
@@ -375,10 +376,10 @@ export default function ProtocolReviewForm({
                   }
                 </h4>
                 <p className={`text-xs ${
-                  assessmentStatus === 'submitted' ? 'text-green-600' :
-                  assessmentStatus === 'approved' ? 'text-blue-600' :
-                  assessmentStatus === 'returned' ? 'text-red-600' :
-                  'text-yellow-600'
+                  assessmentStatus === 'submitted' ? 'text-[#036635]/80 dark:text-[#FECC07]/80' :
+                  assessmentStatus === 'approved' ? 'text-[#036635]/80 dark:text-[#FECC07]/80' :
+                  assessmentStatus === 'returned' ? 'text-destructive/90' :
+                  'text-[#036635]/80 dark:text-[#FECC07]/80'
                 }`}>
                   {assessmentStatus === 'submitted' && 'Your assessment has been submitted and is under review.'}
                   {assessmentStatus === 'approved' && 'Your assessment has been approved by the chairperson.'}
@@ -541,7 +542,7 @@ export default function ProtocolReviewForm({
                 type="button" 
                 variant="outline" 
                 onClick={handleSaveDraft}
-                className="flex-1"
+                className="flex-1 border-[#036635] dark:border-[#FECC07] text-[#036635] dark:text-[#FECC07] hover:bg-[#036635] dark:hover:bg-[#FECC07] hover:text-white dark:hover:text-black"
                 disabled={isSubmitting}
               >
                 <Save className="w-4 h-4 mr-2" />
@@ -549,7 +550,7 @@ export default function ProtocolReviewForm({
               </Button>
               <Button 
                 type="submit" 
-                className="flex-1"
+                className="flex-1 bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (

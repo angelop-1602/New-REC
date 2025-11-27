@@ -16,7 +16,6 @@ import {
   XCircle,
   Clock,
   AlertCircle,
-  AlertTriangle,
   Users,
   FileText as FileTextIcon,
   RefreshCw,
@@ -24,29 +23,29 @@ import {
   Download,
   FileJson,
 } from "lucide-react";
-import { reviewerService } from "@/lib/services/reviewerService";
+import { reviewerService } from "@/lib/services/reviewers/reviewerService";
 import { ApproveDialog } from "./dialogs/ApproveDialog";
 import { RejectDialog } from "./dialogs/RejectDialog";
 import { DecisionDialog } from "./dialogs/DecisionDialog";
 import { AssignReviewersDialog } from "./dialogs/AssignReviewersDialog";
 import { ReassignReviewerDialog } from "./dialogs/ReassignReviewerDialog";
 import { ViewAssessmentDialog } from "./dialogs/ViewAssessmentDialog";
-import { getProtocolReviewerAssessments } from "@/lib/services/assessmentAggregationService";
+import { getProtocolReviewerAssessments, ProtocolAssessmentsResult } from "@/lib/services/assessments/assessmentAggregationService";
 import { Separator } from "@/components/ui/separator";
 import { ProtocolReports } from "@/components/rec/proponent/application/components/protocol/report";
-import { getSubmissionDocuments, SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
+import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { enhancedDocumentManagementService } from "@/lib/services/enhancedDocumentManagementService";
+import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
 import { useRealtimeDocuments } from "@/hooks/useRealtimeDocuments";
 import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
-import { documentGenerator } from "@/lib/services/documentGenerator";
-import { getCurrentChairName } from "@/lib/services/recSettingsService";
-import { extractTemplateData } from "@/lib/services/templateDataMapper";
+import { documentGenerator } from "@/lib/services/documents/documentGenerator";
+import { getCurrentChairName } from "@/lib/services/core/recSettingsService";
+import { extractTemplateData } from "@/lib/services/documents/templateDataMapper";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,9 +53,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { 
+  toChairpersonProtocol,
+  getProtocolCode,
+  toDate,
+  FirestoreDate
+} from '@/types';
 
 interface ChairpersonActionsProps {
-  submission: any;
+  submission: Record<string, unknown>;
   onStatusUpdate: (status: string) => void;
 }
 
@@ -66,15 +71,19 @@ export function ChairpersonActions({
 }: ChairpersonActionsProps) {
   const router = useRouter();
   
+  // Convert to typed protocol at the top
+  const typedInitialSubmission = toChairpersonProtocol(initialSubmission);
+  
   // ⚡ Use real-time protocol hook for all protocol data updates
-  const { protocol: realtimeProtocol, loading: protocolLoading } = useRealtimeProtocol({
-    protocolId: initialSubmission.id,
+  const { protocol: realtimeProtocol } = useRealtimeProtocol({
+    protocolId: String(typedInitialSubmission.id),
     collectionName: SUBMISSIONS_COLLECTION,
     enabled: true,
   });
 
   // Use realtime protocol if available, fallback to initial submission
-  const submission = realtimeProtocol || initialSubmission;
+  const rawSubmission = realtimeProtocol || initialSubmission;
+  const submission = toChairpersonProtocol(rawSubmission);
 
   // Dialog states
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
@@ -86,16 +95,16 @@ export function ChairpersonActions({
   const [viewAssessmentDialogOpen, setViewAssessmentDialogOpen] = useState(false);
 
   // Reviewer assignment states
-  const [assignedReviewers, setAssignedReviewers] = useState<any[]>([]);
-  const [selectedAssignmentToReassign, setSelectedAssignmentToReassign] = useState<any | null>(null);
-  const [selectedAssessmentToView, setSelectedAssessmentToView] = useState<any | null>(null);
+  const [assignedReviewers, setAssignedReviewers] = useState<Record<string, unknown>[]>([]);
+  const [selectedAssignmentToReassign, setSelectedAssignmentToReassign] = useState<Record<string, unknown> | null>(null);
+  const [selectedAssessmentToView, setSelectedAssessmentToView] = useState<Record<string, unknown> | null>(null);
   const [selectedReviewerName, setSelectedReviewerName] = useState<string>("");
-  const [assessments, setAssessments] = useState<any | null>(null);
+  const [assessments, setAssessments] = useState<Record<string, unknown> | null>(null);
   const [loadingAssessments, setLoadingAssessments] = useState(false);
 
   // ⚡ Use real-time documents hook for auto-updates
   const { documents: realtimeDocs, loading: loadingDocuments } = useRealtimeDocuments({
-    protocolId: submission.id,
+    protocolId: String(submission.id),
     collectionName: SUBMISSIONS_COLLECTION,
     enabled: submission.status === "pending",
   });
@@ -103,7 +112,7 @@ export function ChairpersonActions({
   // Document validation states
   const documents = realtimeDocs;
   const [allDocumentsAccepted, setAllDocumentsAccepted] = useState(false);
-  const [documentRequests, setDocumentRequests] = useState<any[]>([]);
+  const [documentRequests, setDocumentRequests] = useState<Record<string, unknown>[]>([]);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   // Load assigned reviewers when component mounts
@@ -111,7 +120,7 @@ export function ChairpersonActions({
     const loadAssignedReviewers = async () => {
       try {
         const existingAssignments = await reviewerService.getProtocolReviewers(
-          submission.id
+          String(submission.id)
         );
         setAssignedReviewers(existingAssignments);
       } catch (error) {
@@ -128,18 +137,22 @@ export function ChairpersonActions({
       if (submission.status === "pending" && !loadingDocuments) {
         try {
           // Load document requests
-          const requests = await enhancedDocumentManagementService.getProtocolDocumentRequests(submission.id);
-          setDocumentRequests(requests);
+          const requests = await enhancedDocumentManagementService.getProtocolDocumentRequests(String(submission.id));
+          setDocumentRequests(requests as unknown as Record<string, unknown>[]);
           
           // Count pending requests (documents with status "requested")
-          const pending = requests.filter((r: any) => r.currentStatus === 'requested' || r.status === 'requested').length;
+          const pending = requests.filter((r) => {
+            const status = ((r as unknown as Record<string, unknown>).currentStatus as string) || ((r as unknown as Record<string, unknown>).status as string);
+            return status === 'requested';
+          }).length;
           setPendingRequestsCount(pending);
           
           // Check if all documents are accepted AND no pending requests
           const hasDocuments = documents.length > 0;
-          const allAccepted = documents.every((doc: any) => {
-            const docStatus = doc.currentStatus || doc.status;
-            console.log(`📄 Document "${doc.title}": status="${doc.status}", currentStatus="${doc.currentStatus}", final="${docStatus}"`);
+          const allAccepted = documents.every((doc) => {
+            const docRec = doc as unknown as Record<string, unknown>;
+            const docStatus = (docRec.currentStatus as string) || (docRec.status as string);
+            console.log(`📄 Document "${docRec.title}": status="${docRec.status}", currentStatus="${docRec.currentStatus}", final="${docStatus}"`);
             return docStatus === "accepted";
           });
           const noPendingRequests = pending === 0;
@@ -149,8 +162,9 @@ export function ChairpersonActions({
           
           console.log(`✅ Documents check:`, {
             totalDocs: documents.length,
-            acceptedDocs: documents.filter((d: any) => {
-              const docStatus = d.currentStatus || d.status;
+            acceptedDocs: documents.filter((d) => {
+              const dRec = d as unknown as Record<string, unknown>;
+              const docStatus = (dRec.currentStatus as string) || (dRec.status as string);
               return docStatus === "accepted";
             }).length,
             pendingRequests: pending,
@@ -186,8 +200,8 @@ export function ChairpersonActions({
     const loadAggregated = async () => {
       try {
         setLoadingAssessments(true);
-        const result = await getProtocolReviewerAssessments(submission.id);
-        setAssessments(result);
+        const result = await getProtocolReviewerAssessments(String(submission.id));
+        setAssessments(result as unknown as Record<string, unknown> | null);
       } catch (e) {
         console.error("Failed to load reviewer assessments:", e);
       } finally {
@@ -205,8 +219,8 @@ export function ChairpersonActions({
   const handleRefreshAssessments = async () => {
     try {
       setLoadingAssessments(true);
-      const result = await getProtocolReviewerAssessments(submission.id);
-      setAssessments(result);
+      const result = await getProtocolReviewerAssessments(String(submission.id));
+      setAssessments(result as unknown as Record<string, unknown> | null);
     } catch (e) {
       console.error("Failed to refresh assessments:", e);
     } finally {
@@ -215,20 +229,20 @@ export function ChairpersonActions({
   };
 
   // Helpers for row actions
-  const handleViewAssessment = (assessment: any, reviewerName: string) => {
+  const handleViewAssessment = (assessment: Record<string, unknown>, reviewerName: string) => {
     setSelectedAssessmentToView(assessment);
     setSelectedReviewerName(reviewerName);
     setViewAssessmentDialogOpen(true);
   };
 
-  const handleDownloadJson = (assessment: any, submissionId: string, reviewerId: string) => {
+  const handleDownloadJson = (assessment: Record<string, unknown>, submissionId: string, reviewerId: string) => {
     // Structure JSON to follow question sequence (same as ViewAssessmentDialog)
-    const formData = assessment.formData ?? {};
+    const formData = (assessment.formData ?? {}) as Record<string, unknown>;
     const formType = assessment.formType;
     
     // Define sections in order (same structure as ViewAssessmentDialog)
     const getOrderedStructure = () => {
-      const protocolInfo: any = {
+      const protocolInfo: Record<string, unknown> = {
         'iacucCode': formData.iacucCode,
         'protocolCode': formData.protocolCode,
         'submissionDate': formData.submissionDate,
@@ -291,7 +305,7 @@ export function ChairpersonActions({
             },
           };
         case 'informed-consent':
-          const questions: any = {};
+          const questions: Record<string, unknown> = {};
           for (let i = 1; i <= 17; i++) {
             questions[`q${i}`] = formData[`q${i}`];
             questions[`q${i}Comments`] = formData[`q${i}Comments`];
@@ -441,30 +455,30 @@ export function ChairpersonActions({
     URL.revokeObjectURL(dataStr);
   };
 
-  const handleExportTemplate = async (assessment: any) => {
+  const handleExportTemplate = async (assessment: Record<string, unknown>) => {
     try {
       const { exportAssessmentFormToTemplate, downloadAssessmentForm } = await import(
-        '@/lib/services/assessmentFormExportService'
+        '@/lib/services/assessments/assessmentFormExportService'
       );
       
       // Ensure submittedAt is available to the template (it's stored on the assessment doc, not formData)
       const formDataForExport = {
         ...(assessment.formData || {}),
-        submittedAt: assessment.submittedAt || assessment.formData?.submittedAt || null,
-        status: assessment.status || assessment.formData?.status || 'draft',
+        submittedAt: assessment.submittedAt || (assessment.formData as Record<string, unknown>)?.submittedAt || null,
+        status: assessment.status || (assessment.formData as Record<string, unknown>)?.status || 'draft',
       };
 
       // Export form to Word template
       const blob = await exportAssessmentFormToTemplate(
         formDataForExport,
-        assessment.formType,
+        assessment.formType as string,
         submission,
-        { name: assessment.reviewerName, reviewerName: assessment.reviewerName }
+        { name: assessment.reviewerName as string, reviewerName: assessment.reviewerName as string }
       );
       
       // Generate filename
-      const formTypeName = assessment.formType.replace(/-/g, '_');
-      const fileName = `${submission.spupCode || submission.id}_${formTypeName}_${assessment.reviewerId || 'reviewer'}.docx`;
+      const formTypeName = (assessment.formType as string).replace(/-/g, '_');
+      const fileName = `${getProtocolCode(submission) || String(submission.id)}_${formTypeName}_${(assessment.reviewerId as string) || 'reviewer'}.docx`;
       
       // Download the file
       downloadAssessmentForm(blob, fileName);
@@ -493,10 +507,10 @@ export function ChairpersonActions({
 
   return (
     <>
-      <Card>
-        <CardHeader>
+      <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden p-0">
+        <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20 rounded-t-lg pt-6 pb-6">
           <CardTitle className="flex items-center justify-between">
-            <span>Administrative Actions</span>
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Administrative Actions</span>
             <div className="flex items-center gap-2">
               {getStatusIcon(submission.status)}
               <Badge
@@ -504,10 +518,11 @@ export function ChairpersonActions({
                   submission.status === "approved" ||
                   submission.status === "accepted"
                     ? "default"
-                    : submission.status === "rejected"
+                    : (submission.status as string) === "rejected"
                     ? "destructive"
                     : "secondary"
                 }
+                className="border-[#036635]/20 dark:border-[#FECC07]/30"
               >
                 {submission.status.charAt(0).toUpperCase() +
                   submission.status.slice(1)}
@@ -518,7 +533,7 @@ export function ChairpersonActions({
             Manage protocol review and approval process
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-6">
           {/* Document Status Summary for Pending Protocols */}
           {submission.status === "pending" && (documents.length > 0 || documentRequests.length > 0) && (
             <div className="bg-muted/50 p-4 rounded-lg border space-y-3">
@@ -529,12 +544,14 @@ export function ChairpersonActions({
                 </div>
                 <div className="flex gap-2">
                   {documents.length > 0 && (
-                    <Badge variant={documents.every((d: any) => {
-                      const status = (d as any).currentStatus || d.status;
+                    <Badge variant={documents.every((d) => {
+                      const dRec = d as unknown as Record<string, unknown>;
+                      const status = (dRec.currentStatus as string) || (dRec.status as string);
                       return status === "accepted";
                     }) ? "default" : "secondary"}>
-                      {documents.filter((d: any) => {
-                        const status = (d as any).currentStatus || d.status;
+                      {documents.filter((d) => {
+                        const dRec = d as unknown as Record<string, unknown>;
+                        const status = (dRec.currentStatus as string) || (dRec.status as string);
                         return status === "accepted";
                       }).length} / {documents.length} Accepted
                     </Badge>
@@ -550,15 +567,17 @@ export function ChairpersonActions({
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">
                     {pendingRequestsCount > 0 && `${pendingRequestsCount} requested document(s) must be uploaded by proponent. `}
-                    {documents.some((d: any) => {
-                      const status = (d as any).currentStatus || d.status;
+                    {documents.some((d) => {
+                      const dRec = d as unknown as Record<string, unknown>;
+                      const status = (dRec.currentStatus as string) || (dRec.status as string);
                       return status !== "accepted" && status !== "requested";
-                    }) && `${documents.filter((d: any) => {
-                      const status = (d as any).currentStatus || d.status;
+                    }) && `${documents.filter((d) => {
+                      const dRec = d as unknown as Record<string, unknown>;
+                      const status = (dRec.currentStatus as string) || (dRec.status as string);
                       return status !== "accepted" && status !== "requested";
                     }).length} document(s) need review. `}
                   </p>
-                  <p className="text-sm font-medium text-primary">
+                  <p className="text-sm font-medium text-[#036635] dark:text-[#FECC07]">
                     Review and accept all documents before accepting the protocol.
                   </p>
                 </div>
@@ -577,7 +596,7 @@ export function ChairpersonActions({
                         <span>
                           <Button
                             onClick={() => setApproveDialogOpen(true)}
-                            className="bg-green-600 hover:bg-green-700"
+                            className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
                             disabled={!allDocumentsAccepted || loadingDocuments}
                           >
                             <CheckCircle className="mr-2 h-4 w-4" />
@@ -594,8 +613,9 @@ export function ChairpersonActions({
                                 ? "No documents have been submitted yet" 
                                 : pendingRequestsCount > 0
                                 ? `${pendingRequestsCount} requested document(s) pending fulfillment by proponent`
-                                : `${documents.filter((d: any) => {
-                                    const status = (d as any).currentStatus || d.status;
+                                : `${documents.filter((d) => {
+                                    const dRec = d as unknown as Record<string, unknown>;
+                                    const status = (dRec.currentStatus as string) || (dRec.status as string);
                                     return status !== "accepted";
                                   }).length} document(s) need to be reviewed and accepted`}
                             </p>
@@ -620,7 +640,7 @@ export function ChairpersonActions({
               {(submission.status === "accepted") && assignedReviewers.length === 0 && (
                 <Button
                   onClick={() => setAssignReviewersDialogOpen(true)}
-                  className="bg-primary hover:bg-primary/80"
+                  className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
                 >
                   <Users className="mr-2 h-4 w-4" />
                   Assign Reviewers
@@ -631,8 +651,9 @@ export function ChairpersonActions({
                 <Button
                   onClick={() => setDecisionDialogOpen(true)}
                   variant="outline"
+                  className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300 hover:scale-105"
                 >
-                  <CheckCircle className="mr-2 h-4 w-4" />
+                  <CheckCircle className="mr-2 h-4 w-4 text-[#036635] dark:text-[#FECC07]" />
                   Make Decision
                 </Button>
               )}
@@ -644,8 +665,9 @@ export function ChairpersonActions({
                     )
                   }
                   variant="outline"
+                  className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300 hover:scale-105"
                 >
-                  <FileTextIcon className="mr-2 h-4 w-4" />
+                  <FileTextIcon className="mr-2 h-4 w-4 text-[#036635] dark:text-[#FECC07]" />
                   Generate Documents
                 </Button>
               )}
@@ -689,16 +711,17 @@ export function ChairpersonActions({
                   <Button
                     variant="outline"
                     size="sm"
+                  className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
                     onClick={async () => {
                       const { formatAssessmentsToDocxData } = await import(
-                        "@/lib/services/assessmentAggregationService"
+                        "@/lib/services/assessments/assessmentAggregationService"
                       );
                       const { buildReviewerSummaryDocx } = await import(
-                        "@/lib/services/wordExportService"
+                        "@/lib/services/documents/wordExportService"
                       );
                       const docxData = formatAssessmentsToDocxData(
                         submission,
-                        assessments
+                        assessments as unknown as ProtocolAssessmentsResult
                       );
                       const blob = await buildReviewerSummaryDocx(docxData);
                       const url = URL.createObjectURL(blob);
@@ -718,14 +741,12 @@ export function ChairpersonActions({
               <Separator className="my-2" />
               <div className="space-y-2">
                 {assignedReviewers.map((assignment) => {
-                  const deadline =
-                    assignment.deadline?.toDate?.() ||
-                    new Date(assignment.deadline);
+                  const deadline = toDate(assignment.deadline as FirestoreDate) || new Date();
                   const now = new Date();
 
                   // Find corresponding assessment data if available
-                  const assessment = assessments?.assessments.find(
-                    (a: any) => a.reviewerId === assignment.reviewerId
+                  const assessment = ((assessments as unknown as ProtocolAssessmentsResult)?.assessments as unknown as Record<string, unknown>[])?.find(
+                    (a: Record<string, unknown>) => (a.reviewerId as string) === (assignment.reviewerId as string)
                   );
 
                   // Determine the actual status to display
@@ -772,15 +793,15 @@ export function ChairpersonActions({
 
                   return (
                     <div
-                      key={assignment.id}
+                      key={String(assignment.id)}
                       className="flex items-center justify-between p-3 bg-background rounded border text-sm"
                     >
                       <div className="flex-1">
                         <div className="font-medium">
-                          {assignment.reviewerName}
+                          {String(assignment.reviewerName || 'Unknown')}
                         </div>
                         <div className="text-muted-foreground text-xs">
-                          {assessment ? `Form: ${assessment.formType} • ` : ''}
+                          {assessment ? `Form: ${assessment.formType as string} • ` : ''}
                           Status: {statusInfo.label} • 
                           Due: {deadline.toLocaleDateString()}
                         </div>
@@ -817,14 +838,14 @@ export function ChairpersonActions({
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem
                               disabled={!assessment || !assessment.formData}
-                              onClick={() => assessment && handleViewAssessment(assessment, assignment.reviewerName)}
+                              onClick={() => assessment && handleViewAssessment(assessment, String(assignment.reviewerName || 'Unknown'))}
                             >
                               <FileTextIcon className="mr-2 h-4 w-4" />
                               View Assessment
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               disabled={!assessment || !assessment.formData}
-                              onClick={() => assessment && handleDownloadJson(assessment, submission.id, assignment.reviewerId)}
+                              onClick={() => assessment && handleDownloadJson(assessment, String(submission.id), String(assignment.reviewerId))}
                             >
                               <FileJson className="mr-2 h-4 w-4" />
                               Download JSON
@@ -900,28 +921,28 @@ export function ChairpersonActions({
       <ApproveDialog
         open={approveDialogOpen}
         onOpenChange={setApproveDialogOpen}
-        submission={submission}
+        submission={submission as unknown as Record<string, unknown>}
         onStatusUpdate={onStatusUpdate}
       />
 
       <RejectDialog
         open={rejectDialogOpen}
         onOpenChange={setRejectDialogOpen}
-        submission={submission}
+        submission={submission as unknown as Record<string, unknown>}
         onStatusUpdate={onStatusUpdate}
       />
 
       <DecisionDialog
         open={decisionDialogOpen}
         onOpenChange={setDecisionDialogOpen}
-        submission={submission}
+        submission={submission as unknown as Record<string, unknown>}
         onStatusUpdate={onStatusUpdate}
       />
 
       <AssignReviewersDialog
         open={assignReviewersDialogOpen}
         onOpenChange={setAssignReviewersDialogOpen}
-        submission={submission}
+        submission={submission as unknown as Record<string, unknown>}
         onAssignmentsUpdate={handleAssignmentsUpdate}
       />
       

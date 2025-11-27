@@ -1,9 +1,8 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useMemo, useState } from 'react';
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/custom/data-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu, 
@@ -11,69 +10,52 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { EllipsisVertical, Eye, UserPlus, MessageSquare } from "lucide-react";
+import { EllipsisVertical, Eye, UserPlus, MessageSquare, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getAllSubmissionsByStatus } from "@/lib/firebase/firestore";
-import { Loader2 } from "lucide-react";
+import { PageLoading } from "@/components/ui/loading";
 import { formatDistanceToNow } from "date-fns";
 import { ColumnDef } from "@tanstack/react-table";
 import { getStatusBadge } from "@/lib/utils/statusUtils";
-
-// Define the protocol type
-interface Protocol {
-  id: string;
-  applicationID: string;
-  title: string;
-  submitBy: string;
-  submittedByName?: string;
-  status: string;
-  createdAt: any;
-  tempProtocolCode?: string;
-  spupCode?: string;
-  information?: any;
-  decision?: string;
-  decisionDetails?: {
-    decision?: string;
-  };
-}
+import { useRealtimeProtocols } from "@/hooks/useRealtimeProtocols";
+import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
+import { Input } from "@/components/ui/input";
+import { 
+  ChairpersonProtocol, 
+  toChairpersonProtocols, 
+  sortProtocolsByDate,
+  getProtocolTitle,
+  getProtocolCode,
+  getPIName,
+  toDate
+} from '@/types';
 
 export default function SubmittedProtocolsPage() {
   const router = useRouter();
-  const [protocols, setProtocols] = useState<Protocol[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [searchValue, setSearchValue] = useState("");
 
-  useEffect(() => {
-    fetchProtocols();
-  }, []);
+  // ⚡ Real-time data for pending and accepted protocols
+  const { protocols: pendingProtocols, loading: pendingLoading, error: pendingError } = useRealtimeProtocols({
+    collectionName: SUBMISSIONS_COLLECTION,
+    statusFilter: 'pending',
+    enabled: true,
+  });
 
-  const fetchProtocols = async () => {
-    try {
-      setLoading(true);
-      // Fetch both pending and accepted protocols (not yet approved)
-      const [pendingProtocols, acceptedProtocols] = await Promise.all([
-        getAllSubmissionsByStatus('pending'),
-        getAllSubmissionsByStatus('accepted')
-      ]);
-      
-      const allProtocols = [...pendingProtocols, ...acceptedProtocols];
-      
-      // Sort by creation date (most recent first)
-      allProtocols.sort((a, b) => {
-        const dateA = new Date(a.createdAt);
-        const dateB = new Date(b.createdAt);
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      setProtocols(allProtocols);
-    } catch (err) {
-      console.error('Error fetching protocols:', err);
-      setError('Failed to load protocols');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { protocols: acceptedProtocols, loading: acceptedLoading, error: acceptedError } = useRealtimeProtocols({
+    collectionName: SUBMISSIONS_COLLECTION,
+    statusFilter: 'accepted',
+    enabled: true,
+  });
+
+  const loading = pendingLoading || acceptedLoading;
+  const error = pendingError || acceptedError;
+
+  // Combine and sort protocols using new type system
+  const protocols = useMemo(() => {
+    const allProtocols = [...pendingProtocols, ...acceptedProtocols];
+    const typedProtocols = toChairpersonProtocols(allProtocols);
+    return sortProtocolsByDate(typedProtocols);
+  }, [pendingProtocols, acceptedProtocols]);
 
   const handleViewProtocol = (protocolId: string) => {
     router.push(`/rec/chairperson/protocol/${protocolId}`);
@@ -89,16 +71,16 @@ export default function SubmittedProtocolsPage() {
     console.log('Send message for:', protocolId);
   };
 
-  const getProtocolStatusBadge = (protocol: Protocol) => {
+  const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
     // Use centralized status utility
     return getStatusBadge(
       protocol.status,
       protocol.decision || protocol.decisionDetails?.decision,
-      false // hasReviewers - can be enhanced to check reviewers if needed
+      protocol.hasReviewers || false
     );
   };
 
-  const columns: ColumnDef<Protocol>[] = [
+  const columns: ColumnDef<ChairpersonProtocol>[] = [
     {
       accessorKey: "applicationID",
       header: "Application ID",
@@ -111,7 +93,7 @@ export default function SubmittedProtocolsPage() {
       header: "Protocol Title",
       cell: ({ row }) => (
         <div className="max-w-[300px] truncate">
-          {row.original.title || row.original.information?.general_information?.protocol_title || "Untitled Protocol"}
+          {getProtocolTitle(row.original)}
         </div>
       ),
     },
@@ -120,7 +102,7 @@ export default function SubmittedProtocolsPage() {
       header: "Code",
       cell: ({ row }) => (
         <div className="font-mono text-sm">
-          {row.original.spupCode || row.original.tempProtocolCode || "—"}
+          {getProtocolCode(row.original) || "—"}
         </div>
       ),
     },
@@ -129,9 +111,7 @@ export default function SubmittedProtocolsPage() {
       header: "Submitted By",
       cell: ({ row }) => (
         <div className="text-sm">
-          {row.original.submittedByName || 
-           row.original.information?.general_information?.principal_investigator?.name || 
-           "Unknown"}
+          {row.original.submittedByName || getPIName(row.original) || "Unknown"}
         </div>
       ),
     },
@@ -139,11 +119,9 @@ export default function SubmittedProtocolsPage() {
       accessorKey: "createdAt",
       header: "Submitted",
       cell: ({ row }) => {
-        const date = row.original.createdAt;
-        if (!date) return <span className="text-muted-foreground">—</span>;
-        
         try {
-          const dateObj = date.toDate ? date.toDate() : new Date(date);
+          const dateObj = toDate(row.original.createdAt);
+          if (!dateObj) return <span className="text-muted-foreground">—</span>;
           return (
             <div className="text-sm text-muted-foreground">
               {formatDistanceToNow(dateObj, { addSuffix: true })}
@@ -207,7 +185,7 @@ export default function SubmittedProtocolsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <PageLoading text="Loading protocols..." />
       </div>
     );
   }
@@ -215,38 +193,36 @@ export default function SubmittedProtocolsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px] text-center">
-        <p className="text-destructive mb-4">{error}</p>
-        <Button onClick={fetchProtocols}>Try Again</Button>
+        <p className="text-destructive mb-4">Error: {error.message || 'Failed to load protocols'}</p>
+        <p className="text-sm text-muted-foreground">Real-time updates will resume automatically</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Submitted Protocols</h1>
-          <p className="text-muted-foreground">
-            Review and manage submitted research protocols
-          </p>
+    <div className="space-y-6 p-4 md:p-6 animate-in fade-in duration-500">
+      <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150 overflow-hidden p-0">
+        <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 dark:to-card p-6">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#036635] dark:text-[#FECC07] h-4 w-4" />
+          <Input
+              placeholder="Search submitted protocols..."
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            className="pl-10 border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300"
+          />
         </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All Submitted Protocols</CardTitle>
-          <CardDescription>
-            Protocols pending review and assignment
-          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6 pb-6">
           <DataTable
             columns={columns}
             data={protocols}
             searchPlaceholder="Search protocols..."
-            showSearch={true}
+            showSearch={false}
             showPagination={true}
             pageSize={10}
+            externalSearchValue={searchValue}
+            onSearchChange={setSearchValue}
           />
         </CardContent>
       </Card>

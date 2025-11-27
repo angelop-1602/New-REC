@@ -190,10 +190,18 @@ export const listFiles = async (directoryPath: string): Promise<{
 
 // Generate storage path for submission documents
 // New structure: submissions/{submissionId}/documents/{fileName}
+// For versions: submissions/{submissionId}/documents/{documentId}/v{version}/{fileName}
 export const generateDocumentStoragePath = (
   submissionId: string,
-  fileName: string
+  fileName: string,
+  documentId?: string,
+  version?: number
 ): string => {
+  // If version is provided, use versioned path structure
+  if (version !== undefined && version > 0 && documentId) {
+    return `submissions/${submissionId}/documents/${documentId}/v${version}/${fileName}`;
+  }
+  // Otherwise use the flat structure (for backward compatibility)
   return `submissions/${submissionId}/documents/${fileName}`;
 };
 
@@ -224,7 +232,7 @@ export const fileExists = async (storagePath: string): Promise<boolean> => {
     const storageRef = ref(storage, storagePath);
     await getMetadata(storageRef);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };

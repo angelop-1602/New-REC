@@ -1,9 +1,12 @@
 "use client"
 
 import * as React from "react"
+import { useMemo, useEffect } from "react"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import { Loader2 } from "lucide-react"
+import { useTheme } from "next-themes"
 
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useIsMobile } from "@/hooks/useMobile"
 import {
   Card,
   CardAction,
@@ -29,262 +32,351 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
+import { useRealtimeProtocols } from "@/hooks/useRealtimeProtocols"
+import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore"
+import { toDate, FirestoreDate } from '@/types'
 
-export const description = "An interactive area chart"
-
-const chartData = [
-  { date: "2024-04-01", desktop: 222, mobile: 150 },
-  { date: "2024-04-02", desktop: 97, mobile: 180 },
-  { date: "2024-04-03", desktop: 167, mobile: 120 },
-  { date: "2024-04-04", desktop: 242, mobile: 260 },
-  { date: "2024-04-05", desktop: 373, mobile: 290 },
-  { date: "2024-04-06", desktop: 301, mobile: 340 },
-  { date: "2024-04-07", desktop: 245, mobile: 180 },
-  { date: "2024-04-08", desktop: 409, mobile: 320 },
-  { date: "2024-04-09", desktop: 59, mobile: 110 },
-  { date: "2024-04-10", desktop: 261, mobile: 190 },
-  { date: "2024-04-11", desktop: 327, mobile: 350 },
-  { date: "2024-04-12", desktop: 292, mobile: 210 },
-  { date: "2024-04-13", desktop: 342, mobile: 380 },
-  { date: "2024-04-14", desktop: 137, mobile: 220 },
-  { date: "2024-04-15", desktop: 120, mobile: 170 },
-  { date: "2024-04-16", desktop: 138, mobile: 190 },
-  { date: "2024-04-17", desktop: 446, mobile: 360 },
-  { date: "2024-04-18", desktop: 364, mobile: 410 },
-  { date: "2024-04-19", desktop: 243, mobile: 180 },
-  { date: "2024-04-20", desktop: 89, mobile: 150 },
-  { date: "2024-04-21", desktop: 137, mobile: 200 },
-  { date: "2024-04-22", desktop: 224, mobile: 170 },
-  { date: "2024-04-23", desktop: 138, mobile: 230 },
-  { date: "2024-04-24", desktop: 387, mobile: 290 },
-  { date: "2024-04-25", desktop: 215, mobile: 250 },
-  { date: "2024-04-26", desktop: 75, mobile: 130 },
-  { date: "2024-04-27", desktop: 383, mobile: 420 },
-  { date: "2024-04-28", desktop: 122, mobile: 180 },
-  { date: "2024-04-29", desktop: 315, mobile: 240 },
-  { date: "2024-04-30", desktop: 454, mobile: 380 },
-  { date: "2024-05-01", desktop: 165, mobile: 220 },
-  { date: "2024-05-02", desktop: 293, mobile: 310 },
-  { date: "2024-05-03", desktop: 247, mobile: 190 },
-  { date: "2024-05-04", desktop: 385, mobile: 420 },
-  { date: "2024-05-05", desktop: 481, mobile: 390 },
-  { date: "2024-05-06", desktop: 498, mobile: 520 },
-  { date: "2024-05-07", desktop: 388, mobile: 300 },
-  { date: "2024-05-08", desktop: 149, mobile: 210 },
-  { date: "2024-05-09", desktop: 227, mobile: 180 },
-  { date: "2024-05-10", desktop: 293, mobile: 330 },
-  { date: "2024-05-11", desktop: 335, mobile: 270 },
-  { date: "2024-05-12", desktop: 197, mobile: 240 },
-  { date: "2024-05-13", desktop: 197, mobile: 160 },
-  { date: "2024-05-14", desktop: 448, mobile: 490 },
-  { date: "2024-05-15", desktop: 473, mobile: 380 },
-  { date: "2024-05-16", desktop: 338, mobile: 400 },
-  { date: "2024-05-17", desktop: 499, mobile: 420 },
-  { date: "2024-05-18", desktop: 315, mobile: 350 },
-  { date: "2024-05-19", desktop: 235, mobile: 180 },
-  { date: "2024-05-20", desktop: 177, mobile: 230 },
-  { date: "2024-05-21", desktop: 82, mobile: 140 },
-  { date: "2024-05-22", desktop: 81, mobile: 120 },
-  { date: "2024-05-23", desktop: 252, mobile: 290 },
-  { date: "2024-05-24", desktop: 294, mobile: 220 },
-  { date: "2024-05-25", desktop: 201, mobile: 250 },
-  { date: "2024-05-26", desktop: 213, mobile: 170 },
-  { date: "2024-05-27", desktop: 420, mobile: 460 },
-  { date: "2024-05-28", desktop: 233, mobile: 190 },
-  { date: "2024-05-29", desktop: 78, mobile: 130 },
-  { date: "2024-05-30", desktop: 340, mobile: 280 },
-  { date: "2024-05-31", desktop: 178, mobile: 230 },
-  { date: "2024-06-01", desktop: 178, mobile: 200 },
-  { date: "2024-06-02", desktop: 470, mobile: 410 },
-  { date: "2024-06-03", desktop: 103, mobile: 160 },
-  { date: "2024-06-04", desktop: 439, mobile: 380 },
-  { date: "2024-06-05", desktop: 88, mobile: 140 },
-  { date: "2024-06-06", desktop: 294, mobile: 250 },
-  { date: "2024-06-07", desktop: 323, mobile: 370 },
-  { date: "2024-06-08", desktop: 385, mobile: 320 },
-  { date: "2024-06-09", desktop: 438, mobile: 480 },
-  { date: "2024-06-10", desktop: 155, mobile: 200 },
-  { date: "2024-06-11", desktop: 92, mobile: 150 },
-  { date: "2024-06-12", desktop: 492, mobile: 420 },
-  { date: "2024-06-13", desktop: 81, mobile: 130 },
-  { date: "2024-06-14", desktop: 426, mobile: 380 },
-  { date: "2024-06-15", desktop: 307, mobile: 350 },
-  { date: "2024-06-16", desktop: 371, mobile: 310 },
-  { date: "2024-06-17", desktop: 475, mobile: 520 },
-  { date: "2024-06-18", desktop: 107, mobile: 170 },
-  { date: "2024-06-19", desktop: 341, mobile: 290 },
-  { date: "2024-06-20", desktop: 408, mobile: 450 },
-  { date: "2024-06-21", desktop: 169, mobile: 210 },
-  { date: "2024-06-22", desktop: 317, mobile: 270 },
-  { date: "2024-06-23", desktop: 480, mobile: 530 },
-  { date: "2024-06-24", desktop: 132, mobile: 180 },
-  { date: "2024-06-25", desktop: 141, mobile: 190 },
-  { date: "2024-06-26", desktop: 434, mobile: 380 },
-  { date: "2024-06-27", desktop: 448, mobile: 490 },
-  { date: "2024-06-28", desktop: 149, mobile: 200 },
-  { date: "2024-06-29", desktop: 103, mobile: 160 },
-  { date: "2024-06-30", desktop: 446, mobile: 400 },
-]
+export const description = "Protocol submissions over time chart"
 
 const chartConfig = {
-  visitors: {
-    label: "Visitors",
+  protocols: {
+    label: "Protocols",
   },
-  desktop: {
-    label: "Desktop",
-    color: "var(--primary)",
-  },
-  mobile: {
-    label: "Mobile",
+  count: {
+    label: "Protocols",
     color: "var(--primary)",
   },
 } satisfies ChartConfig
 
+interface Protocol {
+  id: string;
+  createdAt: unknown;
+  status: string;
+}
+
 export function ChartAreaInteractive() {
   const isMobile = useIsMobile()
-  const [timeRange, setTimeRange] = React.useState("90d")
+  const { theme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+  const [timeRange, setTimeRange] = React.useState<"day" | "month" | "year">("month")
+  const [statusFilter] = React.useState<string>("all") // "all" | "pending" | "accepted" | "approved" | "archived" - fixed to "all"
+  const [dateRange] = React.useState<string>("all") // "all" | "7d" | "30d" | "90d" | "month" | "year" - fixed to "all"
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // ⚡ Real-time data for all protocols
+  const { protocols: allProtocols, loading } = useRealtimeProtocols({
+    collectionName: SUBMISSIONS_COLLECTION,
+    enabled: true,
+  });
 
   React.useEffect(() => {
     if (isMobile) {
-      setTimeRange("7d")
+      setTimeRange("day")
     }
   }, [isMobile])
 
-  const filteredData = chartData.filter((item) => {
-    const date = new Date(item.date)
-    const referenceDate = new Date("2024-06-30")
-    let daysToSubtract = 90
-    if (timeRange === "30d") {
-      daysToSubtract = 30
-    } else if (timeRange === "7d") {
-      daysToSubtract = 7
+  // Filter protocols based on status and date range
+  const filteredProtocols = useMemo(() => {
+    if (!allProtocols || allProtocols.length === 0) {
+      return []
     }
-    const startDate = new Date(referenceDate)
-    startDate.setDate(startDate.getDate() - daysToSubtract)
-    return date >= startDate
-  })
+
+    let filtered = allProtocols as Protocol[]
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((protocol) => protocol.status === statusFilter)
+    }
+
+    // Filter by date range
+    if (dateRange !== "all") {
+      const cutoffDate = new Date()
+      
+      switch (dateRange) {
+        case "7d":
+          cutoffDate.setDate(cutoffDate.getDate() - 7)
+          break
+        case "30d":
+          cutoffDate.setDate(cutoffDate.getDate() - 30)
+          break
+        case "90d":
+          cutoffDate.setDate(cutoffDate.getDate() - 90)
+          break
+        case "month":
+          cutoffDate.setDate(1) // First day of current month
+          cutoffDate.setHours(0, 0, 0, 0)
+          break
+        case "year":
+          cutoffDate.setMonth(0, 1) // January 1st of current year
+          cutoffDate.setHours(0, 0, 0, 0)
+          break
+      }
+
+      filtered = filtered.filter((protocol) => {
+        if (!protocol.createdAt) return false
+        const date = toDate(protocol.createdAt as FirestoreDate)
+        if (!date) return false
+        return date >= cutoffDate
+      })
+    }
+
+    return filtered
+  }, [allProtocols, statusFilter, dateRange])
+
+  // Process protocols into chart data based on time range
+  const chartData = useMemo(() => {
+    if (!filteredProtocols || filteredProtocols.length === 0) {
+      return []
+    }
+
+    const dataMap = new Map<string, number>()
+
+    filteredProtocols.forEach((protocol: Protocol) => {
+      if (!protocol.createdAt) return
+
+      const date = toDate(protocol.createdAt as FirestoreDate)
+      if (!date) return
+      let key: string
+
+      if (timeRange === "day") {
+        // Group by day (YYYY-MM-DD)
+        key = date.toISOString().split('T')[0]
+      } else if (timeRange === "month") {
+        // Group by month (YYYY-MM)
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      } else {
+        // Group by year (YYYY)
+        key = String(date.getFullYear())
+      }
+
+      dataMap.set(key, (dataMap.get(key) || 0) + 1)
+    })
+
+    // Convert map to array and sort by date
+    const data = Array.from(dataMap.entries())
+      .map(([date, count]) => ({
+        date,
+        count,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    return data
+  }, [filteredProtocols, timeRange])
+
+  // Calculate totals based on filtered protocols
+  const totals = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    let dayCount = 0
+    let monthCount = 0
+    let yearCount = 0
+
+    filteredProtocols.forEach((protocol: Protocol) => {
+      if (!protocol.createdAt) return
+
+      const date = toDate(protocol.createdAt as FirestoreDate)
+      if (!date) return
+      
+      // Today
+      const protocolDate = new Date(date)
+      protocolDate.setHours(0, 0, 0, 0)
+      if (protocolDate.getTime() === today.getTime()) {
+        dayCount++
+      }
+
+      // This month
+      if (date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear()) {
+        monthCount++
+      }
+
+      // This year
+      if (date.getFullYear() === today.getFullYear()) {
+        yearCount++
+      }
+    })
+
+    return { day: dayCount, month: monthCount, year: yearCount, total: filteredProtocols.length }
+  }, [filteredProtocols])
+
+  if (loading) {
+    return (
+      <Card className="@container/card">
+        <CardHeader>
+          <CardTitle>Protocol Submissions</CardTitle>
+          <CardDescription>Loading protocol data...</CardDescription>
+        </CardHeader>
+        <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+          <div className="h-[250px] flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const getTimeRangeLabel = () => {
+    switch (timeRange) {
+      case "day":
+        return "Per Day"
+      case "month":
+        return "Per Month"
+      case "year":
+        return "Per Year"
+    }
+  }
+
+  const getTotalLabel = () => {
+    const statusLabel = statusFilter !== "all" ? ` (${statusFilter})` : ""
+    switch (timeRange) {
+      case "day":
+        return `Today: ${totals.day} protocol${totals.day !== 1 ? 's' : ''}${statusLabel}`
+      case "month":
+        return `This Month: ${totals.month} protocol${totals.month !== 1 ? 's' : ''}${statusLabel}`
+      case "year":
+        return `This Year: ${totals.year} protocol${totals.year !== 1 ? 's' : ''}${statusLabel}`
+    }
+  }
+
+  const getDateRangeLabel = () => {
+    switch (dateRange) {
+      case "7d":
+        return "Last 7 days"
+      case "30d":
+        return "Last 30 days"
+      case "90d":
+        return "Last 90 days"
+      case "month":
+        return "This month"
+      case "year":
+        return "This year"
+      default:
+        return "All time"
+    }
+  }
+
+  const formatDateLabel = (value: string) => {
+    if (timeRange === "day") {
+      const date = new Date(value)
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
+    } else if (timeRange === "month") {
+      const [year, month] = value.split('-')
+      const date = new Date(parseInt(year), parseInt(month) - 1)
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        year: "numeric",
+      })
+    } else {
+      return value
+    }
+  }
 
   return (
-    <Card className="@container/card">
-      <CardHeader>
-        <CardTitle>Total Visitors</CardTitle>
-        <CardDescription>
+    <Card className="@container/card transition-all duration-300 hover:shadow-lg border border-[#036635]/10 dark:border-[#FECC07]/20 min-w-0">
+      <CardHeader className="px-4 sm:px-6">
+        <CardTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent text-lg sm:text-xl">
+          Protocol Submissions
+        </CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
           <span className="hidden @[540px]/card:block">
-            Total for the last 3 months
+            {getTotalLabel()} • {getDateRangeLabel()}
           </span>
-          <span className="@[540px]/card:hidden">Last 3 months</span>
+          <span className="@[540px]/card:hidden">{getTimeRangeLabel()}</span>
         </CardDescription>
-        <CardAction>
+        <CardAction className="flex flex-col gap-2 @[540px]/card:flex-row flex-wrap">
+          {/* Time Range Grouping */}
           <ToggleGroup
             type="single"
             value={timeRange}
-            onValueChange={setTimeRange}
+            onValueChange={(value) => value && setTimeRange(value as "day" | "month" | "year")}
             variant="outline"
             className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
           >
-            <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
-            <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
-            <ToggleGroupItem value="7d">Last 7 days</ToggleGroupItem>
+            <ToggleGroupItem value="day">Per Day</ToggleGroupItem>
+            <ToggleGroupItem value="month">Per Month</ToggleGroupItem>
+            <ToggleGroupItem value="year">Per Year</ToggleGroupItem>
           </ToggleGroup>
-          <Select value={timeRange} onValueChange={setTimeRange}>
+          <Select value={timeRange} onValueChange={(value) => setTimeRange(value as "day" | "month" | "year")}>
             <SelectTrigger
-              className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
+              className="flex w-full @[540px]/card:w-32 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
               size="sm"
-              aria-label="Select a value"
+              aria-label="Select time range"
             >
-              <SelectValue placeholder="Last 3 months" />
+              <SelectValue placeholder="Per Month" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
-              <SelectItem value="90d" className="rounded-lg">
-                Last 3 months
+              <SelectItem value="day" className="rounded-lg">
+                Per Day
               </SelectItem>
-              <SelectItem value="30d" className="rounded-lg">
-                Last 30 days
+              <SelectItem value="month" className="rounded-lg">
+                Per Month
               </SelectItem>
-              <SelectItem value="7d" className="rounded-lg">
-                Last 7 days
+              <SelectItem value="year" className="rounded-lg">
+                Per Year
               </SelectItem>
             </SelectContent>
           </Select>
         </CardAction>
       </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <AreaChart data={filteredData}>
-            <defs>
-              <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-desktop)"
-                  stopOpacity={1.0}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-desktop)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-              <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-mobile)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-mobile)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={(value) => {
-                const date = new Date(value)
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })
-              }}
-            />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(value) => {
-                    return new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })
-                  }}
-                  indicator="dot"
-                />
-              }
-            />
-            <Area
-              dataKey="mobile"
-              type="natural"
-              fill="url(#fillMobile)"
-              stroke="var(--color-mobile)"
-              stackId="a"
-            />
-            <Area
-              dataKey="desktop"
-              type="natural"
-              fill="url(#fillDesktop)"
-              stroke="var(--color-desktop)"
-              stackId="a"
-            />
-          </AreaChart>
-        </ChartContainer>
+      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6 overflow-x-auto">
+        {chartData.length === 0 ? (
+          <div className="h-[200px] sm:h-[250px] flex items-center justify-center text-muted-foreground">
+            No protocol submissions data available
+          </div>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[200px] sm:h-[250px] w-full min-w-[300px]"
+          >
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="fillProtocolsLight" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#036635" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#036635" stopOpacity={0.1} />
+                </linearGradient>
+                <linearGradient id="fillProtocolsDark" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#FECC07" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#FECC07" stopOpacity={0.1} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={timeRange === "year" ? 12 : 32}
+                tickFormatter={formatDateLabel}
+                className="text-sm"
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={formatDateLabel}
+                    indicator="dot"
+                    nameKey="protocols"
+                    className="border-[#036635]/20 dark:border-[#FECC07]/30 bg-background/95 backdrop-blur-sm"
+                  />
+                }
+              />
+              <Area
+                dataKey="count"
+                type="natural"
+                fill={mounted && theme === "dark" ? "url(#fillProtocolsDark)" : "url(#fillProtocolsLight)"}
+                stroke={mounted && theme === "dark" ? "#FECC07" : "#036635"}
+                stackId="a"
+                animationDuration={800}
+              />
+            </AreaChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )

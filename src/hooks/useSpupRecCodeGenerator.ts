@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
-import { getFirestore, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import firebaseApp from '@/lib/firebaseConfig';
+// import { getFirestore, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+// import firebaseApp from '@/lib/firebaseConfig';
 
-const db = getFirestore(firebaseApp);
+// const db = getFirestore(firebaseApp);
 
 /**
  * Hook for generating SPUP REC codes
@@ -27,7 +27,8 @@ export const useSpupRecCodeGenerator = () => {
   }, []);
 
   // Get count of approved applications for the year (placeholder for future implementation)
-  const getApprovedApplicationCount = useCallback(async (year: number): Promise<number> => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const getApprovedApplicationCount = useCallback(async (_year: number): Promise<number> => {
     try {
       // TODO: This will be implemented when we have the approved submissions collection
       // For now, return a placeholder count

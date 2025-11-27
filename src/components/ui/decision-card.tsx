@@ -12,9 +12,6 @@ import {
   AlertCircle,
   Download,
   FileText,
-  Calendar,
-  User,
-  Clock,
   Edit
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,14 +19,14 @@ import {
   DecisionData, 
   getDecisionStatus, 
   getDecisionColors 
-} from "@/lib/services/decisionService";
+} from "@/lib/services/core/decisionService";
 import { toast } from "sonner";
 import { ref, getStorage, getDownloadURL } from "firebase/storage";
 import firebaseApp from "@/lib/firebaseConfig";
 import { DecisionDialog } from "@/components/rec/chairperson/components/protocol/dialogs/DecisionDialog";
 import { getSubmissionById } from "@/lib/firebase/firestore";
-import { documentGenerator } from "@/lib/services/documentGenerator";
-import { extractTemplateData } from "@/lib/services/templateDataMapper";
+import { documentGenerator } from "@/lib/services/documents/documentGenerator";
+import { extractTemplateData } from "@/lib/services/documents/templateDataMapper";
 
 // Helper function to handle document download (background download without opening tab)
 const handleDocumentDownload = async (doc: any) => {
@@ -109,7 +106,7 @@ export function DecisionCard({
         setLoading(true);
         
         // Fetch decision data
-        const data = await import("@/lib/services/decisionService").then(module => 
+        const data = await import("@/lib/services/core/decisionService").then(module => 
           module.getDecisionData(protocolId, collection)
         );
         setDecisionData(data);
@@ -143,7 +140,7 @@ export function DecisionCard({
     
     // Refresh decision data
     try {
-      const data = await import("@/lib/services/decisionService").then(module => 
+      const data = await import("@/lib/services/core/decisionService").then(module => 
         module.getDecisionData(protocolId, collection)
       );
       setDecisionData(data);
@@ -162,55 +159,57 @@ export function DecisionCard({
   // ✅ USE CENTRALIZED DATA MAPPER - NO MORE DUPLICATE CODE!
   // All template data extraction is now in src/lib/services/templateDataMapper.ts
 
-  // Handle Progress Report download
-  const handleDownloadProgressReport = async () => {
-    const toastId = toast.loading("Generating Progress Report Form...");
-    try {
-      // ✅ Use centralized data mapper
-      const templateData = extractTemplateData(submission);
-      const blob = await documentGenerator.generateDocument('progress_report', templateData);
-      const fileName = `Progress_Report_Form_${submission.spupCode || protocolId}.docx`;
-      
-      // Download the file
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
-      link.click();
-      URL.revokeObjectURL(link.href);
-      
-      toast.dismiss(toastId);
-      toast.success("Progress Report Form downloaded successfully!");
-    } catch (error) {
-      console.error("Error generating progress report:", error);
-      toast.dismiss(toastId);
-      toast.error("Failed to generate Progress Report Form. Please try again.");
-    }
-  };
+  // Handle Progress Report download (currently not used in UI)
+  // Handle Progress Report download (currently not used in UI)
+  // const handleDownloadProgressReport = async () => {
+  //   const toastId = toast.loading("Generating Progress Report Form...");
+  //   try {
+  //     // ✅ Use centralized data mapper
+  //     const templateData = extractTemplateData(submission);
+  //     const blob = await documentGenerator.generateDocument('progress_report', templateData);
+  //     const fileName = `Progress_Report_Form_${submission.spupCode || protocolId}.docx`;
+  //     
+  //     // Download the file
+  //     const link = document.createElement('a');
+  //     link.href = URL.createObjectURL(blob);
+  //     link.download = fileName;
+  //     link.click();
+  //     URL.revokeObjectURL(link.href);
+  //     
+  //     toast.dismiss(toastId);
+  //     toast.success("Progress Report Form downloaded successfully!");
+  //   } catch (error) {
+  //     console.error("Error generating progress report:", error);
+  //     toast.dismiss(toastId);
+  //     toast.error("Failed to generate Progress Report Form. Please try again.");
+  //   }
+  // };
 
-  // Handle Final Report download
-  const handleDownloadFinalReport = async () => {
-    const toastId = toast.loading("Generating Final Report Form...");
-    try {
-      // ✅ Use centralized data mapper
-      const templateData = extractTemplateData(submission);
-      const blob = await documentGenerator.generateDocument('final_report', templateData);
-      const fileName = `Final_Report_Form_${submission.spupCode || protocolId}.docx`;
-      
-      // Download the file
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
-      link.click();
-      URL.revokeObjectURL(link.href);
-      
-      toast.dismiss(toastId);
-      toast.success("Final Report Form downloaded successfully!");
-    } catch (error) {
-      console.error("Error generating final report:", error);
-      toast.dismiss(toastId);
-      toast.error("Failed to generate Final Report Form. Please try again.");
-    }
-  };
+  // Handle Final Report download (currently not used in UI)
+  // Handle Final Report download (currently not used in UI)
+  // const handleDownloadFinalReport = async () => {
+  //   const toastId = toast.loading("Generating Final Report Form...");
+  //   try {
+  //     // ✅ Use centralized data mapper
+  //     const templateData = extractTemplateData(submission);
+  //     const blob = await documentGenerator.generateDocument('final_report', templateData);
+  //     const fileName = `Final_Report_Form_${submission.spupCode || protocolId}.docx`;
+  //     
+  //     // Download the file
+  //     const link = document.createElement('a');
+  //     link.href = URL.createObjectURL(blob);
+  //     link.download = fileName;
+  //     link.click();
+  //     URL.revokeObjectURL(link.href);
+  //     
+  //     toast.dismiss(toastId);
+  //     toast.success("Final Report Form downloaded successfully!");
+  //   } catch (error) {
+  //     console.error("Error generating final report:", error);
+  //     toast.dismiss(toastId);
+  //     toast.error("Failed to generate Final Report Form. Please try again.");
+  //   }
+  // };
 
   // Don't render if protocolId is invalid
   if (!protocolId || typeof protocolId !== 'string' || protocolId.trim() === '') {
@@ -401,14 +400,14 @@ export function DecisionCard({
   const instructions = getDecisionInstructions(displayDecision, details.timeline);
 
   return (
-    <Card className={cn("w-full", colors.bg, colors.border, className)}>
-      <CardHeader>
-        <CardTitle className={cn("text-lg font-semibold flex items-center gap-2", colors.text)}>
-          <Icon className={cn("h-5 w-5", colors.text)} />
+    <Card className={cn("w-full border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden p-0", colors.bg, colors.border, className)}>
+      <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20 rounded-t-lg pt-6 pb-6">
+        <CardTitle className={cn("text-lg font-semibold flex items-center gap-2 bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent", colors.text)}>
+          <Icon className={cn("h-5 w-5 text-[#036635] dark:text-[#FECC07]", colors.text)} />
           Decision Status
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
         {/* Header: Decision Status, Meeting Reference, Decision Date */}
         <div className="flex flex-col space-y-2 bg-white/50 p-3 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">

@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { InformationType } from "@/types/information.types";
+import { InformationType } from "@/types";
 
 interface ProtocolInformationProps {
   information?: InformationType;
@@ -28,8 +28,10 @@ export default function ProtocolInformation({ information }: ProtocolInformation
     email: information.general_information?.principal_investigator?.email || "-",
     // Handle both combined position_institution and separate position/institution fields
     positionInstitution: information.general_information?.principal_investigator?.position_institution || 
-                        (((information.general_information?.principal_investigator as any)?.position && (information.general_information?.principal_investigator as any)?.institution) ? 
-                         `${(information.general_information.principal_investigator as any).position} at ${(information.general_information.principal_investigator as any).institution}` : 
+                        ((information.general_information?.principal_investigator && 
+                          'position' in information.general_information.principal_investigator &&
+                          'institution' in information.general_information.principal_investigator) ? 
+                         `${(information.general_information.principal_investigator as { position?: string; institution?: string }).position} at ${(information.general_information.principal_investigator as { position?: string; institution?: string }).institution}` : 
                          "-"),
     address: information.general_information?.principal_investigator?.address || "-",
     contactNumber: information.general_information?.principal_investigator?.contact_number || "-",
@@ -82,10 +84,10 @@ export default function ProtocolInformation({ information }: ProtocolInformation
   };
 
   return (
-    <Card className="w-full mx-auto shadow-sm border border-muted-foreground/10 bg-white">
+    <Card className="w-full mx-auto shadow-sm border border-muted-foreground/10 bg-card">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-semibold text-primary">
-          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-primary/80 flex-shrink-0" />
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-semibold text-[#036635] dark:text-[#FECC07]">
+          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-[#036635]/80 dark:text-[#FECC07]/80 flex-shrink-0" />
           Protocol Information
         </CardTitle>
       </CardHeader>

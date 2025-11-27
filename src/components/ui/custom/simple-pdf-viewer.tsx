@@ -35,7 +35,7 @@ export default function SimplePdfViewer({
       ...(storagePath ? { storagePath } : {})
     }).toString();
 
-    const url = `/api/preview/document/${encodeURIComponent(file)}?${qs}`;
+    const url = `/api/documents/preview/document/${encodeURIComponent(file)}?${qs}`;
     setApiUrl(url);
 
     // Create blob URL for iframe
@@ -87,7 +87,7 @@ export default function SimplePdfViewer({
         URL.revokeObjectURL(pdfUrl);
       }
     };
-  }, [file, submissionId, entry, auto, storagePath]);
+  }, [file, submissionId, entry, auto, storagePath, pdfUrl]);
 
   // Loading state
   if (loading) {

@@ -1,5 +1,4 @@
-import { ValidationRule, ValidationSchema, ValidationResult, FieldValidationResult } from "@/types/validation.types";
-import { InformationType } from "@/types/information.types";
+import { ValidationRule, ValidationSchema, ValidationResult, FieldValidationResult, InformationType } from "@/types";
 
 // Validation utility functions
 export const validateField = (value: any, rules: ValidationRule[]): FieldValidationResult => {
@@ -121,9 +120,15 @@ export const validateForm = (data: any, schema: ValidationSchema): ValidationRes
     }
   }
 
+  // Convert errors from string[] to string (join multiple errors)
+  const formattedErrors: Record<string, string> = {};
+  for (const [fieldPath, errorArray] of Object.entries(errors)) {
+    formattedErrors[fieldPath] = errorArray.join(', ');
+  }
+
   return {
-    isValid: Object.keys(errors).length === 0,
-    errors
+    valid: Object.keys(formattedErrors).length === 0,
+    errors: formattedErrors
   };
 };
 

@@ -1,4 +1,4 @@
-import { FormResponse } from "./forms.type";
+import { FormResponse } from "./forms.types";
 
 export interface ReviewerAssignment {
   reviewerId: string;

@@ -107,14 +107,14 @@ export default function PrimaryReviewerPage() {
     () => FORM_PREVIEWS.map(({ key, title, description, details, icon: Icon }) => (
       <Card
         key={key}
-        className="flex flex-col w-80 bg-white hover:shadow-lg transition-shadow"
+        className="flex flex-col w-80 bg-card hover:shadow-lg transition-shadow"
       >
         <CardHeader>
           <div className="flex items-center space-x-2">
-            <Icon size={24} className="text-primary-600" />
-            <CardTitle className="text-base font-medium">{title}</CardTitle>
+            <Icon size={24} className="text-[#036635] dark:text-[#FECC07]" />
+            <CardTitle className="text-base font-medium text-foreground">{title}</CardTitle>
           </div>
-          <CardDescription className="text-sm text-gray-500">{description}</CardDescription>
+          <CardDescription className="text-sm text-muted-foreground">{description}</CardDescription>
         </CardHeader>
 
         <Separator />
@@ -146,9 +146,9 @@ export default function PrimaryReviewerPage() {
   const currentForm = FORM_PREVIEWS.find(form => form.key === previewKey);
 
   return (
-    <section aria-labelledby="form-preview-heading" className="py-12 bg-gray-50">
-      <div className="mx-auto px-6">
-        <header className="text-center mb-8">
+    <section aria-labelledby="form-preview-heading" className="py-8 bg-background">
+      <div className="mx-auto px-4 sm:px-6">
+        <header className="text-center mb-6">
           <h2 id="form-preview-heading" className="text-2xl font-extrabold">Review Form Previews</h2>
           <p className="mt-2 text-gray-600">Get a quick look at each review form.</p>
         </header>

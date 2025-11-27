@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { reviewerAuthService, ReviewerAuthData } from '@/lib/services/reviewerAuthService';
-import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { reviewerAuthService, ReviewerAuthData } from '@/lib/services/reviewers/reviewerAuthService';
+import { collection, onSnapshot, getDocs } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import firebaseApp from '@/lib/firebaseConfig';
 

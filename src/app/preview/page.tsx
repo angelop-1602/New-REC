@@ -4,27 +4,24 @@ import * as React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { 
   Download, 
-  Upload, 
   Pencil, 
-  Eye, 
   FileText, 
   Image, 
   Archive,
   CheckCircle,
   AlertTriangle,
   Clock,
-  X,
   ArrowLeft
 } from "lucide-react";
-import { DocumentsType } from "@/types/documents.types";
+import { DocumentsType } from "@/types";
 
-export default function DocumentPreviewPage() {
+// Separate component that uses useSearchParams
+function DocumentPreviewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -86,7 +83,7 @@ export default function DocumentPreviewPage() {
 
     try {
       // Use our API route for same-origin preview
-      const previewUrl = `/api/preview/document/${document.id}`;
+      const previewUrl = `/api/documents/preview/document/${document.id}`;
       setPreviewUrl(previewUrl);
     } catch (err) {
       console.error('Error loading document preview:', err);
@@ -172,9 +169,10 @@ export default function DocumentPreviewPage() {
                       title="PDF Preview"
                     />
                   ) : getFileType(selectedDocument?.originalFileName || '') === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={previewUrl}
-                      alt="Document Preview"
+                      alt={selectedDocument?.title || selectedDocument?.originalFileName || "Document Preview"}
                       className="w-full h-full object-contain"
                     />
                   ) : getFileType(selectedDocument?.originalFileName || '') === 'text' ? (
@@ -296,5 +294,21 @@ export default function DocumentPreviewPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function DocumentPreviewPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen bg-muted/10 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-muted-foreground">Loading preview...</p>
+        </div>
+      </div>
+    }>
+      <DocumentPreviewContent />
+    </React.Suspense>
   );
 }

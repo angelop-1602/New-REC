@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ValidationRule } from "@/types/validation.types";
+import { ValidationRule } from "@/types";
 import { validateField } from "@/lib/validation/form-validation";
 import { AlertCircle } from "lucide-react";
 
@@ -59,9 +59,7 @@ export const ValidatedRadioGroup: React.FC<ValidatedRadioGroupProps> = ({
 }) => {
   const [errors, setErrors] = useState<string[]>([]);
   const [isTouched, setIsTouched] = useState(false);
-  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [animationKey, setAnimationKey] = useState(0);
   
   const radioGroupRef = useRef<HTMLDivElement>(null);
   const onValidationChangeRef = useRef(onValidationChange);
@@ -90,7 +88,6 @@ export const ValidatedRadioGroup: React.FC<ValidatedRadioGroupProps> = ({
     if (force && !result.isValid) {
       setIsTouched(true);
       setShowAnimation(true);
-      setAnimationKey(prev => prev + 1);
       
       // Focus the first radio button if it's invalid during forced validation
       if (radioGroupRef.current) {
@@ -110,7 +107,6 @@ export const ValidatedRadioGroup: React.FC<ValidatedRadioGroupProps> = ({
   // Handle value changes
   const handleChange = (newValue: string) => {
     onChange(newValue);
-    setHasUserInteracted(true);
     setIsTouched(true); // For radio groups, selecting an option counts as meaningful interaction
     
     // Clear animation when user makes a selection

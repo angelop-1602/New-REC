@@ -10,7 +10,7 @@ import {
   AcceptedSubmission, 
   ApprovedSubmission, 
   ArchivedSubmission 
-} from "./submissions.type";
+} from "./submissions.types";
 
 // ===========================
 // FIRESTORE TIMESTAMP VARIANTS
@@ -63,7 +63,7 @@ export interface AcceptedSubmissionDoc extends WithFirestoreTimestamps<AcceptedS
     pendingReviews: number;
     overdueReviews: number;
     averageReviewTime?: number; // In hours
-    lastReviewActivity?: Timestamp;
+    lastReviewActivity?: string; // ISO timestamp string
   };
 }
 

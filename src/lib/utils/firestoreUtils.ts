@@ -81,7 +81,7 @@ export function processFirestoreDocument<T extends Record<string, any>>(doc: T):
   
   timestampFields.forEach(field => {
     if (processed[field]) {
-      processed[field] = firestoreTimestampToISOString(processed[field]);
+      (processed as Record<string, unknown>)[field] = firestoreTimestampToISOString(processed[field] as any);
     }
   });
   

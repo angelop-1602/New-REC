@@ -31,7 +31,7 @@ export default function PdfPreview({
 
   // Build API URL
   React.useEffect(() => {
-    const baseUrl = `/api/preview/document/${encodeURIComponent(file)}`;
+    const baseUrl = `/api/documents/preview/document/${encodeURIComponent(file)}`;
     const params = new URLSearchParams();
     params.set('submissionId', submissionId);
     
@@ -246,7 +246,7 @@ export default function PdfPreview({
                           }
                         }
                       }
-                    } catch (e) {
+                    } catch {
                       // Cross-origin error is expected for blob URLs, this is actually good
                       console.log('PDF iframe loaded (cross-origin restriction is normal for blob URLs)');
                     }

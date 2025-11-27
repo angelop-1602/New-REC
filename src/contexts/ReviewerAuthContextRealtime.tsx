@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { reviewerAuthService, ReviewerAuthData } from '@/lib/services/reviewerAuthService';
-import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { reviewerAuthService, ReviewerAuthData } from '@/lib/services/reviewers/reviewerAuthService';
+import { useFirestoreQuery } from '@/hooks/useFirestore';
 
 interface ReviewerAuthContextType {
   // State
@@ -54,8 +54,8 @@ export function ReviewerAuthProvider({ children }: { children: React.ReactNode }
           ...assignment,
           status: assignment.reviewStatus || 'pending',
           collection: 'assigned',
-          createdAt: assignment.assignedAt?.toDate?.()?.toISOString() || assignment.assignedAt,
-          updatedAt: assignment.updatedAt?.toDate?.()?.toISOString() || assignment.updatedAt,
+          createdAt: assignment.assignedAt && typeof assignment.assignedAt === 'object' && 'toDate' in assignment.assignedAt && typeof assignment.assignedAt.toDate === 'function' ? assignment.assignedAt.toDate().toISOString() : assignment.assignedAt,
+          updatedAt: assignment.updatedAt && typeof assignment.updatedAt === 'object' && 'toDate' in assignment.updatedAt && typeof assignment.updatedAt.toDate === 'function' ? assignment.updatedAt.toDate().toISOString() : assignment.updatedAt,
         });
       });
     }
@@ -67,8 +67,8 @@ export function ReviewerAuthProvider({ children }: { children: React.ReactNode }
           ...protocol,
           status: 'accepted',
           collection: 'accepted',
-          createdAt: protocol.createdAt?.toDate?.()?.toISOString() || protocol.createdAt,
-          updatedAt: protocol.updatedAt?.toDate?.()?.toISOString() || protocol.updatedAt,
+          createdAt: protocol.createdAt && typeof protocol.createdAt === 'object' && 'toDate' in protocol.createdAt && typeof protocol.createdAt.toDate === 'function' ? protocol.createdAt.toDate().toISOString() : protocol.createdAt,
+          updatedAt: protocol.updatedAt && typeof protocol.updatedAt === 'object' && 'toDate' in protocol.updatedAt && typeof protocol.updatedAt.toDate === 'function' ? protocol.updatedAt.toDate().toISOString() : protocol.updatedAt,
         });
       });
     }
@@ -80,8 +80,8 @@ export function ReviewerAuthProvider({ children }: { children: React.ReactNode }
           ...protocol,
           status: 'approved',
           collection: 'approved',
-          createdAt: protocol.createdAt?.toDate?.()?.toISOString() || protocol.createdAt,
-          updatedAt: protocol.updatedAt?.toDate?.()?.toISOString() || protocol.updatedAt,
+          createdAt: protocol.createdAt && typeof protocol.createdAt === 'object' && 'toDate' in protocol.createdAt && typeof protocol.createdAt.toDate === 'function' ? protocol.createdAt.toDate().toISOString() : protocol.createdAt,
+          updatedAt: protocol.updatedAt && typeof protocol.updatedAt === 'object' && 'toDate' in protocol.updatedAt && typeof protocol.updatedAt.toDate === 'function' ? protocol.updatedAt.toDate().toISOString() : protocol.updatedAt,
         });
       });
     }

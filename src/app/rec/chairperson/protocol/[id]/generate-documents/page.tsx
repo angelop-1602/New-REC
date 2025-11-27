@@ -6,22 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { 
   FileText as FileTextIcon, 
-  Loader2, 
   Eye, 
-  ArrowLeft,
   Download,
-
   Calendar,
   User,
   Building,
@@ -35,13 +24,21 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { generateDecisionDocuments } from "@/lib/services/documentGenerator";
+import { generateDecisionDocuments } from "@/lib/services/documents/documentGenerator";
 import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import firebaseApp from '@/lib/firebaseConfig';
+import { PageLoading } from "@/components/ui/loading";
+import { InlineLoading } from "@/components/ui/loading";
+import { 
+  ChairpersonProtocol, 
+  toChairpersonProtocol,
+  getProtocolTitle,
+  getProtocolCode,
+  getPIName
+} from '@/types';
 
 const db = getFirestore(firebaseApp);
 
-type DecisionType = 'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved';
 
 // Helper function to get template labels based on research type
 const getTemplateLabels = (researchType?: string): string[] => {
@@ -62,7 +59,7 @@ export default function GenerateDocumentsPage() {
   const { user } = useAuth();
   const protocolId = params.id as string;
 
-  const [submission, setSubmission] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [submission, setSubmission] = useState<ChairpersonProtocol | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -80,10 +77,12 @@ export default function GenerateDocumentsPage() {
         const submissionSnap = await getDoc(submissionRef);
         
         if (submissionSnap.exists()) {
-          setSubmission({
+          const rawData = {
             id: submissionSnap.id,
             ...submissionSnap.data()
-          });
+          };
+          const typedProtocol = toChairpersonProtocol(rawData);
+          setSubmission(typedProtocol);
         } else {
           toast.error("Protocol not found");
           router.back();
@@ -129,8 +128,8 @@ export default function GenerateDocumentsPage() {
     if (!submission) return [];
     
     const pi = submission.information?.general_information?.principal_investigator;
-    const protocolTitle = submission.information?.general_information?.protocol_title || submission.title;
-    const spupCode = submission.spupCode || submission.tempProtocolCode || 'TBD';
+    const protocolTitle = getProtocolTitle(submission);
+    const spupCode = getProtocolCode(submission) || 'TBD';
     const today = new Date();
     const initialDate = new Date(today);
     initialDate.setDate(initialDate.getDate() - 5);
@@ -146,7 +145,7 @@ export default function GenerateDocumentsPage() {
       // Protocol Information
       { key: "SPUP_REC_CODE", label: "SPUP REC Code", value: editedData.SPUP_REC_CODE || spupCode, icon: FileTextIcon, editable: true },
       { key: "PROTOCOL_TITLE", label: "Protocol Title", value: editedData.PROTOCOL_TITLE || protocolTitle, icon: BookOpen, editable: true },
-      { key: "PRINCIPAL_INVESTIGATOR", label: "Principal Investigator", value: editedData.PRINCIPAL_INVESTIGATOR || pi?.name || "N/A", icon: User, editable: true },
+      { key: "PRINCIPAL_INVESTIGATOR", label: "Principal Investigator", value: editedData.PRINCIPAL_INVESTIGATOR || getPIName(submission) || "N/A", icon: User, editable: true },
       { key: "INSTITUTION", label: "Institution", value: editedData.INSTITUTION || pi?.position_institution || "St. Paul University Philippines", icon: Building, editable: true },
       { key: "ADDRESS", label: "Address", value: editedData.ADDRESS || pi?.address || "N/A", icon: MapPin, editable: true },
       { key: "CONTACT_NUMBER", label: "Contact Number", value: editedData.CONTACT_NUMBER || pi?.contact_number || "N/A", icon: Phone, editable: true },
@@ -167,7 +166,7 @@ export default function GenerateDocumentsPage() {
 
   const handleEditField = (fieldKey: string, currentValue: string) => {
     setEditingField(fieldKey);
-    setEditedData(prev => ({ ...prev, [fieldKey]: currentValue }));
+    setEditedData((prev: any) => ({ ...prev, [fieldKey]: currentValue })); // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 
   const handleSaveField = (fieldKey: string) => {
@@ -177,7 +176,7 @@ export default function GenerateDocumentsPage() {
 
   const handleCancelEdit = (fieldKey: string) => {
     setEditingField(null);
-    setEditedData(prev => {
+    setEditedData((prev: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       const newData = { ...prev };
       delete newData[fieldKey];
       return newData;
@@ -185,7 +184,7 @@ export default function GenerateDocumentsPage() {
   };
 
   const handleFieldChange = (fieldKey: string, value: string) => {
-    setEditedData(prev => ({ ...prev, [fieldKey]: value }));
+    setEditedData((prev: any) => ({ ...prev, [fieldKey]: value })); // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 
   const handleGenerate = async () => {
@@ -203,6 +202,11 @@ export default function GenerateDocumentsPage() {
     try {
       const finalChairpersonName = editedData.Chairperson || chairpersonName;
       
+      if (!submission) {
+        toast.error("Protocol data not available");
+        return;
+      }
+
       // Determine research type from submission (SR or EX)
       const researchType = submission.researchType || submission.reviewType || 'SR';
       
@@ -267,71 +271,46 @@ export default function GenerateDocumentsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Loading protocol data...</span>
-        </div>
-      </div>
-    );
+    return <PageLoading text="Loading protocol data..." />;
   }
 
   if (!submission) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen animate-in fade-in duration-500">
         <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-2">Protocol Not Found</h2>
+          <h2 className="text-2xl font-semibold mb-2 bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Protocol Not Found</h2>
           <p className="text-muted-foreground mb-4">The requested protocol could not be found.</p>
-          <Button onClick={() => router.back()}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Go Back
-          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => router.back()}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Protocol
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Generate Documents</h1>
-            <p className="text-muted-foreground">
-              Create official documents for protocol: {submission.spupCode || submission.tempProtocolCode}
-            </p>
-          </div>
-        </div>
-        <Badge variant="outline" className="text-lg px-4 py-2">
-          {submission.spupCode || submission.tempProtocolCode}
-        </Badge>
-      </div>
-
+    <div className="container mx-auto p-4 md:p-6 max-w-7xl animate-in fade-in duration-500">
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left Column - Templates */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-1">
           {/* Template Selection */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Document Templates</CardTitle>
+          <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-left-4 duration-500 delay-150 overflow-hidden p-0">
+            <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20 rounded-t-lg pt-6">
+              <CardTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Document Templates</CardTitle>
               <CardDescription>
                 Select which documents to generate
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 p-4">
               <div className="space-y-3">
-                {templateLabels.map(label => (
-                  <div key={label} className="flex items-center space-x-3">
+                {templateLabels.map((label, index) => (
+                  <div 
+                    key={label} 
+                    className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200 animate-in fade-in slide-in-from-left-2"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
                     <Checkbox 
                       id={label}
                       checked={selectedTemplates.includes(label)} 
                       onCheckedChange={() => toggleTemplate(label)}
+                      className="border-[#036635]/20 dark:border-[#FECC07]/30 data-[state=checked]:bg-[#036635] data-[state=checked]:border-[#036635] dark:data-[state=checked]:bg-[#FECC07] dark:data-[state=checked]:border-[#FECC07]"
                     />
                     <Label htmlFor={label} className="text-sm font-normal cursor-pointer">
                       {label}
@@ -341,24 +320,23 @@ export default function GenerateDocumentsPage() {
               </div>
               
               {/* Action Buttons */}
-              <div className="pt-4 border-t flex gap-3">
+              <div className="pt-4 border-t border-[#036635]/10 dark:border-[#FECC07]/20 flex gap-3">
                 <Button 
                   variant="outline" 
                   onClick={() => router.back()}
                   disabled={isGenerating}
-                  className="flex-1"
+                  className="flex-1 border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
                 >
                   Cancel
                 </Button>
                 <Button 
                   onClick={handleGenerate}
                   disabled={isGenerating || selectedTemplates.length === 0}
-                  className="flex-1"
+                  className="flex-1 bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
                 >
                   {isGenerating ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
+                      <InlineLoading size="sm" text="Generating..." />
                     </>
                   ) : (
                     <>
@@ -375,24 +353,28 @@ export default function GenerateDocumentsPage() {
         {/* Right Column - Preview */}
         <div className="lg:col-span-2 space-y-6">
           {/* Replacement Preview */}
-          <Card>
-            <CardHeader>
+          <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-right-4 duration-500 delay-300 overflow-hidden p-0">
+            <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20 rounded-t-lg pt-6 pb-6">
               <CardTitle className="flex items-center gap-2">
-                <Eye className="h-5 w-5" />
-                Replacement Preview
+                <Eye className="h-5 w-5 text-[#036635] dark:text-[#FECC07]" />
+                <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Replacement Preview</span>
               </CardTitle>
               <CardDescription>
                 Preview the data that will be used to populate the generated documents
               </CardDescription>
             </CardHeader>
-                         <CardContent>
+                         <CardContent className="p-6">
                <div className="grid md:grid-cols-2 gap-4">
                  {replacementPreview.map((item, index) => {
                    const IconComponent = item.icon;
                    const isEditing = editingField === item.key;
                    
                    return (
-                     <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
+                     <div 
+                       key={index} 
+                       className="flex items-start gap-3 p-3 border border-[#036635]/10 dark:border-[#FECC07]/20 rounded-lg hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200 animate-in fade-in slide-in-from-bottom-2"
+                       style={{ animationDelay: `${index * 30}ms` }}
+                     >
                        <IconComponent className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                        <div className="min-w-0 flex-1">
                          <div className="text-sm font-medium text-muted-foreground mb-1">
@@ -403,24 +385,24 @@ export default function GenerateDocumentsPage() {
                              <Input
                                value={editedData[item.key] || item.value}
                                onChange={(e) => handleFieldChange(item.key, e.target.value)}
-                               className="text-sm h-8 flex-1"
+                               className="text-sm h-8 flex-1 border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300"
                                placeholder={`Enter ${item.label}`}
                              />
                              <Button
                                size="sm"
                                variant="outline"
                                onClick={() => handleSaveField(item.key)}
-                               className="h-8 w-8 p-0"
+                               className="h-8 w-8 p-0 border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
                              >
-                               <Save className="h-3 w-3" />
+                               <Save className="h-3 w-3 text-[#036635] dark:text-[#FECC07]" />
                              </Button>
                              <Button
                                size="sm"
                                variant="outline"
                                onClick={() => handleCancelEdit(item.key)}
-                               className="h-8 w-8 p-0"
+                               className="h-8 w-8 p-0 border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
                              >
-                               <X className="h-3 w-3" />
+                               <X className="h-3 w-3 text-[#036635] dark:text-[#FECC07]" />
                              </Button>
                            </div>
                          ) : (
@@ -433,9 +415,9 @@ export default function GenerateDocumentsPage() {
                                  size="sm"
                                  variant="outline"
                                  onClick={() => handleEditField(item.key, item.value)}
-                                 className="h-8 w-8 p-0"
+                                 className="h-8 w-8 p-0 border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
                                >
-                                 <Edit className="h-3 w-3" />
+                                 <Edit className="h-3 w-3 text-[#036635] dark:text-[#FECC07]" />
                                </Button>
                              )}
                            </div>

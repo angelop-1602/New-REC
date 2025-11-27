@@ -1,31 +1,23 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useCallback, useRef } from "react";
-import { InformationType } from "@/types/information.types";
-import { DocumentsType } from "@/types/documents.types";
+import { InformationType, DocumentsType } from "@/types";
 import { 
-  useSubmissionFormReducer, 
-  FormState, 
-  FormAction 
+  useSubmissionFormReducer
 } from "@/hooks/useSubmissionFormReducer";
 import { 
   saveDraft, 
   loadDraft, 
-  clearDraft, 
-  hasDraft, 
-  getDraftAge 
-} from "@/utils/localStorageManager";
+  clearDraft
+} from "@/lib/utils/localStorageManager";
 import { 
-  fileReferenceManager,
   getFileReference,
   removeFileReference,
   clearAllFileReferences,
   logFileReferences
-} from "@/utils/fileReferenceManager";
+} from "@/lib/utils/fileReferenceManager";
 import { 
-  createCompleteSubmission,
-  updateSubmission, 
-  submitDraft,
+  createCompleteSubmission
 } from "@/lib/firebase/firestore";
 import { customToast } from "@/components/ui/custom/toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -144,7 +136,7 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     dispatch, 
     getFieldValue, 
     getFieldValidation, 
-    isCurrentStepValid,
+    // isCurrentStepValid: _isCurrentStepValid, // Currently not used
     canProceed,
     canGoBack 
   } = useSubmissionFormReducer();
@@ -274,7 +266,7 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     dispatch({ type: "VALIDATE_FORM" });
     
     // Return the synchronous validation result
-    return formValidationResult.isValid;
+    return formValidationResult.valid;
   }, [dispatch, state.formData]);
 
   const forceValidateAllFields = useCallback(() => {
@@ -290,7 +282,7 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     });
     
     // Return the synchronous validation result
-    return formValidationResult.isValid;
+    return formValidationResult.valid;
   }, [dispatch, state.formData]);
 
   // Navigation
@@ -420,7 +412,7 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
 
       // Update state
       dispatch({ type: "SET_SUBMITTING", payload: false });
-      dispatch({ type: "SHOW_CONFIRM_DIALOG", payload: false });
+      // Removed SHOW_CONFIRM_DIALOG action - not in reducer
       
       // Show success and call completion callback
       onComplete?.(submissionId);
@@ -457,7 +449,7 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     // UI state
     isSubmitting: state.isSubmitting,
     submissionError: state.submissionError,
-    showConfirmDialog: state.showConfirmDialog,
+    showConfirmDialog: false, // Removed from state, always false
     submissionSuccess: false, // This would be derived from successful submission
     submissionId: null, // This would be set after successful submission
     

@@ -1,9 +1,8 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useMemo, useState } from 'react';
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/custom/data-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu, 
@@ -11,68 +10,47 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { EllipsisVertical, Eye, FileText, Download, MessageSquare } from "lucide-react";
+import { EllipsisVertical, Eye, FileText, Download, MessageSquare, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getAllSubmissionsByStatus } from "@/lib/firebase/firestore";
-import { Loader2 } from "lucide-react";
+import { PageLoading } from "@/components/ui/loading";
 import { formatDistanceToNow } from "date-fns";
 import { ColumnDef } from "@tanstack/react-table";
 import { getStatusBadge } from "@/lib/utils/statusUtils";
-
-// Define the approved protocol type
-interface ApprovedProtocol {
-  id: string;
-  applicationID: string;
-  title: string;
-  spupCode: string;
-  submitBy: string;
-  submittedByName?: string;
-  status: string;
-  createdAt: any;
-  approvedAt: any;
-  information?: any;
-}
+import { useRealtimeProtocols } from "@/hooks/useRealtimeProtocols";
+import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
+import { Input } from "@/components/ui/input";
+import { 
+  ChairpersonProtocol, 
+  toChairpersonProtocols, 
+  getProtocolTitle,
+  getProtocolCode,
+  getPIName,
+  toDate
+} from '@/types';
 
 export default function ApprovedProtocolsPage() {
   const router = useRouter();
-  const [protocols, setProtocols] = useState<ApprovedProtocol[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [searchValue, setSearchValue] = useState("");
 
-  useEffect(() => {
-    fetchApprovedProtocols();
-  }, []);
+  // ⚡ Real-time data for approved protocols
+  const { protocols: approvedProtocols, loading, error } = useRealtimeProtocols({
+    collectionName: SUBMISSIONS_COLLECTION,
+    statusFilter: 'approved',
+    enabled: true,
+  });
 
-  const fetchApprovedProtocols = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const approvedProtocols = await getAllSubmissionsByStatus('approved');
-      
-      // Transform the data to include proper typing
-      const transformedProtocols: ApprovedProtocol[] = approvedProtocols.map((protocol: any) => ({
-        id: protocol.id,
-        applicationID: protocol.applicationID || protocol.id,
-        title: protocol.title || protocol.information?.general_information?.protocol_title || 'Untitled Protocol',
-        spupCode: protocol.spupCode || 'N/A',
-        submitBy: protocol.submitBy || 'Unknown',
-        submittedByName: protocol.information?.general_information?.principal_investigator?.name,
-        status: protocol.status || 'approved',
-        createdAt: protocol.createdAt,
-        approvedAt: protocol.approvedAt,
-        information: protocol.information
-      }));
-      
-      setProtocols(transformedProtocols);
-    } catch (err) {
-      console.error('Error fetching approved protocols:', err);
-      setError('Failed to load approved protocols');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Transform protocols data using new type system
+  const protocols = useMemo(() => {
+    const typedProtocols = toChairpersonProtocols(approvedProtocols);
+    // Sort by decision date (most recent first), fallback to createdAt
+    return typedProtocols.sort((a, b) => {
+      const dateA = toDate(a.decisionDetails?.decisionDate || a.createdAt);
+      const dateB = toDate(b.decisionDetails?.decisionDate || b.createdAt);
+      if (!dateA || !dateB) return 0;
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [approvedProtocols]);
 
   const handleViewProtocol = (protocolId: string) => {
     router.push(`/rec/chairperson/protocol/${protocolId}`);
@@ -93,16 +71,15 @@ export default function ApprovedProtocolsPage() {
     console.log('Send message for:', protocolId);
   };
 
-  const getProtocolStatusBadge = (protocol: ApprovedProtocol) => {
-    // Use centralized status utility
+  const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
     return getStatusBadge(
       protocol.status,
       protocol.decision || protocol.decisionDetails?.decision,
-      false
+      protocol.hasReviewers || false
     );
   };
 
-  const columns: ColumnDef<ApprovedProtocol>[] = [
+  const columns: ColumnDef<ChairpersonProtocol>[] = [
     {
       accessorKey: "applicationID",
       header: "Application ID",
@@ -115,7 +92,7 @@ export default function ApprovedProtocolsPage() {
       header: "Protocol Title",
       cell: ({ row }) => (
         <div className="max-w-[300px] truncate">
-          {row.original.title || row.original.information?.general_information?.protocol_title || "Untitled Protocol"}
+          {getProtocolTitle(row.original)}
         </div>
       ),
     },
@@ -124,7 +101,7 @@ export default function ApprovedProtocolsPage() {
       header: "SPUP Code",
       cell: ({ row }) => (
         <div className="font-mono text-sm">
-          {row.original.spupCode || "—"}
+          {getProtocolCode(row.original) || "—"}
         </div>
       ),
     },
@@ -133,9 +110,7 @@ export default function ApprovedProtocolsPage() {
       header: "Principal Investigator",
       cell: ({ row }) => (
         <div className="text-sm">
-          {row.original.submittedByName || 
-           row.original.information?.general_information?.principal_investigator?.name || 
-           "Unknown"}
+          {row.original.submittedByName || getPIName(row.original) || "Unknown"}
         </div>
       ),
     },
@@ -143,11 +118,9 @@ export default function ApprovedProtocolsPage() {
       accessorKey: "approvedAt",
       header: "Approved",
       cell: ({ row }) => {
-        const date = row.original.approvedAt;
-        if (!date) return <span className="text-muted-foreground">—</span>;
-        
         try {
-          const dateObj = date.toDate ? date.toDate() : new Date(date);
+          const dateObj = toDate(row.original.decisionDetails?.decisionDate);
+          if (!dateObj) return <span className="text-muted-foreground">—</span>;
           return (
             <div className="text-sm text-muted-foreground">
               {formatDistanceToNow(dateObj, { addSuffix: true })}
@@ -218,7 +191,7 @@ export default function ApprovedProtocolsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <PageLoading text="Loading protocols..." />
       </div>
     );
   }
@@ -226,38 +199,36 @@ export default function ApprovedProtocolsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px] text-center">
-        <p className="text-destructive mb-4">{error}</p>
-        <Button onClick={fetchApprovedProtocols}>Try Again</Button>
+        <p className="text-destructive mb-4">Error: {error.message || 'Failed to load approved protocols'}</p>
+        <p className="text-sm text-muted-foreground">Real-time updates will resume automatically</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Approved Protocols</h1>
-          <p className="text-muted-foreground">
-            Manage and monitor all approved research protocols
-          </p>
+    <div className="space-y-6 p-4 md:p-6 animate-in fade-in duration-500">
+      <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150 overflow-hidden p-0">
+        <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 dark:to-card p-6">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#036635] dark:text-[#FECC07] h-4 w-4" />
+          <Input
+            placeholder="Search approved protocols..."
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            className="pl-10 border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300"
+          />
         </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All Approved Protocols</CardTitle>
-          <CardDescription>
-            Protocols that have been approved and are in progress or awaiting reports
-          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6 pb-6">
           <DataTable
             columns={columns}
             data={protocols}
             searchPlaceholder="Search approved protocols..."
-            showSearch={true}
+            showSearch={false}
             showPagination={true}
             pageSize={10}
+            externalSearchValue={searchValue}
+            onSearchChange={setSearchValue}
           />
         </CardContent>
       </Card>

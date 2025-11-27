@@ -8,7 +8,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,14 +18,12 @@ import {
   AlertTriangle,
   FileText,
   Users,
-  Calendar,
   BookMinus,
   XCircle,
   Info,
 } from "lucide-react";
-import { InformationType } from "@/types/information.types";
-import { DocumentsType } from "@/types/documents.types";
-import { LoadingSpinner, LoadingBar } from "@/components/ui/loading";
+import { InformationType, DocumentsType } from "@/types";
+import { LoadingSpinner } from "@/components/ui/loading";
 import { Input } from "../input";
 import { Label } from "../label";
 
@@ -67,10 +64,10 @@ export const SubmissionConfirmationDialog: React.FC<
   const {
     formData,
     documents,
-    totalFields,
-    completedFields,
-    requiredDocuments,
-    uploadedDocuments,
+    // totalFields, // Currently not used but kept for future use
+    // completedFields, // Currently not used but kept for future use
+    // requiredDocuments, // Currently not used but kept for future use
+    // uploadedDocuments, // Currently not used but kept for future use
   } = summary;
   const [confirmationText, setConfirmationText] = useState("");
   const isConfirmationValid =
@@ -83,14 +80,10 @@ export const SubmissionConfirmationDialog: React.FC<
     }
   }, [isOpen, submissionSuccess, submissionError]);
 
-  // Calculate completion percentages
-  const formCompletionPercentage = (completedFields / totalFields) * 100;
-  const documentsCompletionPercentage =
-    requiredDocuments > 0 ? (uploadedDocuments / requiredDocuments) * 100 : 100;
-
-  // Determine if ready to submit
-  const isReadyToSubmit =
-    formCompletionPercentage === 100 && documentsCompletionPercentage >= 80; // Allow 80% for optional docs
+  // Calculate completion percentages (currently not displayed but kept for future use)
+  // const formCompletionPercentage = (completedFields / totalFields) * 100;
+  // const documentsCompletionPercentage =
+  //   requiredDocuments > 0 ? (uploadedDocuments / requiredDocuments) * 100 : 100;
 
   // Get dialog content based on current state
   const getDialogContent = () => {
@@ -433,7 +426,7 @@ export const SubmissionConfirmationDialog: React.FC<
 
               <div className="space-y-2">
                 <Label htmlFor="confirm" className="text-sm font-medium">
-                  To proceed, please type "CONFIRM" in the field below:
+                  To proceed, please type &quot;CONFIRM&quot; in the field below:
                 </Label>
                 <Input
                   id="confirm"
@@ -448,7 +441,7 @@ export const SubmissionConfirmationDialog: React.FC<
                 />
                 {!isConfirmationValid && confirmationText.length > 0 && (
                   <p className="text-sm text-red-600">
-                    Please type "CONFIRM" exactly as shown
+                    Please type &quot;CONFIRM&quot; exactly as shown
                   </p>
                 )}
               </div>

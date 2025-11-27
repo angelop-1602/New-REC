@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { reviewerAuthService, ReviewerAuthData } from '@/lib/services/reviewerAuthService';
+import { reviewerAuthService, ReviewerAuthData } from '@/lib/services/reviewers/reviewerAuthService';
 
 interface UseReviewerAuthReturn {
   // State

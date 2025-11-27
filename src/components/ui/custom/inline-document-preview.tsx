@@ -8,7 +8,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { 
-  Download, 
   Pencil, 
   FileText, 
   Image, 
@@ -20,9 +19,9 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
-import { DocumentsType } from "@/types/documents.types";
+import { DocumentsType } from "@/types";
 import SimplePdfViewer from "./simple-pdf-viewer";
-import { enhancedDocumentManagementService } from "@/lib/services/enhancedDocumentManagementService";
+import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -49,7 +48,6 @@ export default function InlineDocumentPreview({
   const [selectedDocument, setSelectedDocument] = React.useState<DocumentsType | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [comment, setComment] = React.useState("");
-  const [selectedStatus, setSelectedStatus] = React.useState<'accepted' | 'revise'>('accepted');
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [showAcceptDialog, setShowAcceptDialog] = React.useState(false);
   const [showReviseDialog, setShowReviseDialog] = React.useState(false);
@@ -83,7 +81,8 @@ export default function InlineDocumentPreview({
         handleDocumentSelect(documentToSelect, indexToSelect);
       }
     }
-  }, [uploadedDocuments, selectedDocumentId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadedDocuments, selectedDocumentId, selectedDocument]);
 
   // Prevent background scrolling when preview is open
   React.useEffect(() => {
@@ -117,15 +116,6 @@ export default function InlineDocumentPreview({
     }
   };
 
-  // Get file type for preview
-  const getFileType = (fileName: string) => {
-    const extension = fileName.split('.').pop()?.toLowerCase();
-    if (['pdf'].includes(extension || '')) return 'pdf';
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension || '')) return 'image';
-    if (['txt', 'md', 'json', 'xml', 'csv'].includes(extension || '')) return 'text';
-    if (['zip'].includes(extension || '')) return 'zip';
-    return 'other';
-  };
 
   // Handle document selection
   const handleDocumentSelect = (document: DocumentsType, index: number) => {

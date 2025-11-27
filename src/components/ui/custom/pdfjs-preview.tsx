@@ -65,7 +65,7 @@ export default function PdfJsPreview({
       ...(storagePath ? { storagePath } : {})
     }).toString();
 
-    const url = `/api/preview/document/${encodeURIComponent(file)}?${qs}`;
+    const url = `/api/documents/preview/document/${encodeURIComponent(file)}?${qs}`;
     setApiUrl(url);
   }, [file, submissionId, entry, auto, storagePath]);
 

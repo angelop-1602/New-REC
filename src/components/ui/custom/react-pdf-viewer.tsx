@@ -40,7 +40,7 @@ export default function ReactPdfViewer({
       ...(auto ? { auto: '1' } : {})
     }).toString();
 
-    const url = `/api/preview/document/${encodeURIComponent(file)}?${qs}`;
+    const url = `/api/documents/preview/document/${encodeURIComponent(file)}?${qs}`;
     setApiUrl(url);
 
     // Fetch document data

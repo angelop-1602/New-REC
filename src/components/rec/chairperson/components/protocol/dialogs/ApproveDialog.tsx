@@ -13,16 +13,20 @@ import {
   DialogHeader, 
   DialogTitle 
 } from "@/components/ui/dialog";
-import { CheckCircle, Loader2, Info } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { useSpupCodeGenerator } from "@/hooks/useSpupCodeGenerator";
 import { acceptSubmission } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { 
+  toChairpersonProtocol,
+  getPIName
+} from '@/types';
 
 interface ApproveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  submission: any;
+  submission: Record<string, unknown>;
   onStatusUpdate: (status: string) => void;
 }
 
@@ -33,37 +37,28 @@ export function ApproveDialog({
   onStatusUpdate 
 }: ApproveDialogProps) {
   const { user } = useAuth();
-  const { generateSpupCode, generateInitials, loading: codeLoading } = useSpupCodeGenerator();
+  const { generateSpupCode } = useSpupCodeGenerator();
+  
+  // Convert to typed protocol at the top
+  const typedSubmission = toChairpersonProtocol(submission);
   
   const [spupCode, setSpupCode] = useState("");
   const [reviewType, setReviewType] = useState<'SR' | 'PR' | 'HO' | 'BS' | 'EX'>('SR');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState("");
-  const [piInitials, setPiInitials] = useState("");
 
   // Generate SPUP code when dialog opens
   useEffect(() => {
     const generateCode = async () => {
-      if (open && submission) {
-        const pi = submission.information?.general_information?.principal_investigator;
-        const code = await generateSpupCode(pi, reviewType);
-        setGeneratedCode(code);
+      if (open && typedSubmission) {
+        const piName = getPIName(typedSubmission);
+        const principalInvestigator = piName ? { name: piName } : null;
+        const code = await generateSpupCode(principalInvestigator, reviewType);
         setSpupCode(code);
-        
-        // Extract initials from PI name
-        if (pi?.name) {
-          const nameParts = pi.name.trim().split(' ');
-          if (nameParts.length >= 2) {
-            const firstName = nameParts[0];
-            const lastName = nameParts[nameParts.length - 1];
-            setPiInitials(generateInitials(firstName, lastName));
-          }
-        }
       }
     };
     
     generateCode();
-  }, [open, submission, reviewType, generateSpupCode, generateInitials]);
+  }, [open, typedSubmission, reviewType, generateSpupCode]);
 
   const handleApprove = async () => {
     if (!spupCode) {
@@ -78,7 +73,7 @@ export function ApproveDialog({
     
     setIsProcessing(true);
     try {
-      await acceptSubmission(submission.id, spupCode, user.uid, reviewType);
+      await acceptSubmission(String(typedSubmission.id), spupCode, user.uid, reviewType);
       const researchTypeNames = {
         'SR': 'Social/Behavioral Research',
         'PR': 'Public Health Research', 
@@ -99,9 +94,9 @@ export function ApproveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
-          <DialogTitle>Accept Protocol</DialogTitle>
+          <DialogTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Accept Protocol</DialogTitle>
           <DialogDescription>
             Review and confirm the SPUP Code for this protocol
           </DialogDescription>
@@ -151,7 +146,7 @@ export function ApproveDialog({
               id="spup-code"
               value={spupCode}
               onChange={(e) => setSpupCode(e.target.value)}
-              className="font-mono"
+              className="font-mono border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300"
             />
             <div className="text-sm text-muted-foreground space-y-1">
               <p className="text-xs">You can manually edit the code if needed</p>
@@ -167,12 +162,13 @@ export function ApproveDialog({
               setReviewType('SR');
             }}
             disabled={isProcessing}
+            className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
           >
             Cancel
           </Button>
           <Button 
             onClick={handleApprove} 
-            className="bg-primary hover:bg-primary/90"
+            className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
             disabled={isProcessing || !spupCode}
           >
             {isProcessing ? (

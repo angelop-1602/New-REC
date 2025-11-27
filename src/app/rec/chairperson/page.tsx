@@ -1,19 +1,32 @@
+"use client"
+
 import { SectionCards } from '@/components/rec/chairperson/components/cards';
 import { ChartAreaInteractive } from '@/components/rec/chairperson/components/chart';
 import { ProtocolCharts } from '@/components/rec/chairperson/components/protocol';
 import { DataTable } from '@/components/rec/chairperson/components/table';
-import data from "./data.json"
-export default async function Dashboard() {
+
+export default function Dashboard() {
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+    <div className="flex flex-col w-full h-full overflow-y-auto p-2 sm:p-4 md:p-6">
+      <div className="@container/main flex flex-col gap-3 sm:gap-4 md:gap-6 w-full max-w-full">
+        {/* Cards with fade-in animation */}
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
           <SectionCards />
-          <div className="px-4 lg:px-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        </div>
+        
+        {/* Charts with staggered animation */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <div className="animate-in fade-in slide-in-from-left-4 duration-700 delay-150 min-w-0">
             <ProtocolCharts />
+          </div>
+          <div className="animate-in fade-in slide-in-from-right-4 duration-700 delay-300 min-w-0">
             <ChartAreaInteractive />
           </div>
-          <DataTable data={data} />
+        </div>
+        
+        {/* Table with fade-in animation */}
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-450 min-w-0">
+          <DataTable />
         </div>
       </div>
     </div>

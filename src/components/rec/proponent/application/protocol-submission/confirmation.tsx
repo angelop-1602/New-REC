@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   FileText,
   Users,
-  Info,
 } from "lucide-react";
 import { useSubmissionContext } from "@/contexts/SubmissionContext";
 
@@ -20,14 +19,11 @@ export default function SubmissionConfirmation() {
     formData,
     documents,
     submissionError,
-    getSubmissionSummary,
   } = useSubmissionContext();
 
   const [isChecked, setIsChecked] = useState(false);
   const [confirmationText, setConfirmationText] = useState("");
   const isConfirmationValid = confirmationText.toUpperCase().trim() === "CONFIRM";
-
-  const summary = getSubmissionSummary();
 
   // Expose confirmation state to parent component
   React.useEffect(() => {

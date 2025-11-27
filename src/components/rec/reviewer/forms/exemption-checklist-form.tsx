@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Save, Send, Clock } from 'lucide-react';
 import useLocalDraft from '@/hooks/useLocalDraft';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 
 // Zod schema for Exemption Checklist
 const exemptionSchema = z.object({
@@ -114,7 +114,8 @@ export default function ExemptionChecklistForm({
   defaultValues = {},
   protocolId,
   reviewerId,
-  reviewerName,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  reviewerName: _reviewerName,
   skipFirebaseLoad = false
 }: ExemptionChecklistFormProps) {
   const router = useRouter();
@@ -425,7 +426,7 @@ export default function ExemptionChecklistForm({
               variant="outline" 
               onClick={handleSaveDraft}
               disabled={isAutoSaving}
-              className="flex-1"
+              className="flex-1 border-[#036635] dark:border-[#FECC07] text-[#036635] dark:text-[#FECC07] hover:bg-[#036635] dark:hover:bg-[#FECC07] hover:text-white dark:hover:text-black"
             >
               <Save className="w-4 h-4 mr-2" />
               Save Draft
@@ -433,7 +434,7 @@ export default function ExemptionChecklistForm({
             <Button 
               type="submit" 
               disabled={isSubmitting}
-              className="flex-1"
+              className="flex-1 bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black"
             >
               <Send className="w-4 h-4 mr-2" />
               {isSubmitting ? 'Submitting...' : 'Submit Assessment'}

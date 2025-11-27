@@ -5,7 +5,7 @@ import { useDocumentIdGenerator } from './useDocumentIdGenerator';
 import { uploadFile as uploadToStorage, type UploadProgress } from '@/lib/firebase/storage';
 import { generateDocumentStoragePath } from '@/lib/firebase/storage';
 import { zipSingleFile } from '@/lib/utils/zip';
-import { DocumentsType } from '@/types/documents.types';
+import { DocumentsType } from '@/types';
 
 export interface DocumentUploadState {
   isUploading: boolean;

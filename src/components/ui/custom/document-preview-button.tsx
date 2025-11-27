@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
-import { DocumentsType } from "@/types/documents.types";
+import { DocumentsType } from "@/types";
 
 interface DocumentPreviewButtonProps {
   documents: DocumentsType[];
@@ -25,7 +25,6 @@ export default function DocumentPreviewButton({
   className,
   disabled = false,
   children,
-  onDocumentStatusUpdate,
   onPreviewToggle,
   isPreviewOpen = false,
   documentId

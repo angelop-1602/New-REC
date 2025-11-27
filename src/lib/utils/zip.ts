@@ -119,7 +119,7 @@ export const zipFilesByCategory = async (
           categoryFolder.file(file.name, file, {
             compression: opts.compression,
             compressionOptions: {
-              level: opts.compressionLevel
+              level: opts.compressionLevel ?? 6
             }
           });
         }
@@ -131,7 +131,7 @@ export const zipFilesByCategory = async (
       type: 'blob',
       compression: opts.compression,
       compressionOptions: {
-        level: opts.compressionLevel
+        level: opts.compressionLevel ?? 6
       }
     });
     
@@ -336,13 +336,13 @@ export const getZipFileInfo = async (zipFile: File): Promise<{
       if (!zipEntry.dir) {
         const fileInfo = {
           name: fileName,
-          size: zipEntry.uncompressedSize,
-          compressedSize: zipEntry.compressedSize,
+          size: (zipEntry as any).uncompressedSize ?? 0,
+          compressedSize: (zipEntry as any).compressedSize ?? 0,
           type: getFileType(fileName)
         };
         
         files.push(fileInfo);
-        totalUncompressedSize += zipEntry.uncompressedSize;
+        totalUncompressedSize += (zipEntry as any).uncompressedSize ?? 0;
       }
     }
     

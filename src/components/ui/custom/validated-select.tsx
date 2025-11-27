@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ValidationRule } from "@/types/validation.types";
+import { ValidationRule } from "@/types";
 import { validateField } from "@/lib/validation/form-validation";
 import { AlertCircle } from "lucide-react";
 
@@ -78,7 +78,6 @@ export const ValidatedSelect: React.FC<ValidatedSelectProps> = ({
   const [isTouched, setIsTouched] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [animationKey, setAnimationKey] = useState(0);
 
   const selectRef = useRef<HTMLButtonElement>(null);
   const onValidationChangeRef = useRef(onValidationChange);
@@ -109,7 +108,6 @@ export const ValidatedSelect: React.FC<ValidatedSelectProps> = ({
       if (force && !result.isValid) {
         setIsTouched(true);
         setShowAnimation(true);
-        setAnimationKey((prev) => prev + 1);
 
         if (selectRef.current) {
           selectRef.current.focus();

@@ -16,13 +16,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FileText, CheckCircle, Edit, X, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { assessmentFormsService } from "@/lib/services/assessmentFormsService";
+import { assessmentFormsService } from "@/lib/services/assessments/assessmentFormsService";
 import { toast } from "sonner";
 
 interface ViewAssessmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  assessment: any;
+  assessment: Record<string, unknown>;
   reviewerName: string;
   protocolId?: string;
   onStatusUpdate?: () => void;
@@ -45,7 +45,7 @@ export function ViewAssessmentDialog({
   }
 
   const formData = assessment.formData;
-  const formType = assessment.formType;
+  const formType = assessment.formType as 'protocol-review' | 'informed-consent' | 'exemption-checklist' | 'iacuc-review';
 
   const handleApprove = async () => {
     if (!protocolId || !assessment.reviewerId) return;
@@ -54,8 +54,8 @@ export function ViewAssessmentDialog({
     try {
       const success = await assessmentFormsService.updateFormStatus(
         protocolId,
-        assessment.formType,
-        assessment.reviewerId,
+        assessment.formType as 'protocol-review' | 'informed-consent' | 'exemption-checklist' | 'iacuc-review',
+        assessment.reviewerId as string,
         'approved'
       );
       
@@ -84,8 +84,8 @@ export function ViewAssessmentDialog({
     try {
       const success = await assessmentFormsService.updateFormStatus(
         protocolId,
-        assessment.formType,
-        assessment.reviewerId,
+        assessment.formType as 'protocol-review' | 'informed-consent' | 'exemption-checklist' | 'iacuc-review',
+        assessment.reviewerId as string,
         'returned',
         rejectionReason.trim()
       );
@@ -108,24 +108,14 @@ export function ViewAssessmentDialog({
   };
 
   // Helper to render field value
-  const renderFieldValue = (value: any): string => {
+  const renderFieldValue = (value: unknown): string => {
     if (value === null || value === undefined) return 'N/A';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-    if (typeof value === 'object' && value.value) return value.value;
+    if (typeof value === 'object' && (value as { value?: unknown }).value) return String((value as { value: unknown }).value);
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
   };
 
-  // Helper to get field label from key
-  const getFieldLabel = (key: string): string => {
-    return key
-      .replace(/_/g, ' ')
-      .replace(/([A-Z])/g, ' $1')
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
-      .trim();
-  };
 
   // Ordered, per-form sections to mirror actual form flow
   type Field = { key: string; label: string };
@@ -324,11 +314,11 @@ export function ViewAssessmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
-      <DialogContent className="max-w-4xl max-h-[90vh] z-50">
+      <DialogContent className="max-w-4xl max-h-[90vh] z-50 border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
-          <DialogTitle className="text-primary flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Assessment Review
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Assessment Review</span>
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             Review the assessment form by {reviewerName}
@@ -355,15 +345,20 @@ export function ViewAssessmentDialog({
                 </Badge>
               </div>
             </div>
-            {assessment.submittedAt && (
+            {assessment.submittedAt != null && (
               <div>
                 <span className="font-medium text-primary">Submitted:</span>
                 <p className="mt-1">
-                  {assessment.submittedAt?.toDate 
-                    ? new Date(assessment.submittedAt.toDate()).toLocaleString()
-                    : assessment.submittedAt?.seconds
-                    ? new Date(assessment.submittedAt.seconds * 1000).toLocaleString()
-                    : new Date(assessment.submittedAt).toLocaleString()}
+                  {(() => {
+                    const submittedAt = assessment.submittedAt as { toDate?: () => Date; seconds?: number } | string | undefined;
+                    if (submittedAt && typeof submittedAt === 'object' && submittedAt.toDate) {
+                      return new Date(submittedAt.toDate()).toLocaleString();
+                    }
+                    if (submittedAt && typeof submittedAt === 'object' && submittedAt.seconds) {
+                      return new Date(submittedAt.seconds * 1000).toLocaleString();
+                    }
+                    return String(submittedAt || '');
+                  })()}
                 </p>
               </div>
             )}
@@ -386,7 +381,7 @@ export function ViewAssessmentDialog({
                         {label}:
                       </div>
                       <div className="col-span-2 text-sm">
-                        {renderFieldValue((formData as any)[key])}
+                        {renderFieldValue((formData as Record<string, unknown>)[key])}
                       </div>
                     </div>
                   ))}
@@ -432,9 +427,9 @@ export function ViewAssessmentDialog({
 
       {/* Reject Confirmation Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <DialogContent>
+        <DialogContent className="border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
           <DialogHeader>
-            <DialogTitle>Reject Assessment</DialogTitle>
+            <DialogTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Reject Assessment</DialogTitle>
             <DialogDescription>
               Please provide a reason for rejecting this assessment. This will be visible to the reviewer.
             </DialogDescription>

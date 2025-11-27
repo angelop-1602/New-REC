@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import AssessmentSubmissionService from '@/lib/services/assessmentSubmissionService';
+import AssessmentSubmissionService from '@/lib/services/assessments/assessmentSubmissionService';
 
 interface UseAssessmentSubmissionProps {
   protocolId: string;

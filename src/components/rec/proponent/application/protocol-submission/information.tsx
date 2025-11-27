@@ -1,22 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
   X,
   User,
-  MapPin,
-  GraduationCap,
   FileText,
-  Users,
   BookOpen,
-  PhilippinePeso,
   CalendarDays,
 } from "lucide-react";
-import type { InformationType } from "@/types/information.types";
-import { ValidationRule } from "@/types/validation.types";
 import { informationFormValidation } from "@/lib/validation/form-validation";
 import { useSubmissionContext } from "@/contexts/SubmissionContext";
 import { ValidatedInput } from "@/components/ui/custom/validated-input";
@@ -90,14 +84,11 @@ const FUNDING_SOURCE_OPTIONS = [
 
 export const SubmissionInformation = () => {
   const {
-    formData,
     updateField,
     getFieldValue,
     addCoResearcher,
     removeCoResearcher,
     updateCoResearcher,
-    isFormValid,
-    validateAllFields,
     registerFieldValidation,
     unregisterFieldValidation,
     handleFieldValidation,

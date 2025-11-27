@@ -1,8 +1,7 @@
 "use client";
 
-import { useReducer, useCallback, useEffect } from "react";
-import { InformationType } from "@/types/information.types";
-import { DocumentsType } from "@/types/documents.types";
+import { useReducer, useCallback } from "react";
+import { InformationType, DocumentsType } from "@/types";
 import { validateForm, validateField, informationFormValidation } from "@/lib/validation/form-validation";
 
 // Form state interface
@@ -149,8 +148,8 @@ export const formReducer = (state: FormState, action: FormAction): FormState => 
         delete newErrors[fieldPath];
       }
       
-      // Validate entire form
-      const formValidationResult = validateForm(newFormData, informationFormValidation);
+      // Validate entire form (validation result not used here, using newErrors instead)
+      // const formValidationResult = validateForm(newFormData, informationFormValidation);
       
       return {
         ...state,
@@ -166,8 +165,8 @@ export const formReducer = (state: FormState, action: FormAction): FormState => 
       return {
         ...state,
         formData: action.payload,
-        errors: formValidationResult.errors,
-        isFormValid: formValidationResult.isValid,
+        errors: formValidationResult.errors as unknown as Record<string, string[]>,
+        isFormValid: formValidationResult.valid,
         isDraftSaved: false,
       };
     }
@@ -308,8 +307,8 @@ export const formReducer = (state: FormState, action: FormAction): FormState => 
       const formValidationResult = validateForm(state.formData, informationFormValidation);
       return {
         ...state,
-        errors: formValidationResult.errors,
-        isFormValid: formValidationResult.isValid,
+        errors: formValidationResult.errors as unknown as Record<string, string[]>,
+        isFormValid: formValidationResult.valid,
       };
     }
 
@@ -320,8 +319,8 @@ export const formReducer = (state: FormState, action: FormAction): FormState => 
       
       return {
         ...state,
-        errors: formValidationResult.errors,
-        isFormValid: formValidationResult.isValid,
+        errors: formValidationResult.errors as unknown as Record<string, string[]>,
+        isFormValid: formValidationResult.valid,
         touchedFields: newTouchedFields,
       };
     }

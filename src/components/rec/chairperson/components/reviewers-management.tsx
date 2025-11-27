@@ -1,12 +1,21 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { PageLoading } from '@/components/ui/loading';
+import { toLocaleDateString } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -15,35 +24,74 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
-  Users, 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
   Plus, 
-  Edit, 
-  ToggleLeft, 
-  ToggleRight,
   UserCheck,
-  UserX,
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-  Trash2
+  Eye,
+  MoreVertical,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  Copy,
+  CheckCircle2
 } from 'lucide-react';
-import { reviewersManagementService, Reviewer, CreateReviewerRequest } from '@/lib/services/reviewersManagementService';
+import { reviewersManagementService, Reviewer, CreateReviewerRequest, ReviewerRole, ReviewersManagementService } from '@/lib/services/reviewers/reviewersManagementService';
+import { generateReviewerCode } from '@/lib/services/reviewers/reviewerCodeGenerator';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
-export default function ReviewersManagement() {
+interface ReviewersManagementProps {
+  onAddReviewerClick?: () => void;
+  addReviewerDialogOpen?: boolean;
+  onAddReviewerDialogChange?: (open: boolean) => void;
+}
+
+export default function ReviewersManagement({ 
+  onAddReviewerClick, 
+  addReviewerDialogOpen,
+  onAddReviewerDialogChange 
+}: ReviewersManagementProps = {}) {
+  const router = useRouter();
   const { user } = useAuth();
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   
-  // Add reviewer dialog
-  const [addReviewerOpen, setAddReviewerOpen] = useState(false);
+  // Add reviewer dialog - controlled from parent if props provided
+  const [internalAddReviewerOpen, setInternalAddReviewerOpen] = useState(false);
+  const addReviewerOpen = addReviewerDialogOpen !== undefined ? addReviewerDialogOpen : internalAddReviewerOpen;
+  const setAddReviewerOpen = onAddReviewerDialogChange || setInternalAddReviewerOpen;
   const [newReviewer, setNewReviewer] = useState<CreateReviewerRequest>({
-    name: ''
+    name: '',
+    role: undefined
   });
+  const [generatedCode, setGeneratedCode] = useState<string>('');
+  const [codeCopied, setCodeCopied] = useState(false);
+  
+  
+  // Member management dialog - removed, now handled in settings page;
+  
+  // Delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [reviewerToDelete, setReviewerToDelete] = useState<Reviewer | null>(null);
+  
+  // Controlled dropdown state
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   // Load data on mount
   useEffect(() => {
@@ -53,13 +101,13 @@ export default function ReviewersManagement() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [reviewersData, statsData] = await Promise.all([
-        reviewersManagementService.getAllReviewers(),
-        reviewersManagementService.getReviewerStats()
-      ]);
+      const reviewersData = await reviewersManagementService.getAllReviewers();
       
-      setReviewers(reviewersData);
-      setStats(statsData);
+      // Filter out reviewers with REC member roles (they're displayed on Members page)
+      const memberRoles: ReviewerRole[] = ['chairperson', 'vice-chair', 'secretary', 'office-secretary', 'member'];
+      const nonMemberReviewers = reviewersData.filter(r => !r.role || !memberRoles.includes(r.role));
+      
+      setReviewers(nonMemberReviewers);
     } catch (error) {
       console.error('Error loading reviewers data:', error);
       toast.error('Failed to load reviewers data');
@@ -68,6 +116,27 @@ export default function ReviewersManagement() {
     }
   };
 
+  // Generate code preview when name changes
+  useEffect(() => {
+    const generateCodePreview = async () => {
+      if (newReviewer.name.trim()) {
+        try {
+          const code = await generateReviewerCode(newReviewer.name.trim());
+          setGeneratedCode(code);
+        } catch (error) {
+          console.error('Error generating code preview:', error);
+          setGeneratedCode('');
+        }
+      } else {
+        setGeneratedCode('');
+      }
+    };
+
+    // Debounce code generation
+    const timeoutId = setTimeout(generateCodePreview, 500);
+    return () => clearTimeout(timeoutId);
+  }, [newReviewer.name]);
+
   const handleAddReviewer = async () => {
     if (!newReviewer.name.trim() || !user) return;
     
@@ -75,9 +144,11 @@ export default function ReviewersManagement() {
     try {
       const reviewerId = await reviewersManagementService.createReviewer(newReviewer);
       if (reviewerId) {
-        toast.success('Reviewer added successfully');
+        toast.success(`Reviewer added successfully! Code: ${generatedCode}`);
         setAddReviewerOpen(false);
-        setNewReviewer({ name: '' });
+        setNewReviewer({ name: '', role: undefined });
+        setGeneratedCode('');
+        setCodeCopied(false);
         await loadData(); // Refresh data
       } else {
         toast.error('Failed to add reviewer');
@@ -90,8 +161,26 @@ export default function ReviewersManagement() {
     }
   };
 
+  const handleCopyCode = async () => {
+    if (generatedCode) {
+      try {
+        await navigator.clipboard.writeText(generatedCode);
+        setCodeCopied(true);
+        toast.success('Code copied to clipboard!');
+        setTimeout(() => setCodeCopied(false), 2000);
+      } catch (error) {
+        console.error('Failed to copy code:', error);
+        toast.error('Failed to copy code');
+      }
+    }
+  };
+
+
   const handleToggleStatus = async (reviewerId: string) => {
     if (!user) return;
+    
+    // Close dropdown immediately
+    setOpenDropdownId(null);
     
     setSaving(true);
     try {
@@ -110,14 +199,16 @@ export default function ReviewersManagement() {
     }
   };
 
-  const handleDeleteReviewer = async (reviewerId: string) => {
-    if (!user) return;
+  const handleDeleteReviewer = async () => {
+    if (!reviewerToDelete || !user) return;
     
     setSaving(true);
     try {
-      const success = await reviewersManagementService.deleteReviewer(reviewerId);
+      const success = await reviewersManagementService.deleteReviewer(reviewerToDelete.id);
       if (success) {
         toast.success('Reviewer deleted successfully');
+        setDeleteDialogOpen(false);
+        setReviewerToDelete(null);
         await loadData(); // Refresh data
       } else {
         toast.error('Failed to delete reviewer');
@@ -130,125 +221,166 @@ export default function ReviewersManagement() {
     }
   };
 
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading reviewers...</span>
+      <div className="flex items-center justify-center h-[400px]">
+        <PageLoading text="Loading reviewers..." />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Reviewers Management</h1>
-          <p className="text-muted-foreground">Manage research ethics reviewers</p>
-        </div>
-        <Button onClick={() => setAddReviewerOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Reviewer
-        </Button>
+    <div className="mx-auto max-w-7xl space-y-6 animate-in fade-in duration-500">
+      {/* Header Section */}
+      <div>
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">
+          Reviewers
+        </h2>
+        <p className="text-muted-foreground mt-1">
+          Manage research ethics reviewers who can be assigned to review protocols
+        </p>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Reviewers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Reviewers</CardTitle>
-            <UserCheck className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inactive Reviewers</CardTitle>
-            <UserX className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.inactive}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Reviewers List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Reviewers</CardTitle>
-          <CardDescription>
-            Complete list of research ethics reviewers
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {reviewers.length > 0 ? (
-            <div className="space-y-3">
-              {reviewers.map(reviewer => (
-                <div key={reviewer.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="flex flex-col">
-                      <p className="font-medium">{reviewer.name}</p>
-                      <p className="text-sm text-muted-foreground">Code: {reviewer.code}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Created: {reviewer.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Badge variant={reviewer.isActive ? "default" : "secondary"}>
-                      {reviewer.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleToggleStatus(reviewer.id)}
-                      disabled={saving}
+      {reviewers.length > 0 ? (
+        <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-[#036635]/5 dark:bg-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20">
+                  <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Name</TableHead>
+                  <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Code</TableHead>
+                  <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Status</TableHead>
+                  <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Added</TableHead>
+                  <TableHead className="text-right font-semibold text-[#036635] dark:text-[#FECC07]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reviewers.map((reviewer, index) => {
+                  return (
+                    <TableRow 
+                      key={reviewer.id}
+                      className="hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 transition-all duration-200 animate-in fade-in slide-in-from-left-2"
+                      style={{ animationDelay: `${index * 50}ms` }}
                     >
-                      {reviewer.isActive ? (
-                        <ToggleRight className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <ToggleLeft className="h-4 w-4 text-gray-400" />
-                      )}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteReviewer(reviewer.id)}
-                      disabled={saving}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                No reviewers found. Click "Add Reviewer" to create the first reviewer.
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+                      <TableCell className="font-medium">{reviewer.name}</TableCell>
+                      <TableCell className="font-mono text-sm">{reviewer.code}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={reviewer.isActive ? "default" : "secondary"} 
+                          className={cn(
+                            "text-xs transition-all duration-300",
+                            reviewer.isActive 
+                              ? "bg-[#036635] dark:bg-[#FECC07] text-white dark:text-black" 
+                              : "bg-gray-500"
+                          )}
+                        >
+                          {reviewer.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {toLocaleDateString(reviewer.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu
+                          open={openDropdownId === reviewer.id}
+                          onOpenChange={(open) => setOpenDropdownId(open ? reviewer.id : null)}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0"
+                              disabled={saving}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setOpenDropdownId(null);
+                                const nameSlug = ReviewersManagementService.nameToSlug(reviewer.name);
+                                router.push(`/rec/chairperson/portfolio/${encodeURIComponent(nameSlug)}`);
+                              }}
+                              disabled={saving}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Profile
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleToggleStatus(reviewer.id);
+                              }}
+                              disabled={saving}
+                            >
+                              {reviewer.isActive ? (
+                                <>
+                                  <ToggleRight className="h-4 w-4 mr-2" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <ToggleLeft className="h-4 w-4 mr-2" />
+                                  Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setOpenDropdownId(null);
+                                setReviewerToDelete(reviewer);
+                                setDeleteDialogOpen(true);
+                              }}
+                              disabled={saving}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2 text-red-600" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in duration-500">
+          <CardContent className="p-12 text-center">
+            <UserCheck className="h-12 w-12 mx-auto text-[#036635] dark:text-[#FECC07] mb-4 animate-in fade-in duration-500" />
+            <h3 className="text-lg font-semibold mb-2 bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">
+              No Reviewers Found
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Click &quot;Add Reviewer&quot; to create the first reviewer.
+            </p>
+            {onAddReviewerClick ? (
+              <Button 
+                onClick={onAddReviewerClick}
+                className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Reviewer
+              </Button>
+            ) : (
+              <Button 
+                onClick={() => setAddReviewerOpen(true)}
+                className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Reviewer
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add Reviewer Dialog */}
       <Dialog open={addReviewerOpen} onOpenChange={setAddReviewerOpen}>
@@ -272,23 +404,111 @@ export default function ReviewersManagement() {
                 A unique code will be automatically generated based on the name initials
               </p>
             </div>
+            
+            {/* Generated Code Preview - Always visible when name is entered */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Generated Reviewer Code</Label>
+              {generatedCode ? (
+                <div className="p-4 bg-gradient-to-r from-[#036635]/10 to-[#036635]/5 dark:from-[#FECC07]/20 dark:to-[#FECC07]/10 rounded-lg border-2 border-[#036635]/30 dark:border-[#FECC07]/40">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 font-mono text-xl font-bold text-[#036635] dark:text-[#FECC07] bg-white dark:bg-gray-900 px-4 py-3 rounded border-2 border-[#036635]/40 dark:border-[#FECC07]/50 text-center">
+                      {generatedCode}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyCode}
+                      className="flex-shrink-0 h-11"
+                      title="Copy code to clipboard"
+                    >
+                      {codeCopied ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-green-600 mr-1" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3 text-center">
+                    This code will be used by the reviewer to access their account. Copy it before saving.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 bg-muted/30 rounded-lg border border-dashed border-muted-foreground/30">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Enter a name above to generate the reviewer code
+                  </p>
+                </div>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="role">Role (Optional)</Label>
+              <Select 
+                value={newReviewer.role || undefined} 
+                onValueChange={(value) => setNewReviewer(prev => ({ ...prev, role: value ? (value as ReviewerRole) : undefined }))}
+              >
+                <SelectTrigger id="role">
+                  <SelectValue placeholder="Select a role (optional)..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="chairperson">Chairperson</SelectItem>
+                  <SelectItem value="vice-chair">Vice Chair</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="secretary">Secretary</SelectItem>
+                  <SelectItem value="office-secretary">Office Secretary</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddReviewerOpen(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setAddReviewerOpen(false);
+                setNewReviewer({ name: '', role: undefined });
+                setGeneratedCode('');
+                setCodeCopied(false);
+              }}
+            >
               Cancel
             </Button>
             <Button 
               onClick={handleAddReviewer} 
               disabled={saving || !newReviewer.name.trim()}
             >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                'Add Reviewer'
-              )}
+              {saving ? 'Adding...' : 'Add Reviewer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Reviewer</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {reviewerToDelete?.name}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={handleDeleteReviewer}
+              disabled={saving}
+            >
+              {saving ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

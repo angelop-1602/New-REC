@@ -17,7 +17,7 @@ const firebaseConfig = {
 // Debug Firebase configuration in development
 if (process.env.NODE_ENV === 'development') {
   const missingKeys = Object.entries(firebaseConfig)
-    .filter(([key, value]) => !value)
+    .filter(([, value]) => !value)
     .map(([key]) => key);
   
   if (missingKeys.length > 0) {

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm, UseFormReturn } from 'react-hook-form';
-import { assessmentFormsService, FormType, FormStatus } from '@/lib/services/assessmentFormsService';
+import { assessmentFormsService, FormType, FormStatus } from '@/lib/services/assessments/assessmentFormsService';
 import { toast } from 'sonner';
+import { toDate } from '@/types';
 
 interface UseAssessmentFormProps {
   protocolId: string;
@@ -183,7 +184,7 @@ export function useAssessmentForm({
         // Load form data
         form.reset(existingForm.formData);
         setFormStatus(existingForm.status);
-        setLastSavedAt(existingForm.lastSavedAt?.toDate() || null);
+        setLastSavedAt(toDate(existingForm.lastSavedAt) || null);
         lastFormDataRef.current = JSON.stringify(existingForm.formData);
         
         // Show status message

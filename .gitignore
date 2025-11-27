@@ -33,9 +33,26 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Firebase service account JSON files (contains sensitive credentials)
+*-firebase-adminsdk-*.json
+firebase-adminsdk-*.json
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+# firebase
+firebase-debug.log*
+firebase-debug.*.log*
+*.local
+.firebase/
+firebase.rules*
+firebase.indexes.json*
+firebase.storage.rules*
+firebase.firestore.rules*
+firebase.firestore.indexes.json*
+firebase.firestore.rules*

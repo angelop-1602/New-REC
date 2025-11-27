@@ -2,14 +2,13 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { CalendarIcon, AlertCircle } from "lucide-react";
-import { ValidationRule } from "@/types/validation.types";
+import { ValidationRule } from "@/types";
 import { validateField } from "@/lib/validation/form-validation";
 
 export interface ValidatedDateInputProps {
@@ -66,7 +65,6 @@ export const ValidatedDateInput: React.FC<ValidatedDateInputProps> = ({
   const [isTouched, setIsTouched] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [animationKey, setAnimationKey] = useState(0);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
   const dateButtonRef = useRef<HTMLButtonElement>(null);
@@ -100,7 +98,6 @@ export const ValidatedDateInput: React.FC<ValidatedDateInputProps> = ({
     if (force && !result.isValid) {
       setIsTouched(true);
       setShowAnimation(true);
-      setAnimationKey(prev => prev + 1);
       
       // Focus the date button if it's invalid during forced validation
       if (dateButtonRef.current) {

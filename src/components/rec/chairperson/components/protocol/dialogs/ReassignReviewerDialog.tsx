@@ -34,14 +34,15 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { UserX, Check, ChevronsUpDown, AlertTriangle, Loader2 } from "lucide-react";
-import { reviewerService, Reviewer } from "@/lib/services/reviewerService";
+import { reviewerService, Reviewer } from "@/lib/services/reviewers/reviewerService";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { toDate, FirestoreDate } from '@/types';
 
 interface ReassignReviewerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  assignment: any; // The overdue assignment to reassign
+  assignment: Record<string, unknown>; // The overdue assignment to reassign
   protocolId: string;
   onReassignmentSuccess: () => void;
 }
@@ -129,10 +130,10 @@ export function ReassignReviewerDialog({
     try {
       const success = await reviewerService.reassignReviewer(
         protocolId,
-        assignment.id,
+        String(assignment.id),
         selectedReviewerId,
         finalReason,
-        user.email || user.id || 'Unknown Chairperson'
+        user.email || (user as { uid?: string }).uid || 'Unknown Chairperson'
       );
       
       if (success) {
@@ -163,17 +164,17 @@ export function ReassignReviewerDialog({
   const selectedReviewer = reviewers.find(r => r.id === selectedReviewerId);
 
   // Calculate days overdue
-  const deadline = assignment?.deadline?.toDate?.() || new Date(assignment?.deadline);
+  const deadline = toDate(assignment?.deadline as FirestoreDate) || new Date();
   const now = new Date();
   const daysOverdue = Math.ceil((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
-          <DialogTitle className="text-primary flex items-center gap-2">
-            <UserX className="w-5 h-5" />
-            Reassign Overdue Reviewer
+          <DialogTitle className="flex items-center gap-2">
+            <UserX className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Reassign Overdue Reviewer</span>
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             Reassign this overdue reviewer assignment to a new reviewer. The old reviewer will lose access to this protocol.
@@ -188,12 +189,15 @@ export function ReassignReviewerDialog({
             </Label>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{assignment?.reviewerName}</span>
+                <span className="font-medium">{String(assignment?.reviewerName || '')}</span>
                 <Badge variant="outline" className="text-xs border-primary/30 text-primary">
-                  {assignment?.assessmentType?.includes("Protocol Review Assessment") ? "PRA" :
-                   assignment?.assessmentType?.includes("Informed Consent Assessment") ? "ICA" :
-                   assignment?.assessmentType?.includes("IACUC Protocol Review Assessment") ? "IACUC-PRA" :
-                   assignment?.assessmentType?.includes("Checklist for Exemption Form Review") ? "CFEFR" : "Assessment"}
+                  {(() => {
+                    const assessmentType = String(assignment?.assessmentType || '');
+                    return assessmentType.includes("Protocol Review Assessment") ? "PRA" :
+                           assessmentType.includes("Informed Consent Assessment") ? "ICA" :
+                           assessmentType.includes("IACUC Protocol Review Assessment") ? "IACUC-PRA" :
+                           assessmentType.includes("Checklist for Exemption Form Review") ? "CFEFR" : "Assessment";
+                  })()}
                 </Badge>
               </div>
               <div className="flex items-center justify-between text-sm">
@@ -311,7 +315,7 @@ export function ReassignReviewerDialog({
             )}
             
             <p className="text-xs text-muted-foreground">
-              This reason will be visible to the removed reviewer in their "Reassigned" tab.
+              This reason will be visible to the removed reviewer in their &quot;Reassigned&quot; tab.
             </p>
           </div>
 

@@ -6,7 +6,6 @@ import SubmissionDocuments from "@/components/rec/proponent/application/protocol
 import SubmissionConfirmation from "@/components/rec/proponent/application/protocol-submission/confirmation";
 import Steps from "@/components/ui/custom/steps";
 import { Button } from "@/components/ui/button";
-import Footer from "@/components/rec/proponent/application/footer";
 import GlobalBackButton from "@/components/ui/global-back-button";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { SubmissionProvider, useSubmissionContext } from "@/contexts/SubmissionContext";
@@ -48,7 +47,7 @@ function ApplicationContent() {
           } else {
             setCanSubmit(false);
           }
-        } catch (error) {
+        } catch {
           setCanSubmit(false);
         }
       };

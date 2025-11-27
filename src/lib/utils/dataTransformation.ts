@@ -15,7 +15,7 @@ import {
   isAssessment,
   isReviewer,
   isDecision
-} from '@/types/unified.types';
+} from '@/types';
 
 // ============================================================================
 // PROTOCOL TRANSFORMATIONS
@@ -514,7 +514,10 @@ export function mergeObjects<T>(target: T, source: Partial<T>): T {
   
   for (const key in source) {
     if (source.hasOwnProperty(key)) {
-      result[key] = deepClone(source[key]);
+      const value = source[key];
+      if (value !== undefined) {
+        result[key] = deepClone(value);
+      }
     }
   }
   

@@ -3,13 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useReviewerAuthContext } from '@/contexts/ReviewerAuthContext';
-import { useAssessmentForm } from '@/hooks/useAssessmentForm';
-import { assessmentFormsService, FormType } from '@/lib/services/assessmentFormsService';
+import { FormType } from '@/lib/services/assessments/assessmentFormsService';
 import { prePopulateFormFields, getFormDefaultValues, mapAssessmentTypeToFormType } from '@/lib/utils/formPrepopulation';
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import firebaseApp from '@/lib/firebaseConfig';
 import { getSubmissionWithDocuments } from '@/lib/firebase/firestore';
+import { InformationType, DocumentsType } from '@/types';
 
 // Dynamic imports for forms
 import dynamic from 'next/dynamic';
@@ -22,8 +21,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Save, Send, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { ArrowLeft, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading';
 import ProtocolOverview from '@/components/rec/shared/protocol-overview';
 
@@ -35,15 +33,15 @@ export default function ProtocolReviewPage() {
   const protocolId = params.id as string;
   
   const { reviewer, isAuthenticated, isLoading } = useReviewerAuthContext();
-  const [protocolData, setProtocolData] = useState<any>(null);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [reviewerAssignment, setReviewerAssignment] = useState<any>(null);
+  const [protocolData, setProtocolData] = useState<Record<string, unknown> | null>(null);
+  const [documents, setDocuments] = useState<DocumentsType[]>([]);
+  const [reviewerAssignment, setReviewerAssignment] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [formType, setFormType] = useState<FormType | null>(null);
-  const [defaultValues, setDefaultValues] = useState<Record<string, any>>({});
+  const [defaultValues, setDefaultValues] = useState<Record<string, unknown>>({});
   const [skipFirebaseLoad, setSkipFirebaseLoad] = useState(false);
   const [assessmentStatus, setAssessmentStatus] = useState<string | null>(null);
   const [returnReason, setReturnReason] = useState<string | null>(null);
@@ -74,7 +72,9 @@ export default function ProtocolReviewPage() {
          }
 
          setProtocolData(completeProtocol);
-         setDocuments(completeProtocol.documents || []);
+         // Convert documents to typed array
+         const typedDocuments = (completeProtocol.documents || []) as DocumentsType[];
+         setDocuments(typedDocuments);
 
         // Check if this reviewer was reassigned from this protocol
         const reassignmentHistoryRef = collection(db, 'submissions', protocolId, 'reassignment_history');
@@ -112,7 +112,7 @@ export default function ProtocolReviewPage() {
         setFormType(mappedFormType);
 
         // Check if there's existing assessment data first
-        const { default: AssessmentSubmissionService } = await import('@/lib/services/assessmentSubmissionService');
+        const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
         const existingAssessment = await AssessmentSubmissionService.getAssessment(protocolId, mappedFormType, reviewer.id);
         
         if (existingAssessment && existingAssessment.formData) {
@@ -145,11 +145,6 @@ export default function ProtocolReviewPage() {
   }, [protocolId, reviewer, isAuthenticated, isLoading]);
 
   // Handle form submission
-  const handleFormSubmit = (formData: any) => {
-    console.log('Form submitted:', formData);
-    // Navigate back to reviewer dashboard
-    router.push('/rec/reviewers');
-  };
 
   // Render the appropriate form based on form type
   const renderForm = () => {
@@ -183,7 +178,7 @@ export default function ProtocolReviewPage() {
   // Loading state (auth or page)
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <LoadingSpinner size="lg" text="Loading protocol data..." />
       </div>
     );
@@ -198,7 +193,10 @@ export default function ProtocolReviewPage() {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-          <Button onClick={() => router.push('/rec/reviewers')}>
+          <Button 
+            onClick={() => router.push('/rec/reviewers')}
+            className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Dashboard
           </Button>
@@ -214,9 +212,9 @@ export default function ProtocolReviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-card shadow-sm border-b border-border">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -224,13 +222,13 @@ export default function ProtocolReviewPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push('/rec/reviewers')}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 border-[#036635] dark:border-[#FECC07] text-[#036635] dark:text-[#FECC07] hover:bg-[#036635] dark:hover:bg-[#FECC07] hover:text-white dark:hover:text-black"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to Dashboard
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-primary">Protocol Review</h1>
+                <h1 className="text-2xl font-bold text-[#036635] dark:text-[#FECC07]">Protocol Review</h1>
                 <p className="text-sm text-muted-foreground">
                   {reviewer.name} • {reviewer.code}
                 </p>
@@ -248,9 +246,9 @@ export default function ProtocolReviewPage() {
                   }
                   className={
                     assessmentStatus === 'submitted' || assessmentStatus === 'completed' || assessmentStatus === 'approved'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-[#036635]/10 dark:bg-[#FECC07]/20 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30'
                       : assessmentStatus === 'draft'
-                      ? 'bg-yellow-100 text-yellow-800'
+                      ? 'bg-[#036635]/5 dark:bg-[#FECC07]/10 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30'
                       : ''
                   }
                 >
@@ -274,15 +272,15 @@ export default function ProtocolReviewPage() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-6">
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Left Panel: Forms */}
           <div className="lg:col-span-3 space-y-8">
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl font-semibold">
-                  {reviewerAssignment?.assessmentType || 'Assessment Form'}
+                  {(reviewerAssignment?.assessmentType as string) || 'Assessment Form'}
                 </CardTitle>
                 <CardDescription>
                   Please complete your assessment of this protocol. Your work will be auto-saved.
@@ -295,21 +293,21 @@ export default function ProtocolReviewPage() {
           </div>
 
           {/* Right Panel: Return Reason + Protocol Overview */}
-          <div className="lg:col-span-2 lg:border-l lg:border-gray-200 lg:pl-8">
+          <div className="lg:col-span-2 lg:border-l lg:border-border lg:pl-8">
             <div className="sticky top-8 max-h-[calc(100vh-8rem)] overflow-y-auto">
               {assessmentStatus === 'returned' && returnReason && (
-                <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-4">
+                <div className="mb-6 rounded-md border border-destructive/30 bg-destructive/10 p-4">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-destructive mt-0.5" />
                     <div>
-                      <p className="font-semibold text-red-800">Returned by Chairperson</p>
-                      <p className="text-sm text-red-800/90">{returnReason}</p>
+                      <p className="font-semibold text-destructive">Returned by Chairperson</p>
+                      <p className="text-sm text-destructive/90">{returnReason}</p>
                     </div>
                   </div>
                 </div>
               )}
               <ProtocolOverview 
-                information={protocolData?.information}
+                information={protocolData?.information as InformationType}
                 documents={documents}
                 userType="reviewer"
                 showDocuments={true}

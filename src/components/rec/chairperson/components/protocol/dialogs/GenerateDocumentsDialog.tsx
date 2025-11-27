@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { 
   Dialog,
   DialogContent,
@@ -24,12 +23,19 @@ import {
 import { FileText as FileTextIcon, Loader2, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { generateDecisionDocuments } from "@/lib/services/documentGenerator";
+import { generateDecisionDocuments } from "@/lib/services/documents/documentGenerator";
+import { reviewersManagementService } from "@/lib/services/reviewers/reviewersManagementService";
+import { 
+  toChairpersonProtocol,
+  getProtocolTitle,
+  getProtocolCode,
+  getPIName
+} from '@/types';
 
 interface GenerateDocumentsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  submission: any;
+  submission: Record<string, unknown>;
 }
 
 type DecisionType = 'approved' | 'approved_minor_revisions' | 'major_revisions_deferred' | 'disapproved';
@@ -57,23 +63,48 @@ const TEMPLATE_LABELS: Record<DecisionType, string[]> = {
 
 export function GenerateDocumentsDialog({ open, onOpenChange, submission }: GenerateDocumentsDialogProps) {
   const { user } = useAuth();
+  
+  // Convert to typed protocol at the top
+  const typedSubmission = toChairpersonProtocol(submission);
+  
   const [decision, setDecision] = useState<DecisionType>('approved');
   const [timeline, setTimeline] = useState<string>("");
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [previewMap, setPreviewMap] = useState<Record<string, string>>({});
+  const [chairpersonName, setChairpersonName] = useState<string>("REC Chairperson");
 
   useEffect(() => {
     if (!open) return;
     // default-select all templates for the current decision
     const defaults = TEMPLATE_LABELS[decision];
     setSelectedTemplates(defaults);
-  }, [open, decision]);
+    
+    // Fetch current REC chairperson from reviewers (REC members)
+    const fetchChairperson = async () => {
+      try {
+        const reviewers = await reviewersManagementService.getAllReviewers();
+        // Find the reviewer with role 'chairperson' and is active
+        const chairperson = reviewers.find(r => r.role === 'chairperson' && r.isActive);
+        if (chairperson) {
+          setChairpersonName(chairperson.name);
+        } else {
+          // Fallback to user display name or default
+          setChairpersonName(user?.displayName || "REC Chairperson");
+        }
+      } catch (error) {
+        console.error('Error fetching REC chairperson:', error);
+        // Fallback to user display name or default
+        setChairpersonName(user?.displayName || "REC Chairperson");
+      }
+    };
+    
+    fetchChairperson();
+  }, [open, decision, user]);
 
   const replacementPreview = useMemo(() => {
-    const pi = submission.information?.general_information?.principal_investigator;
-    const protocolTitle = submission.information?.general_information?.protocol_title || submission.title;
-    const spupCode = submission.spupCode || submission.tempProtocolCode || 'TBD';
+    const pi = typedSubmission.information?.general_information?.principal_investigator;
+    const protocolTitle = getProtocolTitle(typedSubmission);
+    const spupCode = getProtocolCode(typedSubmission) || 'TBD';
     const today = new Date();
     const initialDate = new Date(today);
     initialDate.setDate(initialDate.getDate() - 5);
@@ -89,24 +120,24 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
       // Protocol Information
       { key: "<<SPUP_REC_CODE>>", value: spupCode },
       { key: "<<PROTOCOL_TITLE>>", value: protocolTitle },
-      { key: "<<PRINCIPAL_INVESTIGATOR>>", value: pi?.name || "N/A" },
+      { key: "<<PRINCIPAL_INVESTIGATOR>>", value: getPIName(typedSubmission) || "N/A" },
       { key: "<<INSTITUTION>>", value: pi?.position_institution || "N/A" },
       { key: "<<ADDRESS>>", value: pi?.address || "N/A" },
       { key: "<<CONTACT_NUMBER>>", value: pi?.contact_number || "N/A" },
       { key: "<<E-MAIL>>", value: pi?.email || "N/A" },
-      { key: "<<ADVISER>>", value: submission.information?.general_information?.adviser?.name || "N/A" },
+      { key: "<<ADVISER>>", value: typedSubmission.information?.general_information?.adviser?.name || "N/A" },
       { key: "<<APPROVED_DATE>>", value: today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },
       { key: "<<TYPE_SUBMISSION>>", value: "Initial Review" },
       
       // Input/Reviewer Values
       { key: "<<VERSION>>", value: "1.0" },
-      { key: "<<Chairperson>>", value: user?.displayName || "REC Chairperson" },
+      { key: "<<Chairperson>>", value: chairpersonName },
       
       // Decision-specific
       { key: "Decision", value: decision.replaceAll('_', ' ') },
       { key: "Timeline", value: timeline || (decision === 'approved_minor_revisions' ? '3 days' : decision === 'major_revisions_deferred' ? '7 days' : '—') },
     ];
-  }, [submission, decision, timeline, user]);
+  }, [typedSubmission, decision, timeline, chairpersonName]);
 
   const toggleTemplate = (label: string) => {
     setSelectedTemplates(curr => curr.includes(label) ? curr.filter(t => t !== label) : [...curr, label]);
@@ -124,8 +155,7 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
 
     setIsGenerating(true);
     try {
-      const chairpersonName = user?.displayName || 'REC Chairperson';
-      const docs = await generateDecisionDocuments(decision, submission, chairpersonName, timeline || undefined);
+      const docs = await generateDecisionDocuments(decision, typedSubmission as unknown as Record<string, unknown>, chairpersonName, timeline || undefined);
 
       // Map document templates to labels for filtering. documentGenerator should expose names;
       // we fallback by matching label substrings in fileName.
@@ -159,9 +189,9 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
-          <DialogTitle>Generate Documents</DialogTitle>
+          <DialogTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Generate Documents</DialogTitle>
           <DialogDescription>
             Preview replacements and select which documents to generate
           </DialogDescription>
@@ -172,7 +202,7 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
             <div>
               <Label>Decision</Label>
               <Select value={decision} onValueChange={(v) => setDecision(v as DecisionType)}>
-                <SelectTrigger>
+                <SelectTrigger className="border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300">
                   <SelectValue placeholder="Select decision" />
                 </SelectTrigger>
                 <SelectContent>
@@ -188,7 +218,7 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
               <div>
                 <Label>Timeline for Compliance</Label>
                 <Select value={timeline} onValueChange={setTimeline}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-[#036635]/20 dark:border-[#FECC07]/30 focus:border-[#036635] dark:focus:border-[#FECC07] focus:ring-[#036635]/20 dark:focus:ring-[#FECC07]/20 transition-all duration-300">
                     <SelectValue placeholder={decision === 'approved_minor_revisions' ? 'Default 3 days' : 'Default 7 days'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -237,7 +267,7 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
                 {replacementPreview.map(item => (
                   <div key={item.key} className="flex justify-between gap-4">
                     <span className="text-muted-foreground">{item.key}</span>
-                    <span className="text-right break-all">{item.value}</span>
+                    <span className="text-right break-all">{String(item.value || '')}</span>
                   </div>
                 ))}
               </div>
@@ -249,12 +279,14 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
           <Button 
             variant="outline" 
             onClick={() => onOpenChange(false)}
+            className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
           >
             Cancel
           </Button>
           <Button 
             onClick={handleGenerate}
             disabled={isGenerating || selectedTemplates.length === 0}
+            className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
           >
             {isGenerating ? (
               <>

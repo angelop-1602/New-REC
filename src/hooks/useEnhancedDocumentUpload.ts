@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadFile as uploadToStorage, type UploadProgress } from '@/lib/firebase/storage';
 import { zipSingleFile } from '@/lib/utils/zip';
-import { enhancedDocumentManagementService } from '@/lib/services/enhancedDocumentManagementService';
-import { DocumentCategory } from '@/types/documents.types';
+import { enhancedDocumentManagementService } from '@/lib/services/documents/enhancedDocumentManagementService';
+import { DocumentCategory } from '@/types';
 
 export interface EnhancedDocumentUploadState {
   isUploading: boolean;
@@ -49,7 +49,7 @@ export const useEnhancedDocumentUpload = ({
     return `${sanitizedTitle}${suffix}.zip`;
   }, []);
 
-  // Upload document to fulfill a request
+  // Upload document to fulfill a request or add a new version
   const uploadDocumentToRequest = useCallback(async (
     file: File,
     documentTitle: string,
@@ -74,8 +74,48 @@ export const useEnhancedDocumentUpload = ({
       // Zip the file
       const zippedFile = await zipSingleFile(file, { fileName });
 
-      // Generate storage path - use submissions collection (not submissions_accepted)
-      const storagePath = `submissions/${protocolId}/documents/${fileName}`;
+      // Check if this is a revision (requestId is an existing document ID)
+      let storagePath: string;
+      let documentId: string;
+      let isRevision = false;
+      let newVersionNumber = 1;
+
+      if (requestId) {
+        // This might be a revision - check if document exists
+        try {
+          const existingDoc = await enhancedDocumentManagementService.getDocument(protocolId, requestId);
+          if (existingDoc && existingDoc.currentVersion > 0) {
+            // This is a revision - use versioned path
+            isRevision = true;
+            documentId = requestId;
+            newVersionNumber = existingDoc.currentVersion + 1;
+            // Use versioned storage path: documents/{documentId}/v{version}/{fileName}
+            storagePath = `submissions/${protocolId}/documents/${documentId}/v${newVersionNumber}/${fileName}`;
+          } else {
+            // New document fulfilling a request (status is "requested" but no version yet)
+            documentId = requestId;
+            // Use versioned path for initial upload: documents/{documentId}/v1/{fileName}
+            storagePath = `submissions/${protocolId}/documents/${documentId}/v1/${fileName}`;
+            newVersionNumber = 1;
+          }
+        } catch {
+          // Document doesn't exist, treat as new document
+          documentId = requestId;
+          storagePath = `submissions/${protocolId}/documents/${documentId}/v1/${fileName}`;
+          newVersionNumber = 1;
+        }
+      } else {
+        // New document - generate ID first for versioned path
+        const sanitizedTitle = documentTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, '_')
+          .trim();
+        documentId = `${sanitizedTitle}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Use versioned path from the start: documents/{documentId}/v1/{fileName}
+        storagePath = `submissions/${protocolId}/documents/${documentId}/v1/${fileName}`;
+        newVersionNumber = 1;
+      }
 
       // Upload to Firebase Storage
       const uploadResult = await uploadToStorage(zippedFile, storagePath, {
@@ -90,23 +130,41 @@ export const useEnhancedDocumentUpload = ({
         },
       });
 
-      // Create document using enhanced service
-      const documentId = await enhancedDocumentManagementService.createDocument(
-        protocolId,
-        {
-          title: documentTitle,
-          description: documentDescription,
-          category,
-          uploadedBy: user.uid,
-          fileType: file.type,
-          storagePath,
-          downloadUrl: uploadResult.downloadUrl,
-          originalFileName: file.name,
-          fileSize: file.size,
-          requestId, // This will fulfill the existing request
-          isRequired: true, // Assume requested documents are required
-        }
-      );
+      if (isRevision) {
+        // Add new version to existing document
+        await enhancedDocumentManagementService.addDocumentVersion(
+          protocolId,
+          documentId,
+          {
+            uploadedBy: user.uid,
+            fileType: file.type,
+            storagePath: uploadResult.storagePath,
+            downloadUrl: uploadResult.downloadUrl,
+            originalFileName: file.name,
+            fileSize: file.size,
+          }
+        );
+      } else {
+        // Create new document or fulfill request
+        // documentId and storagePath are already set above with versioned path
+        const createdDocumentId = await enhancedDocumentManagementService.createDocument(
+          protocolId,
+          {
+            title: documentTitle,
+            description: documentDescription,
+            category,
+            uploadedBy: user.uid,
+            fileType: file.type,
+            storagePath: uploadResult.storagePath, // Already uses versioned path: documents/{documentId}/v1/{fileName}
+            downloadUrl: uploadResult.downloadUrl,
+            originalFileName: file.name,
+            fileSize: file.size,
+            requestId: requestId || documentId, // Pass documentId if it's a new document (will be used as requestId for fulfillment)
+            isRequired: true, // Assume requested documents are required
+          }
+        );
+        documentId = createdDocumentId;
+      }
 
       setUploadState(prev => ({
         ...prev,

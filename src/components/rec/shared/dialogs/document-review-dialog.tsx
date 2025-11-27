@@ -23,8 +23,8 @@ import {
   MessageSquare,
   FileText
 } from "lucide-react";
-import { DocumentsType, DocumentStatus } from "@/types/documents.types";
-import { enhancedDocumentManagementService } from "@/lib/services/enhancedDocumentManagementService";
+import { DocumentsType, DocumentStatus } from "@/types";
+import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
 import { toast } from "sonner";
 
 interface DocumentReviewDialogProps {
@@ -140,11 +140,11 @@ export default function DocumentReviewDialog({
         )}
       </DialogTrigger>
       
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Review Document
+            <FileText className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Review Document</span>
           </DialogTitle>
           <DialogDescription>
             Set the status and add comments for this document.

@@ -7,11 +7,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-background flex flex-col justify-between">
+      <main className="bg-background">
         {children}
-        
-      <Footer />
       </main>
+      <Footer />
     </>
   );
 }

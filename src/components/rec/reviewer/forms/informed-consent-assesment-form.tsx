@@ -76,7 +76,8 @@ export default function InformedConsentForm({
   defaultValues = {},
   protocolId,
   reviewerId,
-  reviewerName,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  reviewerName: _reviewerName,
   skipFirebaseLoad = false
 }: InformedConsentFormProps) {
   const router = useRouter();
@@ -320,7 +321,7 @@ export default function InformedConsentForm({
                    type="button" 
                    variant="outline" 
                    onClick={handleSaveDraft}
-                   className="flex-1"
+                   className="flex-1 border-[#036635] dark:border-[#FECC07] text-[#036635] dark:text-[#FECC07] hover:bg-[#036635] dark:hover:bg-[#FECC07] hover:text-white dark:hover:text-black"
                    disabled={isSubmitting}
                  >
                    <Save className="w-4 h-4 mr-2" />
@@ -328,7 +329,7 @@ export default function InformedConsentForm({
                  </Button>
                  <Button 
                    type="submit" 
-                   className="flex-1"
+                   className="flex-1 bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black"
                    disabled={isSubmitting}
                  >
                    {isSubmitting ? (

@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { 
   getAuth, 
-  signInWithPopup, 
+  signInWithPopup,
+  getRedirectResult,
   signInWithEmailAndPassword as firebaseSignInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -11,13 +12,12 @@ import {
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   onAuthStateChanged,
   GoogleAuthProvider,
-  OAuthProvider,
   User as FirebaseUser,
   AuthError
 } from "firebase/auth";
 import { customToast } from "@/components/ui/custom/toast";
 import firebaseApp from "@/lib/firebaseConfig";
-import { AuthContextType, User, convertFirebaseUser } from "@/types/auth.types";
+import { AuthContextType, User, convertFirebaseUser } from "@/types";
 
 const auth = getAuth(firebaseApp);
 
@@ -43,41 +43,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [verificationEmail, setVerificationEmail] = useState<string>("");
   const [emailVerificationStatus, setEmailVerificationStatus] = useState<'pending' | 'verified'>('pending');
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        const user = convertFirebaseUser(firebaseUser);
-        setUser(user);
-        
-        // Handle post-authentication redirect for verified users
-        if (user.emailVerified) {
-          const redirectUrl = localStorage.getItem('auth-redirect');
-          if (redirectUrl) {
-            localStorage.removeItem('auth-redirect');
-            // Only redirect if we're currently on the auth page
-            if (window.location.pathname.includes('/auth/signin')) {
-              window.location.href = redirectUrl;
-            }
-          }
-        }
-      } else {
-        setUser(null);
-        // Don't redirect on sign out - let the signOut function handle it
-      }
-      setLoading(false);
+  const handleAuthError = (error: AuthError, isOAuth: boolean = false) => {
+    // Log full error for debugging
+    console.error("Authentication Error:", {
+      code: error.code,
+      message: error.message,
+      isOAuth,
+      fullError: error
     });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleAuthError = (error: AuthError) => {
+    
     let title = "Authentication Error";
     let description = "";
     
     switch (error.code) {
       case "auth/invalid-credential":
-        title = "Invalid Credentials";
-        description = "Invalid email or password. Please check your credentials and try again.";
+        if (isOAuth) {
+          title = "OAuth Authentication Failed";
+          description = "OAuth sign-in failed. Please try again or use a different sign-in method.";
+        } else {
+          title = "Invalid Credentials";
+          description = "Invalid email or password. Please check your credentials and try again.";
+        }
         break;
       case "auth/user-not-found":
         title = "User Not Found";
@@ -108,8 +94,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         description = "Password should be at least 6 characters.";
         break;
       case "auth/operation-not-allowed":
-        title = "Operation Not Allowed";
-        description = "This sign-in method is not enabled.";
+        title = "OAuth Sign-in Not Enabled";
+        description = "OAuth sign-in is not enabled. Please contact the administrator or check Firebase console settings.";
         break;
       case "auth/popup-closed-by-user":
         title = "Sign-in Cancelled";
@@ -119,6 +105,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         title = "Sign-in Cancelled";
         description = "Sign-in request was cancelled.";
         break;
+      case "auth/popup-blocked":
+        title = "Popup Blocked";
+        description = "Please allow popups for this site and try again.";
+        break;
       case "auth/network-request-failed":
         title = "Network Error";
         description = "Please check your internet connection and try again.";
@@ -127,13 +117,119 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         title = "Internal Error";
         description = "An internal error occurred. Please try again later.";
         break;
+      case "auth/account-exists-with-different-credential":
+        title = "Account Exists with Different Provider";
+        description = "An account with this email already exists using a different sign-in method. Please use the original sign-in method.";
+        break;
+      case "auth/unauthorized-domain":
+        title = "Unauthorized Domain";
+        description = "This domain is not authorized for authentication. Please contact the administrator.";
+        break;
+      case "auth/configuration-not-found":
+        title = "OAuth Configuration Error";
+        description = "OAuth authentication is not properly configured. Please check Firebase console settings.";
+        break;
       default:
         title = "Authentication Error";
-        description = error.message;
+        description = error.message || "An unexpected error occurred. Please try again.";
     }
     
+    setError(description);
     customToast.error(title, description);
   };
+
+  useEffect(() => {
+    let isRedirectHandled = false;
+    
+    // Handle OAuth redirect result (for Google redirect flow)
+    const handleRedirectResult = async () => {
+      try {
+        console.log('Checking for redirect result...');
+        const result = await getRedirectResult(auth);
+        
+        if (result) {
+          console.log('Redirect result found:', result);
+          isRedirectHandled = true;
+          setLoading(false);
+          
+          // User signed in via redirect
+          const user = convertFirebaseUser(result.user);
+          setUser(user);
+          
+          // Check if this is a new user (sign-up) or existing user (sign-in)
+          const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+          
+          if (isNewUser) {
+            customToast.success(
+              "Account Created Successfully", 
+              "Your account has been created! Welcome to REC Proponent."
+            );
+          } else {
+            customToast.success(
+              "Sign In Successful", 
+              "Welcome back! You have been signed in successfully."
+            );
+          }
+          
+          // Redirect after successful sign-in
+          setTimeout(() => {
+            const redirectUrl = localStorage.getItem('auth-redirect') || '/rec/proponent/dashboard';
+            if (redirectUrl !== '/rec/proponent/dashboard') {
+              localStorage.removeItem('auth-redirect');
+            }
+            window.location.href = redirectUrl;
+          }, 1000);
+        } else {
+          console.log('No redirect result found');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Redirect result error:", error);
+        isRedirectHandled = true;
+        setLoading(false);
+        const authError = error as AuthError;
+        handleAuthError(authError, true);
+      }
+    };
+
+    // Handle redirect result first
+    handleRedirectResult();
+
+    // Then set up auth state listener
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+      if (firebaseUser) {
+        const user = convertFirebaseUser(firebaseUser);
+        
+        // Only update user state if we haven't already handled a redirect
+        // This prevents race conditions between redirect result and auth state change
+        if (!isRedirectHandled) {
+          setUser(user);
+        }
+        
+        // Handle post-authentication redirect for verified users (only if not from redirect flow)
+        if (!isRedirectHandled && user.emailVerified) {
+          const redirectUrl = localStorage.getItem('auth-redirect');
+          if (redirectUrl) {
+            localStorage.removeItem('auth-redirect');
+            // Only redirect if we're currently on the auth page
+            if (window.location.pathname.includes('/auth/signin')) {
+              window.location.href = redirectUrl;
+            }
+          }
+        }
+      } else {
+        setUser(null);
+        // Don't redirect on sign out - let the signOut function handle it
+      }
+      
+      // Only set loading to false if we're not handling a redirect
+      if (!isRedirectHandled) {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const signInWithGoogle = async () => {
     try {
@@ -141,7 +237,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setError(null);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      customToast.success("Sign In Successful", "Welcome back! You have been signed in successfully.");
+      
+      // Check if this is a new user (sign-up) or existing user (sign-in)
+      const isNewUser = !auth.currentUser?.metadata?.creationTime || 
+        (auth.currentUser?.metadata?.lastSignInTime && 
+         auth.currentUser.metadata.creationTime === auth.currentUser.metadata.lastSignInTime);
+      
+      if (isNewUser) {
+        customToast.success(
+          "Account Created Successfully", 
+          "Your account has been created with Google! Welcome to REC Proponent."
+        );
+      } else {
+        customToast.success(
+          "Sign In Successful", 
+          "Welcome back! You have been signed in successfully with Google."
+        );
+      }
       
       // Redirect after successful sign-in
       setTimeout(() => {
@@ -152,54 +264,95 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         window.location.href = redirectUrl;
       }, 1000);
     } catch (error) {
-      handleAuthError(error as AuthError);
+      handleAuthError(error as AuthError, true); // true = OAuth error
     } finally {
       setLoading(false);
     }
   };
 
-  const signInWithMicrosoft = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const provider = new OAuthProvider("microsoft.com");
-      await signInWithPopup(auth, provider);
-      customToast.success("Sign In Successful", "Welcome back! You have been signed in successfully.");
-      
-      // Redirect after successful sign-in
-      setTimeout(() => {
-        const redirectUrl = localStorage.getItem('auth-redirect') || '/rec/proponent/dashboard';
-        if (redirectUrl !== '/rec/proponent/dashboardt') {
-          localStorage.removeItem('auth-redirect');
-        }
-        window.location.href = redirectUrl;
-      }, 1000);
-    } catch (error) {
-      handleAuthError(error as AuthError);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const signInWithEmailAndPassword = async (email: string, password: string) => {
     try {
       setLoading(true);
       setError(null);
-      const userCredential = await firebaseSignInWithEmailAndPassword(auth, email, password);
+      const authRole = localStorage.getItem('auth-role');
+      const isChairperson = email === 'rec@spup.edu.ph' || authRole === 'chairperson';
+      
+      let userCredential;
+      
+      try {
+        // Try to sign in
+        userCredential = await firebaseSignInWithEmailAndPassword(auth, email, password);
+      } catch (signInError: any) {
+        // If account doesn't exist and it's the chairperson, create it
+        if ((signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') && isChairperson && email === 'rec@spup.edu.ph') {
+          console.log('📝 Chairperson account not found. Creating account...');
+          try {
+            // Create the chairperson account
+            userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            console.log('✅ Chairperson account created successfully');
+            
+            // Send email verification (optional, but good practice)
+            try {
+              await firebaseSendEmailVerification(userCredential.user);
+              console.log('📧 Verification email sent');
+            } catch (verifyError) {
+              console.warn('⚠️ Could not send verification email:', verifyError);
+            }
+            
+            // Sign in with the newly created account
+            userCredential = await firebaseSignInWithEmailAndPassword(auth, email, password);
+            console.log('✅ Chairperson signed in with new account');
+          } catch (createError: any) {
+            console.error('❌ Failed to create chairperson account:', createError);
+            handleAuthError(createError as AuthError);
+            return;
+          }
+        } else {
+          // For other errors, throw to be handled by catch block
+          throw signInError;
+        }
+      }
       
       // Check if email is verified for email/password sign-in
-      if (userCredential.user.emailVerified) {
-        customToast.success("Sign In Successful", "Welcome back! You have been signed in successfully.");
+      // Chairperson can sign in even if email is not verified (system account)
+      if (userCredential.user.emailVerified || isChairperson) {
+        customToast.success(
+          "Sign In Successful", 
+          "Welcome back! You have been signed in successfully."
+        );
         
         // Redirect after successful sign-in
-        setTimeout(() => {
-          const redirectUrl = localStorage.getItem('auth-redirect') || '/dashboard/proponent';
-          if (redirectUrl !== '/dashboard/proponent') {
+        setTimeout(async () => {
+          const redirectUrl = localStorage.getItem('auth-redirect') || '/rec/proponent/dashboard';
+          const authRole = localStorage.getItem('auth-role');
+          
+          // If chairperson role, verify email matches before redirecting
+          if (authRole === 'chairperson' && userCredential.user.email !== 'rec@spup.edu.ph') {
+            customToast.error(
+              "Access Denied",
+              "This account is not authorized to access the chairperson portal."
+            );
+            await firebaseSignOut(auth);
+            // Clear redirect and role from localStorage
             localStorage.removeItem('auth-redirect');
+            localStorage.removeItem('auth-role');
+            return;
           }
+          
+          // Clear redirect and role from localStorage
+          localStorage.removeItem('auth-redirect');
+          localStorage.removeItem('auth-role');
+          
           window.location.href = redirectUrl;
         }, 1000);
       } else {
+        // Show error message for unverified email (only for non-chairperson)
+        customToast.error(
+          "Email Not Verified", 
+          "Please verify your email address before signing in. Check your inbox for the verification link."
+        );
+        
         // Show email verification dialog for unverified users
         setVerificationEmail(email);
         setEmailVerificationStatus('pending');
@@ -222,12 +375,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Send email verification
       await firebaseSendEmailVerification(userCredential.user);
       
-      // Show email verification dialog instead of redirecting
+      // Show success message for account creation
+      customToast.success(
+        "Account Created Successfully", 
+        "Your account has been created! Please verify your email to continue."
+      );
+      
+      // Show email verification dialog
       setVerificationEmail(email);
       setEmailVerificationStatus('pending');
       setShowEmailVerificationDialog(true);
-      
-      // Don't show toast - dialog will handle the messaging
     } catch (error) {
       handleAuthError(error as AuthError);
     } finally {
@@ -248,7 +405,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setEmailVerificationStatus('verified');
           setUser(convertFirebaseUser(updatedUser));
           
-          // Don't show toast - dialog will handle the success messaging
+          // Show success message for email verification
+          customToast.success(
+            "Email Verified Successfully", 
+            "Your email has been verified! Redirecting to your dashboard..."
+          );
           
           // Auto-close dialog and redirect after a short delay
           setTimeout(() => {
@@ -262,7 +423,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           
           return true;
         } else {
-          // Don't show toast - let the dialog handle the error messaging
+          // Email not verified yet - show error message
+          customToast.error(
+            "Email Not Verified", 
+            "Your email has not been verified yet. Please check your inbox and click the verification link."
+          );
           return false;
         }
       }
@@ -339,7 +504,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     loading,
     error,
     signInWithGoogle,
-    signInWithMicrosoft,
     signInWithEmailAndPassword,
     signUpWithEmailAndPassword,
     signOut,

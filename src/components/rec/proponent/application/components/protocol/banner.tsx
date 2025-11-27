@@ -1,6 +1,6 @@
 "use client";
 import { CustomBadge } from "@/components/ui/custom/badge";
-import { Calendar, ScanBarcode, Key, Dot, MessageCircle } from "lucide-react";
+import { Calendar, ScanBarcode, Key, Dot } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -60,12 +60,12 @@ export default function CustomBanner({
   status = "pending",
   submissionId,
   spupCode,
-  tempCode,
+  tempCode: _tempCode, // eslint-disable-line @typescript-eslint/no-unused-vars
   dateSubmitted,
   unreadMessageCount = 0,
   hasReviewers = false,
 }: CustomBannerProps) {
-  const [open, setOpen] = useState(false);
+  const [open] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // Format date if not provided
   const displayDate = dateSubmitted || new Date().toLocaleDateString();
@@ -101,10 +101,10 @@ export default function CustomBanner({
   const displayCode = spupCode || "PENDING";
 
   return (
-    <section className="w-full max-w-full bg-primary rounded-lg p-4 sm:p-6 lg:p-8 flex flex-col gap-3 sm:gap-4">
+    <section className="w-full max-w-full bg-gradient-to-r from-[#036635] to-[#036635]/90 dark:from-[#FECC07] dark:to-[#FECC07]/90 rounded-lg p-4 sm:p-6 lg:p-8 flex flex-col gap-3 sm:gap-4 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-top-4 duration-500">
       {/* Title */}
       <div className="space-y-2">
-        <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white leading-tight">
+        <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white dark:text-black leading-tight">
           {title}
         </h1>
       </div>
@@ -117,7 +117,7 @@ export default function CustomBanner({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger>
-                  <span className="text-xs sm:text-sm text-white/90 flex items-center gap-1.5 sm:gap-2">
+                  <span className="text-xs sm:text-sm text-white/90 dark:text-black/90 flex items-center gap-1.5 sm:gap-2">
                     <ScanBarcode className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                     <span className="truncate">{submissionId}</span>
                   </span>
@@ -135,11 +135,11 @@ export default function CustomBanner({
         {/* Protocol Code (SPUP or PENDING) */}
         {shouldShowCode && (
           <>
-            <Dot className="hidden sm:block w-4 h-4 text-white/90 flex-shrink-0" />
+            <Dot className="hidden sm:block w-4 h-4 text-white/90 dark:text-black/90 flex-shrink-0" />
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger>
-                  <span className="text-xs sm:text-sm text-white/90 flex items-center gap-1.5 sm:gap-2">
+                  <span className="text-xs sm:text-sm text-white/90 dark:text-black/90 flex items-center gap-1.5 sm:gap-2">
                     <Key className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                     <span className="truncate">
                       {displayCode}
@@ -156,12 +156,12 @@ export default function CustomBanner({
               </Tooltip>
             </TooltipProvider>
 
-            <Dot className="hidden sm:block w-4 h-4 text-white/90 flex-shrink-0" />
+            <Dot className="hidden sm:block w-4 h-4 text-white/90 dark:text-black/90 flex-shrink-0" />
           </>
         )}
 
         {/* Date Submitted */}
-        <span className="text-xs sm:text-sm text-white/90 flex items-center gap-1.5 sm:gap-2">
+        <span className="text-xs sm:text-sm text-white/90 dark:text-black/90 flex items-center gap-1.5 sm:gap-2">
           <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
           <span className="truncate">{displayDate}</span>
         </span>

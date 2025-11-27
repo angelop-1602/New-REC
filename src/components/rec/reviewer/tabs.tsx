@@ -67,15 +67,15 @@ export default function ReviewerTabs({ assignedProtocols, onProtocolAction }: Re
   return (
     <div className='w-full'>
       <Tabs defaultValue='submittedProtocols' className='flex-row'>
-        <TabsList className='h-full flex-col gap-1.5'>
+        <TabsList className='h-full flex-col gap-1.5 bg-muted border-[#036635]/10 dark:border-[#FECC07]/20'>
           {tabs.map(tab => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className='flex w-full items-center justify-start gap-1.5 px-2.5 sm:px-3'
+              className='flex w-full items-center justify-start gap-1.5 px-2.5 sm:px-3 data-[state=active]:bg-[#036635]/10 dark:data-[state=active]:bg-[#FECC07]/20 data-[state=active]:text-[#036635] dark:data-[state=active]:text-[#FECC07] data-[state=active]:border-[#036635] dark:data-[state=active]:border-[#FECC07] hover:bg-[#036635]/5 dark:hover:bg-[#FECC07]/10 hover:text-[#036635] dark:hover:text-[#FECC07]'
             >
               {tab.name}
-              <Badge className='h-5 min-w-5 rounded-full px-1 tabular-nums'>{tab.count}</Badge>
+              <Badge className='h-5 min-w-5 rounded-full px-1 tabular-nums bg-[#036635]/10 dark:bg-[#FECC07]/20 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30'>{tab.count}</Badge>
             </TabsTrigger>
           ))}
         </TabsList>

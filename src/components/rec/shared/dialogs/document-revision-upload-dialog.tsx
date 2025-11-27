@@ -15,10 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, AlertCircle, CheckCircle, MessageSquare, Eye } from "lucide-react";
+import { Upload, FileText, AlertCircle, MessageSquare, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useEnhancedDocumentUpload } from "@/hooks/useEnhancedDocumentUpload";
-import { DocumentCategory } from "@/types/documents.types";
+import { DocumentCategory } from "@/types";
 
 interface DocumentRevisionUploadDialogProps {
   documentId: string;
@@ -61,11 +61,10 @@ export default function DocumentRevisionUploadDialog({
     isUploading,
     progress,
     error,
-    uploadedDocumentId,
     uploadDocumentToRequest
   } = useEnhancedDocumentUpload({
     protocolId,
-    onUploadComplete: (documentId) => {
+    onUploadComplete: () => {
       toast.success("Document revision uploaded successfully!");
       setIsOpen(false);
       onUploadComplete?.();
@@ -90,7 +89,7 @@ export default function DocumentRevisionUploadDialog({
 
     // Use the same preview API as other components
     const filename = storagePath.split('/').pop();
-    const previewUrl = `/api/preview/document/${filename}?submissionId=${submissionId}&auto=1&storagePath=${encodeURIComponent(storagePath)}`;
+    const previewUrl = `/api/documents/preview/document/${filename}?submissionId=${submissionId}&auto=1&storagePath=${encodeURIComponent(storagePath)}`;
     window.open(previewUrl, '_blank');
   };
 
@@ -129,14 +128,14 @@ export default function DocumentRevisionUploadDialog({
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            Upload Document Revision
+            <Upload className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Upload Document Revision</span>
           </DialogTitle>
           <DialogDescription>
-            Upload a revised version of "{documentTitle}" based on the chairperson's feedback.
+            Upload a revised version of &quot;{documentTitle}&quot; based on the chairperson&apos;s feedback.
           </DialogDescription>
         </DialogHeader>
 
@@ -147,7 +146,7 @@ export default function DocumentRevisionUploadDialog({
               <MessageSquare className="h-4 w-4" />
               <AlertDescription>
                 <div className="space-y-2">
-                  <p className="font-medium text-sm">Chairperson's Feedback:</p>
+                  <p className="font-medium text-sm">Chairperson&apos;s Feedback:</p>
                   <p className="text-sm text-muted-foreground p-2 rounded">
                     {chairpersonComment}
                   </p>

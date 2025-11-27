@@ -7,12 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CustomDialog } from "@/components/ui/custom/dialog";
-import { CustomAlert } from "@/components/ui/custom/alert";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { useAuth } from "../../../../hooks/useAuth";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { LoadingSimple } from "@/components/ui/loading";
 
@@ -30,12 +30,13 @@ export function SigninForm({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resendEmailStatus, setResendEmailStatus] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   
   const { 
     signInWithEmailAndPassword,
     signUpWithEmailAndPassword,
     signInWithGoogle,
-    signInWithMicrosoft,
     sendPasswordResetEmail,
     loading,
     error,
@@ -49,16 +50,28 @@ export function SigninForm({
     sendEmailVerification
   } = useAuth();
   
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/rec/proponent/dashboard";
+  const role = searchParams.get("role"); // Check if it's for chairperson
+  const redirectParam = searchParams.get("redirect");
+  
+  // Determine redirect URL based on role
+  const redirectTo = redirectParam || (role === "chairperson" ? "/rec/chairperson" : "/rec/proponent/dashboard");
+
+  // Avoid hydration mismatch for theme
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Store redirect URL in localStorage for post-auth redirect
   useEffect(() => {
-    if (redirectTo !== "/rec/proponent/dashboard") {
+    if (redirectTo) {
       localStorage.setItem('auth-redirect', redirectTo);
+      // Also store role if specified
+      if (role) {
+        localStorage.setItem('auth-role', role);
+      }
     }
-  }, [redirectTo]);
+  }, [redirectTo, role]);
 
 
 
@@ -81,7 +94,7 @@ export function SigninForm({
       setTimeout(() => {
         setResendEmailStatus(null);
       }, 3000);
-    } catch (error) {
+    } catch {
       setResendEmailStatus("Failed to send email. Please try again.");
       setTimeout(() => {
         setResendEmailStatus(null);
@@ -129,10 +142,6 @@ export function SigninForm({
     await signInWithGoogle();
   };
 
-  const handleMicrosoftSignIn = async () => {
-    clearError();
-    await signInWithMicrosoft();
-  };
 
   const handlePasswordReset = async () => {
     if (!email) {
@@ -151,7 +160,7 @@ export function SigninForm({
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
                 <Image 
-                  src="/SPUP-REC-logo-light.png" 
+                  src={mounted && theme === "dark" ? "/SPUP-REC-logo-light.png" : "/SPUP-REC-logo-dark.png"} 
                   alt="SPUP REC Logo" 
                   width={200} 
                   height={200} 
@@ -179,7 +188,7 @@ export function SigninForm({
                         <ul className="list-disc list-inside mt-1 space-y-1">
                           <li>Double-check your email and password</li>
                           <li>Make sure you have an account - try signing up if this is your first time</li>
-                          <li>If you signed up with Google/Microsoft, use those buttons instead</li>
+                          <li>If you signed up with Google, use that button instead</li>
                           <li>Try resetting your password if you forgot it</li>
                         </ul>
                       </div>
@@ -305,30 +314,6 @@ export function SigninForm({
                   variant="outline" 
                   type="button" 
                   className="w-full"
-                  onClick={handleMicrosoftSignIn}
-                  disabled={loading}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    x="0px"
-                    y="0px"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 48 48"
-                    className="mr-2"
-                  >
-                    <path fill="#ff5722" d="M6 6H22V22H6z" transform="rotate(-180 14 14)"></path>
-                    <path fill="#4caf50" d="M26 6H42V22H26z" transform="rotate(-180 34 14)"></path>
-                    <path fill="#ffc107" d="M26 26H42V42H26z" transform="rotate(-180 34 34)"></path>
-                    <path fill="#03a9f4" d="M6 26H22V42H6z" transform="rotate(-180 14 34)"></path>
-                  </svg>
-                  Sign in with Microsoft
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  type="button" 
-                  className="w-full"
                   onClick={handleGoogleSignIn}
                   disabled={loading}
                 >
@@ -346,7 +331,7 @@ export function SigninForm({
                     <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"></path>
                     <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"></path>
                   </svg>
-                  Sign in with Google
+                  {isSignUp ? "Sign up with Google" : "Sign in with Google"}
                 </Button>
               </div>
               

@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EllipsisVertical, View, Pencil, FileText, Clock, CheckCircle, AlertCircle} from "lucide-react";
+import { toDate, FirestoreDate } from '@/types';
 
 interface ReviewerTableProps {
   protocols: any[];
@@ -23,9 +24,10 @@ export default function ReviewerTable({ protocols, tabType, onProtocolAction }: 
   // State to track which dropdown is open
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
 
-  const formatDate = (date: any) => {
+  const formatDate = (date: unknown) => {
     if (!date) return 'N/A';
-    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    const dateObj = toDate(date as FirestoreDate);
+    if (!dateObj) return 'N/A';
     return dateObj.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -33,9 +35,10 @@ export default function ReviewerTable({ protocols, tabType, onProtocolAction }: 
     });
   };
 
-  const getDaysRemaining = (deadline: any) => {
+  const getDaysRemaining = (deadline: unknown) => {
     if (!deadline) return 'N/A';
-    const deadlineDate = deadline.toDate ? deadline.toDate() : new Date(deadline);
+    const deadlineDate = toDate(deadline as FirestoreDate);
+    if (!deadlineDate) return 'N/A';
     const now = new Date();
     const diffTime = deadlineDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -48,25 +51,25 @@ export default function ReviewerTable({ protocols, tabType, onProtocolAction }: 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>;
+        return <Badge variant="default" className="bg-[#036635]/10 dark:bg-[#FECC07]/20 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>;
       case 'submitted':
-        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Submitted</Badge>;
+        return <Badge variant="default" className="bg-[#036635]/10 dark:bg-[#FECC07]/20 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30"><CheckCircle className="w-3 h-3 mr-1" />Submitted</Badge>;
       case 'draft':
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800"><Clock className="w-3 h-3 mr-1" />In Progress</Badge>;
+        return <Badge variant="secondary" className="bg-[#036635]/5 dark:bg-[#FECC07]/10 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30"><Clock className="w-3 h-3 mr-1" />In Progress</Badge>;
       case 'pending':
-        return <Badge variant="outline" className="bg-gray-100 text-gray-800"><Clock className="w-3 h-3 mr-1" />Not Started</Badge>;
+        return <Badge variant="outline" className="bg-muted text-muted-foreground border-border"><Clock className="w-3 h-3 mr-1" />Not Started</Badge>;
       case 'resubmitted':
-        return <Badge variant="outline" className="bg-blue-100 text-blue-800"><FileText className="w-3 h-3 mr-1" />Re-submitted</Badge>;
+        return <Badge variant="outline" className="bg-[#036635]/5 dark:bg-[#FECC07]/10 text-[#036635] dark:text-[#FECC07] border-[#036635]/30 dark:border-[#FECC07]/40"><FileText className="w-3 h-3 mr-1" />Re-submitted</Badge>;
       case 'returned':
-        return <Badge variant="destructive" className="bg-red-100 text-red-800"><AlertCircle className="w-3 h-3 mr-1" />Returned</Badge>;
+        return <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/30"><AlertCircle className="w-3 h-3 mr-1" />Returned</Badge>;
       case 'approved':
-        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Approved</Badge>;
+        return <Badge variant="default" className="bg-[#036635]/10 dark:bg-[#FECC07]/20 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30"><CheckCircle className="w-3 h-3 mr-1" />Approved</Badge>;
       case 'overdue':
-        return <Badge variant="destructive"><AlertCircle className="w-3 h-3 mr-1" />Overdue</Badge>;
+        return <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/30"><AlertCircle className="w-3 h-3 mr-1" />Overdue</Badge>;
       case 'reassigned':
-        return <Badge variant="destructive" className="bg-red-100 text-red-800"><AlertCircle className="w-3 h-3 mr-1" />Reassigned</Badge>;
+        return <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/30"><AlertCircle className="w-3 h-3 mr-1" />Reassigned</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="bg-muted text-muted-foreground border-border">{status}</Badge>;
     }
   };
 
@@ -166,9 +169,9 @@ export default function ReviewerTable({ protocols, tabType, onProtocolAction }: 
 
   if (protocols.length === 0) {
     return (
-      <div className="text-center py-8">
-        <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-500">No protocols found in this category.</p>
+      <div className="text-center py-6">
+        <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+        <p className="text-muted-foreground">No protocols found in this category.</p>
       </div>
     );
   }
@@ -203,26 +206,26 @@ export default function ReviewerTable({ protocols, tabType, onProtocolAction }: 
                     <div className="font-medium truncate w-108">{protocol.protocolTitle}</div>
                     {isReassigned ? (
                       <>
-                        <div className="text-sm text-red-600">Reassigned: {formatDate(protocol.reassignedAt)}</div>
-                        <div className="text-xs text-gray-600 italic">Reason: {protocol.reason}</div>
+                        <div className="text-sm text-destructive">Reassigned: {formatDate(protocol.reassignedAt)}</div>
+                        <div className="text-xs text-muted-foreground italic">Reason: {protocol.reason}</div>
                       </>
                     ) : (
-                      <div className="text-sm text-gray-500">Assigned: {formatDate(protocol.assignedAt)}</div>
+                      <div className="text-sm text-muted-foreground">Assigned: {formatDate(protocol.assignedAt)}</div>
                     )}
                   </TableCell>
                   <TableCell className="text-center w-10">
-                    <Badge variant="outline" className="text-xs">{protocol.assessmentType}</Badge>
+                    <Badge variant="outline" className="text-xs bg-[#036635]/5 dark:bg-[#FECC07]/10 text-[#036635] dark:text-[#FECC07] border-[#036635]/20 dark:border-[#FECC07]/30">{protocol.assessmentType}</Badge>
                   </TableCell>
                   <TableCell className="text-center w-10">
                     {isReassigned ? (
                       <>
-                        <div className="text-sm">{formatDate(protocol.originalDeadline)}</div>
-                        <div className="text-xs text-red-600">Missed ({protocol.daysOverdue} days overdue)</div>
+                        <div className="text-sm text-foreground">{formatDate(protocol.originalDeadline)}</div>
+                        <div className="text-xs text-destructive">Missed ({protocol.daysOverdue} days overdue)</div>
                       </>
                     ) : (
                       <>
-                        <div className="text-sm">{formatDate(protocol.deadline)}</div>
-                        <div className="text-xs text-gray-500">{getDaysRemaining(protocol.deadline)}</div>
+                        <div className="text-sm text-foreground">{formatDate(protocol.deadline)}</div>
+                        <div className="text-xs text-muted-foreground">{getDaysRemaining(protocol.deadline)}</div>
                       </>
                     )}
                   </TableCell>

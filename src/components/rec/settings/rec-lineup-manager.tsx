@@ -27,9 +27,7 @@ import {
   Users, 
   UserCheck, 
   Plus, 
-  Edit, 
   Save, 
-  CheckCircle, 
   AlertCircle, 
   Crown,
   Shield,
@@ -37,8 +35,8 @@ import {
   UserCog,
   Loader2
 } from 'lucide-react';
-import { recSettingsService } from '@/lib/services/recSettingsService';
-import { RECMember, RECLineup, CreateRECMemberRequest } from '@/types/rec-settings.types';
+import { recSettingsService } from '@/lib/services/core/recSettingsService';
+import { RECMember, RECLineup, CreateRECMemberRequest } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -145,8 +143,6 @@ export default function RECLineupManager() {
       setSaving(false);
     }
   };
-
-  const getMemberById = (id: string) => members.find(m => m.id === id);
 
   const getPositionIcon = (position: string) => {
     if (position.toLowerCase().includes('chair')) return <Crown className="h-4 w-4 text-yellow-600" />;
@@ -281,7 +277,7 @@ export default function RECLineupManager() {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    No REC lineup has been configured yet. Use the "Manage Positions" tab to set up the lineup.
+                    No REC lineup has been configured yet. Use the &quot;Manage Positions&quot; tab to set up the lineup.
                   </AlertDescription>
                 </Alert>
               )}

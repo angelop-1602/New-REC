@@ -1,7 +1,7 @@
 import { DocumentsType } from "./documents.types";
 import { InformationType } from "./information.types";
 import { MessagesType } from "./message.types";
-import { SubmissionsType } from "./submissions.type";
+import { SubmissionsType } from "./submissions.types";
 
 export interface SubmissionBundle {
     submission: SubmissionsType;

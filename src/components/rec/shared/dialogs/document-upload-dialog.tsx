@@ -18,7 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { Upload, FileText, AlertCircle, CheckCircle, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useEnhancedDocumentUpload } from "@/hooks/useEnhancedDocumentUpload";
-import { DocumentCategory } from "@/types/documents.types";
+import { DocumentCategory } from "@/types";
 
 interface DocumentUploadDialogProps {
   documentId: string;
@@ -67,7 +67,7 @@ export default function DocumentUploadDialog({
     resetUploadState
   } = useEnhancedDocumentUpload({
     protocolId,
-    onUploadComplete: (documentId) => {
+    onUploadComplete: () => {
       toast.success("Document uploaded successfully!");
       setIsOpen(false);
       onUploadComplete?.();
@@ -124,11 +124,11 @@ export default function DocumentUploadDialog({
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            Upload Document
+            <Upload className="w-5 h-5 text-[#036635] dark:text-[#FECC07]" />
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Upload Document</span>
           </DialogTitle>
           <DialogDescription>
             Upload the document: <strong>{documentTitle}</strong>
@@ -150,7 +150,7 @@ export default function DocumentUploadDialog({
                   size="sm"
                   onClick={() => {
                     const filename = storagePath.split('/').pop();
-                    const previewUrl = `/api/preview/document/${filename}?submissionId=${submissionId}&auto=1&storagePath=${encodeURIComponent(storagePath)}`;
+                    const previewUrl = `/api/documents/preview/document/${filename}?submissionId=${submissionId}&auto=1&storagePath=${encodeURIComponent(storagePath)}`;
                     window.open(previewUrl, '_blank');
                   }}
                   className="flex items-center gap-2"
@@ -180,7 +180,7 @@ export default function DocumentUploadDialog({
               <MessageSquare className="h-4 w-4" />
               <AlertDescription>
                 <div className="space-y-2">
-                  <p className="font-medium text-sm">Chairperson's Feedback:</p>
+                  <p className="font-medium text-sm">Chairperson&apos;s Feedback:</p>
                   <p className="text-sm text-muted-foreground p-2 rounded">
                     {chairpersonComment}
                   </p>

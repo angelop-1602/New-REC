@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { toDate } from '@/types';
 
 interface UseLocalDraftProps {
   protocolId: string;
@@ -37,7 +38,7 @@ export const useLocalDraft = ({
       }
 
       // First, try to load from Firebase
-      const { default: AssessmentSubmissionService } = await import('@/lib/services/assessmentSubmissionService');
+      const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
       const existingAssessment = await AssessmentSubmissionService.getAssessment(protocolId, formType, reviewerId);
       
       console.log('🔍 loadDraft - existingAssessment from Firebase:', existingAssessment);
@@ -46,7 +47,7 @@ export const useLocalDraft = ({
         console.log('✅ Loaded existing assessment from Firebase:', existingAssessment.status);
         console.log('🔍 FormData keys:', Object.keys(existingAssessment.formData));
         console.log('🔍 FormData:', existingAssessment.formData);
-        setLastSaved(existingAssessment.submittedAt ? new Date(existingAssessment.submittedAt.toDate()) : null);
+        setLastSaved(toDate(existingAssessment.submittedAt) || null);
         // Store in local storage as backup
         const storageKey = getStorageKey();
         const draftData = {
@@ -138,7 +139,7 @@ export const useLocalDraft = ({
       
       // Also save to Firebase with draft status
       try {
-        const { default: AssessmentSubmissionService } = await import('@/lib/services/assessmentSubmissionService');
+        const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
         await AssessmentSubmissionService.saveAssessment(
           protocolId,
           formType,
@@ -233,7 +234,7 @@ export const useLocalDraft = ({
 
     try {
       // Import the service dynamically to avoid circular dependencies
-      const { default: AssessmentSubmissionService } = await import('@/lib/services/assessmentSubmissionService');
+      const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
       
       await AssessmentSubmissionService.submitAssessment(
         protocolId,

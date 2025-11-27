@@ -1,0 +1,242 @@
+rules_version = '3';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isReviewer() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/reviewers/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/reviewers/$(request.auth.uid)).data.isActive == true;
+    }
+    
+    function isChairperson() {
+      return isAuthenticated() && 
+             (exists(/databases/$(database)/documents/rec_settings/$(request.auth.uid)) ||
+              exists(/databases/$(database)/documents/settings/$(request.auth.uid)));
+    }
+    
+    function isProponent(submissionData) {
+      return isAuthenticated() && isOwner(submissionData.submitBy);
+    }
+    
+    function canReadSubmission(submissionData) {
+      return isAuthenticated() && (
+        isProponent(submissionData) || 
+        isChairperson() || 
+        isReviewer()
+      );
+    }
+    
+    function canWriteSubmission(submissionData) {
+      return isAuthenticated() && (
+        isProponent(submissionData) || 
+        isChairperson()
+      );
+    }
+    
+    // ============================================================================
+    // USERS COLLECTION
+    // ============================================================================
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isChairperson());
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // ============================================================================
+    // SUBMISSIONS COLLECTION (Unified - single collection with status field)
+    // ============================================================================
+    
+    match /submissions/{submissionId} {
+      // Read: Proponent (own), Chairperson, Reviewers (assigned)
+      allow read: if canReadSubmission(resource.data);
+      
+      // Create: Any authenticated user can create their own submission
+      allow create: if isAuthenticated() && isOwner(request.resource.data.submitBy);
+      
+      // Update: Proponent (own), Chairperson
+      allow update: if canWriteSubmission(resource.data) || 
+                      (isChairperson() && canReadSubmission(resource.data));
+      
+      // Delete: Only chairperson
+      allow delete: if isChairperson();
+      
+      // ============================================================================
+      // SUBMISSIONS SUBCOLLECTIONS
+      // ============================================================================
+      
+      // Documents subcollection
+      match /documents/{documentId} {
+        allow read: if isAuthenticated() && (
+          isProponent(get(/databases/$(database)/documents/submissions/$(submissionId)).data) ||
+          isOwner(resource.data.uploadedBy) ||
+          isChairperson() ||
+          isReviewer()
+        );
+        allow create: if isAuthenticated() && (
+          isOwner(request.resource.data.uploadedBy) ||
+          isProponent(get(/databases/$(database)/documents/submissions/$(submissionId)).data) ||
+          isChairperson()
+        );
+        allow update: if isAuthenticated() && (
+          isOwner(resource.data.uploadedBy) ||
+          isChairperson()
+        );
+        allow delete: if isAuthenticated() && isChairperson();
+      }
+      
+      // Reviewers subcollection (reviewer assignments)
+      match /reviewers/{reviewerAssignmentId} {
+        allow read: if isAuthenticated() && (
+          isOwner(resource.data.reviewerId) ||
+          isChairperson() ||
+          isProponent(get(/databases/$(database)/documents/submissions/$(submissionId)).data)
+        );
+        allow write: if isAuthenticated() && isChairperson();
+        
+        // Assessment forms nested under reviewer assignments
+        match /assessment_forms/{formType} {
+          allow read: if isAuthenticated() && (
+            isOwner(resource.data.reviewerId) ||
+            isChairperson() ||
+            isProponent(get(/databases/$(database)/documents/submissions/$(submissionId)).data)
+          );
+          allow create: if isAuthenticated() && (
+            isOwner(request.resource.data.reviewerId) ||
+            isChairperson()
+          );
+          allow update: if isAuthenticated() && (
+            isOwner(resource.data.reviewerId) ||
+            isChairperson()
+          );
+          allow delete: if isAuthenticated() && isChairperson();
+        }
+      }
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && (
+          isOwner(resource.data.senderId) ||
+          isOwner(resource.data.receiverId) ||
+          isChairperson()
+        );
+        allow create: if isAuthenticated() && isOwner(request.resource.data.senderId);
+        allow update, delete: if isAuthenticated() && (
+          isOwner(resource.data.senderId) ||
+          isChairperson()
+        );
+      }
+      
+      // Reassignment history subcollection
+      match /reassignment_history/{historyId} {
+        allow read: if isAuthenticated() && (isChairperson() || isReviewer());
+        allow write: if isAuthenticated() && isChairperson();
+      }
+      
+      // Decision subcollection (if exists)
+      match /decision/{decisionId} {
+        allow read: if canReadSubmission(get(/databases/$(database)/documents/submissions/$(submissionId)).data);
+        allow write: if isAuthenticated() && isChairperson();
+      }
+    }
+    
+    // ============================================================================
+    // REVIEWERS COLLECTION
+    // ============================================================================
+    
+    match /reviewers/{reviewerId} {
+      allow read: if isAuthenticated() && (
+        isOwner(reviewerId) ||
+        isChairperson()
+      );
+      allow write: if isAuthenticated() && isChairperson();
+    }
+    
+    // ============================================================================
+    // MESSAGES COLLECTION (Top-level, if used)
+    // ============================================================================
+    
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.senderId) ||
+        isOwner(resource.data.receiverId) ||
+        isChairperson()
+      );
+      allow create: if isAuthenticated() && isOwner(request.resource.data.senderId);
+      allow update, delete: if isAuthenticated() && (
+        isOwner(resource.data.senderId) ||
+        isChairperson()
+      );
+    }
+    
+    // ============================================================================
+    // PRESENCE COLLECTION
+    // ============================================================================
+    
+    match /presence/{presenceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        isOwner(resource.data.userId) ||
+        isOwner(request.resource.data.userId)
+      );
+    }
+    
+    // ============================================================================
+    // SETTINGS COLLECTIONS
+    // ============================================================================
+    
+    match /rec_settings/{settingId} {
+      allow read: if isAuthenticated() && isChairperson();
+      allow write: if isAuthenticated() && isChairperson();
+    }
+    
+    match /settings/{settingId} {
+      allow read: if isAuthenticated() && isChairperson();
+      allow write: if isAuthenticated() && isChairperson();
+    }
+    
+    // ============================================================================
+    // ASSESSMENT FORMS COLLECTION (Top-level, if used)
+    // ============================================================================
+    
+    match /assessment_forms/{formId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.reviewerId) ||
+        isChairperson()
+      );
+      allow write: if isAuthenticated() && (
+        isOwner(resource.data.reviewerId) ||
+        isChairperson()
+      );
+    }
+    
+    // ============================================================================
+    // DECISION COLLECTION (Top-level, if used)
+    // ============================================================================
+    
+    match /decision/{decisionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isChairperson();
+    }
+    
+    // ============================================================================
+    // DEFAULT DENY RULE
+    // ============================================================================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

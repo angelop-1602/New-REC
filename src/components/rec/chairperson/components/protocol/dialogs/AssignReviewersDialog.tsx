@@ -27,59 +27,71 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { Users, Check, ChevronsUpDown, AlertTriangle, Loader2 } from "lucide-react";
-import { reviewerService, Reviewer, REVIEWER_REQUIREMENTS } from "@/lib/services/reviewerService";
+import { reviewerService, Reviewer, REVIEWER_REQUIREMENTS } from "@/lib/services/reviewers/reviewerService";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { 
+  ChairpersonReviewerAssignment,
+  toChairpersonProtocol, 
+  toChairpersonReviewerAssignments,
+  toDate,
+  getString
+} from "@/types";
 
 interface AssignReviewersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  submission: any;
+  submission: Record<string, unknown>;
   onAssignmentsUpdate: () => void;
 }
 
 export function AssignReviewersDialog({ 
   open, 
   onOpenChange, 
-  submission,
+  submission: rawSubmission,
   onAssignmentsUpdate
 }: AssignReviewersDialogProps) {
   const { user } = useAuth();
+  
+  // 🎯 Convert to typed protocol immediately - using our type system!
+  const submission = toChairpersonProtocol(rawSubmission);
   
   // Reviewer assignment states
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
   const [selectedReviewers, setSelectedReviewers] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isLoadingReviewers, setIsLoadingReviewers] = useState(false);
   const [isAssigningReviewers, setIsAssigningReviewers] = useState(false);
+  const [isLoadingReviewers, setIsLoadingReviewers] = useState(false);
   const [openPopovers, setOpenPopovers] = useState<boolean[]>([]);
-  const [assignedReviewers, setAssignedReviewers] = useState<any[]>([]);
+  const [assignedReviewers, setAssignedReviewers] = useState<ChairpersonReviewerAssignment[]>([]);
   const [exemptionSubType, setExemptionSubType] = useState<'experimental' | 'documentary'>('experimental');
 
   // Dynamic dialog width (auto-adjust based on required reviewer slots)
   const [dialogWidth, setDialogWidth] = useState<number>(640);
 
-  const getResearchType = () => {
+  const getResearchType = (): string => {
     // First check if researchType is directly stored (from Accept Protocol dialog)
     if (submission.researchType) {
-      return submission.researchType;
+      return getString(submission.researchType);
     }
     
     // Fallback to checking submissionType or nature_and_type_of_study
-    const submissionType = submission.information?.submissionType?.toLowerCase();
-    const studyType = submission.information?.general_information?.nature_and_type_of_study?.type?.toLowerCase();
+    const submissionType = getString(submission.information?.submissionType);
+    const studyType = submission.information?.nature_and_type_of_study as { type?: string } | undefined;
     
     // Check study type first (more reliable)
-    if (studyType?.includes("social") || studyType?.includes("behavioral")) return "SR";
-    if (studyType?.includes("public health")) return "PR";
-    if (studyType?.includes("health operations")) return "HO";
-    if (studyType?.includes("biomedical")) return "BS";
-    if (studyType?.includes("exempted") || studyType?.includes("exemption")) return "EX";
+    const studyTypeStr = studyType?.type?.toLowerCase();
+    if (studyTypeStr?.includes("social") || studyTypeStr?.includes("behavioral")) return "SR";
+    if (studyTypeStr?.includes("public health")) return "PR";
+    if (studyTypeStr?.includes("health operations")) return "HO";
+    if (studyTypeStr?.includes("biomedical")) return "BS";
+    if (studyTypeStr?.includes("exempted") || studyTypeStr?.includes("exemption")) return "EX";
     
     // Fallback to submission type check
-    if (submissionType?.includes("social")) return "SR";
-    if (submissionType?.includes("experimental")) return "experimental";
-    if (submissionType?.includes("exemption")) return "EX";
+    const submissionTypeLower = submissionType?.toLowerCase();
+    if (submissionTypeLower?.includes("social")) return "SR";
+    if (submissionTypeLower?.includes("experimental")) return "experimental";
+    if (submissionTypeLower?.includes("exemption")) return "EX";
     
     return "SR"; // default to Social/Behavioral Research
   };
@@ -97,18 +109,20 @@ export function AssignReviewersDialog({
         const activeReviewers = await reviewerService.getAllReviewers();
         setReviewers(activeReviewers);
         
-        // Load existing assignments if any
-        const existingAssignments = await reviewerService.getProtocolReviewers(submission.id);
-        setAssignedReviewers(existingAssignments);
-        if (existingAssignments.length > 0) {
-          const reviewerIds = existingAssignments.map((assignment: any) => assignment.reviewerId);
+        // Load existing assignments if any - using type system!
+        const rawAssignments = await reviewerService.getProtocolReviewers(submission.id);
+        const typedAssignments = toChairpersonReviewerAssignments(rawAssignments);
+        setAssignedReviewers(typedAssignments);
+        
+        if (typedAssignments.length > 0) {
+          const reviewerIds = typedAssignments.map(a => a.reviewerId);
           setSelectedReviewers(reviewerIds);
         } else {
           setSelectedReviewers([]);
         }
         
         // Initialize popover states
-        const requirements = REVIEWER_REQUIREMENTS[getResearchType()];
+        const requirements = REVIEWER_REQUIREMENTS[getResearchType() as keyof typeof REVIEWER_REQUIREMENTS];
         setOpenPopovers(new Array(requirements.count).fill(false));
       } catch (error) {
         console.error("Error loading reviewers:", error);
@@ -133,7 +147,7 @@ export function AssignReviewersDialog({
 
   const computeDialogWidth = () => {
     // columns roughly equal to required reviewers, clamped 1-3 for layout comfort
-    const cols = Math.max(1, Math.min(REVIEWER_REQUIREMENTS[getResearchType()].count, 3));
+    const cols = Math.max(1, Math.min(REVIEWER_REQUIREMENTS[getResearchType() as keyof typeof REVIEWER_REQUIREMENTS].count, 3));
     const colWidth = 320;     // px per column target
     const padding = 96;       // px for internal padding/buttons
     const desired = cols * colWidth + padding;
@@ -145,7 +159,7 @@ export function AssignReviewersDialog({
 
   const handleAssignReviewers = async () => {
     const researchType = getResearchType();
-    let requirements = REVIEWER_REQUIREMENTS[researchType];
+    let requirements: any = REVIEWER_REQUIREMENTS[researchType as keyof typeof REVIEWER_REQUIREMENTS];
     
     // Handle EX subtype requirements
     if (researchType === 'EX' && requirements.hasSubTypes && requirements.subTypes) {
@@ -182,13 +196,14 @@ export function AssignReviewersDialog({
     
     setIsAssigningReviewers(true);
     try {
+      // submission.id is already typed as string from toChairpersonProtocol()!
       await reviewerService.checkOverdueReviewers(submission.id);
       await reviewerService.removeOverdueReviewers(submission.id);
       
       const success = await reviewerService.assignReviewers(
         submission.id,
         validReviewers,
-        researchType,
+        researchType as any,
         researchType === 'EX' ? exemptionSubType : undefined
       );
       
@@ -215,11 +230,10 @@ export function AssignReviewersDialog({
     setSelectedReviewers([]);
     setSearchTerm("");
     setOpenPopovers([]);
-    onEditingChange(false);
   };
 
   const researchType = getResearchType();
-  let requirements = REVIEWER_REQUIREMENTS[researchType];
+  let requirements: any = REVIEWER_REQUIREMENTS[researchType as keyof typeof REVIEWER_REQUIREMENTS];
   
   // Handle EX subtype requirements for UI display
   if (researchType === 'EX' && requirements.hasSubTypes && requirements.subTypes) {
@@ -242,10 +256,10 @@ export function AssignReviewersDialog({
       <DialogContent
         // auto-sizing: width driven by state, safe-capped to viewport
         style={{ width: dialogWidth, maxWidth: "calc(100vw - 2rem)" }}
-        className="p-6"
+        className="p-6 border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300"
       >
         <DialogHeader>
-          <DialogTitle className="text-primary">
+          <DialogTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">
             Assign Reviewers
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -290,8 +304,9 @@ export function AssignReviewersDialog({
             <div className="rounded-lg p-4 border border-primary/20 bg-primary/5">
               <Label className="text-sm font-medium mb-2 block text-primary">Current Assignments:</Label>
               <div className="space-y-2">
-                {assignedReviewers.map((assignment: any) => {
-                  const deadline = assignment.deadline?.toDate?.() || new Date(assignment.deadline);
+                {assignedReviewers.map((assignment) => {
+                  // 🎯 Using type system - toDate() handles all Timestamp conversions!
+                  const deadline = toDate(assignment.deadline);
                   const now = new Date();
                   const isOverdue = deadline < now && assignment.reviewStatus === "pending";
                   const daysOverdue = isOverdue ? Math.ceil((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -439,7 +454,7 @@ export function AssignReviewersDialog({
             variant="outline" 
             onClick={handleCancel}
             disabled={isAssigningReviewers}
-            className="border-primary/30 hover:bg-primary/10"
+            className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
           >
             Cancel
           </Button>
@@ -449,7 +464,7 @@ export function AssignReviewersDialog({
               isAssigningReviewers ||
               selectedReviewers.filter(id => id && id.trim() !== "").length !== requirements.count
             }
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
           >
             {isAssigningReviewers ? (
               <>
