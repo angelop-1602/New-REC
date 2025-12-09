@@ -32,6 +32,11 @@ import {
   getAnalyticsUsageStats, 
   getPerformanceMetrics 
 } from './firebaseAnalyticsService';
+import { getAnalyticsCache } from './analyticsCache';
+
+// Cache TTL constants
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes for most analytics
+const CACHE_TTL_LONG_MS = 10 * 60 * 1000; // 10 minutes for system health
 
 /**
  * Get total reviewers count
@@ -103,63 +108,41 @@ import { ChairpersonProtocol, toChairpersonProtocols, toDate } from '@/types';
 const db = getFirestore(firebaseApp);
 
 /**
- * Calculate protocol metrics
+ * Calculate protocol metrics from pre-fetched data (OPTIMIZED)
  */
-export async function calculateProtocolMetrics(
-  dateRange: DateRange,
-  filters?: AnalyticsFilters
-): Promise<ProtocolMetrics> {
+function calculateProtocolMetricsFromData(
+  protocols: ChairpersonProtocol[],
+  dateRange?: DateRange
+): ProtocolMetrics {
   try {
-    const submissionsRef = collection(db, SUBMISSIONS_COLLECTION);
-    let q = query(submissionsRef);
     
-    // Apply date filter
-    if (dateRange.start) {
-      q = query(q, where('createdAt', '>=', Timestamp.fromDate(dateRange.start)));
-    }
-    if (dateRange.end) {
-      q = query(q, where('createdAt', '<=', Timestamp.fromDate(dateRange.end)));
-    }
-    
-    const snapshot = await getDocs(q);
-    const protocols = toChairpersonProtocols(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    // Apply filters
-    let filteredProtocols = protocols;
-    if (filters?.status && filters.status.length > 0) {
-      filteredProtocols = filteredProtocols.filter(p => filters.status!.includes(p.status));
-    }
-    if (filters?.researchType && filters.researchType.length > 0) {
-      filteredProtocols = filteredProtocols.filter(p => {
-        const researchType = p.information?.researchType;
-        return typeof researchType === 'string' && filters.researchType!.includes(researchType);
-      });
-    }
-    
-    const total = filteredProtocols.length;
+    const total = protocols.length;
     const byStatus = {
-      pending: filteredProtocols.filter(p => p.status === 'pending').length,
-      accepted: filteredProtocols.filter(p => p.status === 'accepted').length,
-      approved: filteredProtocols.filter(p => p.status === 'approved').length,
-      archived: filteredProtocols.filter(p => p.status === 'archived').length,
-      rejected: filteredProtocols.filter(p => p.status === 'disapproved').length,
+      pending: protocols.filter(p => p.status === 'pending').length,
+      accepted: protocols.filter(p => p.status === 'accepted').length,
+      approved: protocols.filter(p => p.status === 'approved').length,
+      archived: protocols.filter(p => p.status === 'archived').length,
+      rejected: protocols.filter(p => p.status === 'disapproved').length,
     };
     
     const byResearchType = {
-      SR: filteredProtocols.filter(p => p.information?.researchType === 'SR').length,
-      PR: filteredProtocols.filter(p => p.information?.researchType === 'PR').length,
-      HO: filteredProtocols.filter(p => p.information?.researchType === 'HO').length,
-      BS: filteredProtocols.filter(p => p.information?.researchType === 'BS').length,
-      EX: filteredProtocols.filter(p => p.information?.researchType === 'EX').length,
+      SR: protocols.filter(p => p.information?.researchType === 'SR').length,
+      PR: protocols.filter(p => p.information?.researchType === 'PR').length,
+      HO: protocols.filter(p => p.information?.researchType === 'HO').length,
+      BS: protocols.filter(p => p.information?.researchType === 'BS').length,
+      EX: protocols.filter(p => p.information?.researchType === 'EX').length,
     };
     
     // Calculate submission rate (per month)
-    const daysDiff = (dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24);
-    const monthsDiff = daysDiff / 30;
-    const submissionRate = monthsDiff > 0 ? total / monthsDiff : total;
+    let submissionRate = total;
+    if (dateRange) {
+      const daysDiff = (dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24);
+      const monthsDiff = daysDiff / 30;
+      submissionRate = monthsDiff > 0 ? total / monthsDiff : total;
+    }
     
     // Calculate average times
-    const submittedProtocols = filteredProtocols.filter(p => 
+    const submittedProtocols = protocols.filter(p => 
       p.status !== 'draft' && p.createdAt
     );
     
@@ -195,7 +178,7 @@ export async function calculateProtocolMetrics(
       : 0;
     
     // Completion rate (drafts that became submissions)
-    const drafts = filteredProtocols.filter(p => p.status === 'draft').length;
+    const drafts = protocols.filter(p => p.status === 'draft').length;
     const completionRate = drafts + submittedProtocols.length > 0
       ? Math.round((submittedProtocols.length / (drafts + submittedProtocols.length)) * 100)
       : 0;
@@ -216,43 +199,27 @@ export async function calculateProtocolMetrics(
 }
 
 /**
- * Calculate protocol trends over time
+ * Calculate protocol metrics (legacy - kept for backward compatibility)
  */
-export async function calculateProtocolTrends(
+export async function calculateProtocolMetrics(
   dateRange: DateRange,
   filters?: AnalyticsFilters
-): Promise<ProtocolTrend[]> {
+): Promise<ProtocolMetrics> {
+  const protocols = await fetchSubmissionsData(dateRange, filters);
+  return calculateProtocolMetricsFromData(protocols, dateRange);
+}
+
+/**
+ * Calculate protocol trends from pre-fetched data (OPTIMIZED)
+ */
+function calculateProtocolTrendsFromData(
+  protocols: ChairpersonProtocol[]
+): ProtocolTrend[] {
   try {
-    const submissionsRef = collection(db, SUBMISSIONS_COLLECTION);
-    let q = query(submissionsRef);
-    
-    // Apply date filter
-    if (dateRange.start) {
-      q = query(q, where('createdAt', '>=', Timestamp.fromDate(dateRange.start)));
-    }
-    if (dateRange.end) {
-      q = query(q, where('createdAt', '<=', Timestamp.fromDate(dateRange.end)));
-    }
-    
-    const snapshot = await getDocs(q);
-    const protocols = toChairpersonProtocols(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    // Apply filters
-    let filteredProtocols = protocols;
-    if (filters?.status && filters.status.length > 0) {
-      filteredProtocols = filteredProtocols.filter(p => filters.status!.includes(p.status));
-    }
-    if (filters?.researchType && filters.researchType.length > 0) {
-      filteredProtocols = filteredProtocols.filter(p => {
-        const researchType = p.information?.researchType;
-        return typeof researchType === 'string' && filters.researchType!.includes(researchType);
-      });
-    }
-    
     // Group by month
     const trendsMap = new Map<string, { submissions: number; approvals: number; rejections: number }>();
     
-    filteredProtocols.forEach(protocol => {
+    protocols.forEach(protocol => {
       if (!protocol.createdAt) return;
       
       const createdDate = toDate(protocol.createdAt);
@@ -287,6 +254,149 @@ export async function calculateProtocolTrends(
   } catch (error) {
     console.error('Error calculating protocol trends:', error);
     return [];
+  }
+}
+
+/**
+ * Calculate reviewer metrics from pre-fetched data (OPTIMIZED)
+ */
+async function calculateReviewerMetricsFromData(
+  protocols: ChairpersonProtocol[],
+  reviewerAssignments: Map<string, Array<{ reviewerId: string; [key: string]: any }>>,
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<ReviewerMetrics> {
+  try {
+    // Get all reviewers (still need to fetch this)
+    const reviewersRef = collection(db, 'reviewers');
+    const reviewersSnapshot = await getDocs(reviewersRef);
+    const allReviewers = reviewersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Array<{ id: string; isActive?: boolean }>;
+    
+    const totalReviewers = allReviewers.length;
+    const activeReviewers = allReviewers.filter(r => r.isActive !== false).length;
+    
+    const now = new Date();
+    let totalAssignments = 0;
+    let completedAssignments = 0;
+    let pendingAssignments = 0;
+    let overdueAssignments = 0;
+    let totalCompletionTime = 0;
+    let completionCount = 0;
+    
+    const reviewerAssignmentCounts: Record<string, number> = {};
+    const reviewerCompletionTimes: Record<string, number[]> = {};
+    
+    // Process assignments from pre-fetched data
+    protocols.forEach(protocol => {
+      const protocolId = protocol.id;
+      const assignments = reviewerAssignments.get(protocolId) || [];
+      
+      assignments.forEach(assignment => {
+        const reviewerId = assignment.reviewerId;
+        
+        if (!reviewerId) return;
+        
+        // Apply reviewer filter if specified
+        if (filters?.reviewerId && filters.reviewerId.length > 0) {
+          if (!filters.reviewerId.includes(reviewerId)) return;
+        }
+        
+        totalAssignments++;
+        reviewerAssignmentCounts[reviewerId] = (reviewerAssignmentCounts[reviewerId] || 0) + 1;
+        
+        const reviewStatus = assignment.reviewStatus || assignment.status || 'pending';
+        const isCompleted = ['completed', 'submitted'].includes(reviewStatus);
+        const isPending = ['pending', 'assigned', 'in-progress'].includes(reviewStatus);
+        
+        if (isCompleted) {
+          completedAssignments++;
+          
+          if (assignment.assignedAt && assignment.completedAt) {
+            const assignedDate = assignment.assignedAt.toDate 
+              ? assignment.assignedAt.toDate() 
+              : new Date(assignment.assignedAt);
+            const completedDate = assignment.completedAt.toDate 
+              ? assignment.completedAt.toDate() 
+              : new Date(assignment.completedAt);
+            
+            const days = (completedDate.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24);
+            totalCompletionTime += days;
+            completionCount++;
+            
+            if (!reviewerCompletionTimes[reviewerId]) {
+              reviewerCompletionTimes[reviewerId] = [];
+            }
+            reviewerCompletionTimes[reviewerId].push(days);
+          }
+        } else if (isPending) {
+          pendingAssignments++;
+          
+          if (assignment.deadline) {
+            const deadline = assignment.deadline.toDate 
+              ? assignment.deadline.toDate() 
+              : new Date(assignment.deadline);
+            
+            if (deadline < now) {
+              overdueAssignments++;
+            }
+          }
+        }
+      });
+    });
+    
+    const averageCompletionTime = completionCount > 0 
+      ? Math.round(totalCompletionTime / completionCount) 
+      : 0;
+    
+    const completionRate = totalAssignments > 0 
+      ? Math.round((completedAssignments / totalAssignments) * 100) 
+      : 0;
+    
+    const reviewerIds = Object.keys(reviewerAssignmentCounts);
+    const totalWorkload = reviewerIds.reduce((sum, id) => sum + reviewerAssignmentCounts[id], 0);
+    const averageWorkload = activeReviewers > 0 
+      ? Math.round(totalWorkload / activeReviewers) 
+      : 0;
+    
+    let workloadBalance = 0;
+    if (reviewerIds.length > 0 && averageWorkload > 0) {
+      const variances = reviewerIds.map(id => {
+        const workload = reviewerAssignmentCounts[id];
+        return Math.pow(workload - averageWorkload, 2);
+      });
+      const variance = variances.reduce((sum, v) => sum + v, 0) / reviewerIds.length;
+      workloadBalance = Math.round(Math.sqrt(variance));
+    }
+    
+    return {
+      totalReviewers,
+      activeReviewers,
+      totalAssignments,
+      completedAssignments,
+      pendingAssignments,
+      overdueAssignments,
+      averageCompletionTime,
+      completionRate,
+      averageWorkload,
+      workloadBalance,
+    };
+  } catch (error) {
+    console.error('Error calculating reviewer metrics:', error);
+    return {
+      totalReviewers: 0,
+      activeReviewers: 0,
+      totalAssignments: 0,
+      completedAssignments: 0,
+      pendingAssignments: 0,
+      overdueAssignments: 0,
+      averageCompletionTime: 0,
+      completionRate: 0,
+      averageWorkload: 0,
+      workloadBalance: 0,
+    };
   }
 }
 
@@ -465,6 +575,121 @@ export async function calculateReviewerMetrics(
 }
 
 /**
+ * Calculate reviewer performance from pre-fetched data (OPTIMIZED)
+ */
+async function calculateReviewerPerformanceFromData(
+  protocols: ChairpersonProtocol[],
+  reviewerAssignments: Map<string, Array<{ reviewerId: string; [key: string]: any }>>,
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<ReviewerPerformance[]> {
+  try {
+    const reviewersRef = collection(db, 'reviewers');
+    const reviewersSnapshot = await getDocs(reviewersRef);
+    
+    const reviewers = reviewersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      name: doc.data().name || 'Unknown Reviewer',
+      ...doc.data()
+    }));
+    
+    const now = new Date();
+    const reviewerStats: Record<string, {
+      totalAssignments: number;
+      completedAssignments: number;
+      overdueAssignments: number;
+      completionTimes: number[];
+    }> = {};
+    
+    reviewers.forEach(reviewer => {
+      reviewerStats[reviewer.id] = {
+        totalAssignments: 0,
+        completedAssignments: 0,
+        overdueAssignments: 0,
+        completionTimes: [],
+      };
+    });
+    
+    // Process assignments from pre-fetched data
+    protocols.forEach(protocol => {
+      const protocolId = protocol.id;
+      const assignments = reviewerAssignments.get(protocolId) || [];
+      
+      assignments.forEach(assignment => {
+        const reviewerId = assignment.reviewerId;
+        
+        if (!reviewerId || !reviewerStats[reviewerId]) return;
+        
+        if (filters?.reviewerId && filters.reviewerId.length > 0) {
+          if (!filters.reviewerId.includes(reviewerId)) return;
+        }
+        
+        reviewerStats[reviewerId].totalAssignments++;
+        
+        const reviewStatus = assignment.reviewStatus || assignment.status || 'pending';
+        const isCompleted = ['completed', 'submitted'].includes(reviewStatus);
+        const isPending = ['pending', 'assigned', 'in-progress'].includes(reviewStatus);
+        
+        if (isCompleted) {
+          reviewerStats[reviewerId].completedAssignments++;
+          
+          if (assignment.assignedAt && assignment.completedAt) {
+            const assignedDate = assignment.assignedAt.toDate 
+              ? assignment.assignedAt.toDate() 
+              : new Date(assignment.assignedAt);
+            const completedDate = assignment.completedAt.toDate 
+              ? assignment.completedAt.toDate() 
+              : new Date(assignment.completedAt);
+            
+            const days = (completedDate.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24);
+            reviewerStats[reviewerId].completionTimes.push(days);
+          }
+        } else if (isPending) {
+          if (assignment.deadline) {
+            const deadline = assignment.deadline.toDate 
+              ? assignment.deadline.toDate() 
+              : new Date(assignment.deadline);
+            
+            if (deadline < now) {
+              reviewerStats[reviewerId].overdueAssignments++;
+            }
+          }
+        }
+      });
+    });
+    
+    const performance: ReviewerPerformance[] = reviewers
+      .filter(reviewer => reviewerStats[reviewer.id].totalAssignments > 0)
+      .map(reviewer => {
+        const stats = reviewerStats[reviewer.id];
+        const avgCompletionTime = stats.completionTimes.length > 0
+          ? Math.round(stats.completionTimes.reduce((sum, time) => sum + time, 0) / stats.completionTimes.length)
+          : 0;
+        
+        const completionRate = stats.totalAssignments > 0
+          ? Math.round((stats.completedAssignments / stats.totalAssignments) * 100)
+          : 0;
+        
+        return {
+          reviewerId: reviewer.id,
+          reviewerName: reviewer.name,
+          totalAssignments: stats.totalAssignments,
+          completedAssignments: stats.completedAssignments,
+          overdueAssignments: stats.overdueAssignments,
+          averageCompletionTime: avgCompletionTime,
+          completionRate,
+        };
+      })
+      .sort((a, b) => b.totalAssignments - a.totalAssignments);
+    
+    return performance;
+  } catch (error) {
+    console.error('Error calculating reviewer performance:', error);
+    return [];
+  }
+}
+
+/**
  * Calculate reviewer performance
  */
 export async function calculateReviewerPerformance(
@@ -608,53 +833,26 @@ export async function calculateReviewerPerformance(
 }
 
 /**
- * Calculate review process metrics
+ * Calculate review process metrics from pre-fetched data (OPTIMIZED)
  */
-export async function calculateReviewProcessMetrics(
-  dateRange: DateRange,
-  filters?: AnalyticsFilters
-): Promise<ReviewProcessMetrics> {
+function calculateReviewProcessMetricsFromData(
+  protocols: ChairpersonProtocol[]
+): ReviewProcessMetrics {
   try {
-    const submissionsRef = collection(db, SUBMISSIONS_COLLECTION);
-    let q = query(submissionsRef);
-    
-    // Apply date filter
-    if (dateRange.start) {
-      q = query(q, where('createdAt', '>=', Timestamp.fromDate(dateRange.start)));
-    }
-    if (dateRange.end) {
-      q = query(q, where('createdAt', '<=', Timestamp.fromDate(dateRange.end)));
-    }
-    
-    const snapshot = await getDocs(q);
-    const protocols = toChairpersonProtocols(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    // Apply filters
-    let filteredProtocols = protocols;
-    if (filters?.status && filters.status.length > 0) {
-      filteredProtocols = filteredProtocols.filter(p => filters.status!.includes(p.status));
-    }
-    if (filters?.researchType && filters.researchType.length > 0) {
-      filteredProtocols = filteredProtocols.filter(p => {
-        const researchType = p.information?.researchType;
-        return typeof researchType === 'string' && filters.researchType!.includes(researchType);
-      });
-    }
-    
     // Count submitted protocols (exclude drafts)
-    const submittedProtocols = filteredProtocols.filter(p => p.status !== 'draft');
+    const submittedProtocols = protocols.filter(p => p.status !== 'draft');
     const submittedCount = submittedProtocols.length;
     
     // Count approved protocols
-    const approvedProtocols = filteredProtocols.filter(p => p.status === 'approved');
+    const approvedProtocols = protocols.filter(p => p.status === 'approved');
     const approvedCount = approvedProtocols.length;
     
     // Count rejected protocols
-    const rejectedProtocols = filteredProtocols.filter(p => p.status === 'disapproved');
+    const rejectedProtocols = protocols.filter(p => p.status === 'disapproved');
     const rejectedCount = rejectedProtocols.length;
     
     // Count conditionally approved protocols
-    const conditionalApprovedProtocols = filteredProtocols.filter(p => 
+    const conditionalApprovedProtocols = protocols.filter(p => 
       p.status === 'approved_minor_revisions' || p.status === 'major_revisions_deferred'
     );
     const conditionalApprovedCount = conditionalApprovedProtocols.length;
@@ -678,7 +876,7 @@ export async function calculateReviewProcessMetrics(
     let totalCycleTime = 0;
     let cycleTimeCount = 0;
     
-    const decidedProtocols = filteredProtocols.filter(p => 
+    const decidedProtocols = protocols.filter(p => 
       ['approved', 'disapproved', 'approved_minor_revisions', 'major_revisions_deferred'].includes(p.status)
     );
     
@@ -743,6 +941,17 @@ export async function calculateReviewProcessMetrics(
     console.error('Error calculating review process metrics:', error);
     throw error;
   }
+}
+
+/**
+ * Calculate review process metrics
+ */
+export async function calculateReviewProcessMetrics(
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<ReviewProcessMetrics> {
+  const protocols = await fetchSubmissionsData(dateRange, filters);
+  return calculateReviewProcessMetricsFromData(protocols);
 }
 
 /**
@@ -936,8 +1145,10 @@ export async function calculateSystemHealthMetrics(
       ? Math.round((now - maxUpdateTime) / (1000 * 60 * 60)) // Hours
       : 0;
     
-    // Cache hit rate (would need to track this separately - placeholder for now)
-    const cacheHitRate = 0; // TODO: Implement cache tracking
+    // Get cache hit rate from cache manager
+    const cache = getAnalyticsCache();
+    const cacheStats = cache.getStats();
+    const cacheHitRate = cacheStats.hitRate;
     
     // Dashboard load time (would be measured client-side, placeholder)
     const dashboardLoadTime = queryTime; // Use query time as approximation
@@ -1054,28 +1265,338 @@ export async function calculateErrorTrends(
 }
 
 /**
- * Get all analytics data
+ * Fetch all submissions once and share across calculations
+ */
+async function fetchSubmissionsData(
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<ChairpersonProtocol[]> {
+  const submissionsRef = collection(db, SUBMISSIONS_COLLECTION);
+  let q = query(submissionsRef);
+  
+  // Apply date filter
+  if (dateRange.start) {
+    q = query(q, where('createdAt', '>=', Timestamp.fromDate(dateRange.start)));
+  }
+  if (dateRange.end) {
+    q = query(q, where('createdAt', '<=', Timestamp.fromDate(dateRange.end)));
+  }
+  
+  const snapshot = await getDocs(q);
+  let protocols = toChairpersonProtocols(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  
+  // Apply filters
+  if (filters?.status && filters.status.length > 0) {
+    protocols = protocols.filter(p => filters.status!.includes(p.status));
+  }
+  if (filters?.researchType && filters.researchType.length > 0) {
+    protocols = protocols.filter(p => {
+      const researchType = p.information?.researchType;
+      return typeof researchType === 'string' && filters.researchType!.includes(researchType);
+    });
+  }
+  
+  return protocols;
+}
+
+/**
+ * Batch fetch all reviewer assignments for protocols
+ */
+async function fetchReviewerAssignments(
+  protocolIds: string[]
+): Promise<Map<string, Array<{ reviewerId: string; [key: string]: any }>>> {
+  const assignmentsMap = new Map<string, Array<{ reviewerId: string; [key: string]: any }>>();
+  
+  // Batch fetch assignments in parallel (limit concurrent requests)
+  const batchSize = 10;
+  for (let i = 0; i < protocolIds.length; i += batchSize) {
+    const batch = protocolIds.slice(i, i + batchSize);
+    const batchPromises = batch.map(async (protocolId) => {
+      try {
+        const reviewersRef = collection(db, SUBMISSIONS_COLLECTION, protocolId, 'reviewers');
+        const assignmentsSnapshot = await getDocs(reviewersRef);
+        const assignments = assignmentsSnapshot.docs.map(doc => ({
+          reviewerId: doc.data().reviewerId,
+          ...doc.data(),
+        }));
+        return { protocolId, assignments };
+      } catch (error) {
+        // Skip protocols without reviewer subcollection
+        return { protocolId, assignments: [] };
+      }
+    });
+    
+    const results = await Promise.all(batchPromises);
+    results.forEach(({ protocolId, assignments }) => {
+      if (assignments.length > 0) {
+        assignmentsMap.set(protocolId, assignments);
+      }
+    });
+  }
+  
+  return assignmentsMap;
+}
+
+/**
+ * Get overview tab data (PRIORITY - loads first)
+ * Includes minimal reviewer and system health data for KPIs
+ * Uses multi-layer caching for performance
+ */
+export async function getOverviewData(
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<Pick<AnalyticsData, 'protocolMetrics' | 'protocolTrends' | 'reviewProcessMetrics' | 'reviewerMetrics' | 'systemHealthMetrics'>> {
+  const cache = getAnalyticsCache();
+  const cacheKey = 'overview';
+  
+  // Try to get from cache first
+  const cached = await cache.get<Pick<AnalyticsData, 'protocolMetrics' | 'protocolTrends' | 'reviewProcessMetrics' | 'reviewerMetrics' | 'systemHealthMetrics'>>(
+    dateRange,
+    filters,
+    cacheKey,
+    CACHE_TTL_MS
+  );
+  
+  if (cached) {
+    return cached;
+  }
+  
+  // Cache miss - fetch and compute
+  const protocols = await fetchSubmissionsData(dateRange, filters);
+  const protocolIds = protocols.map(p => p.id);
+  
+  // Calculate what's needed for overview - fetch minimal reviewer and system health data
+  const [
+    protocolMetrics,
+    protocolTrends,
+    reviewProcessMetrics,
+    reviewerAssignments,
+    systemHealthMetrics,
+  ] = await Promise.all([
+    Promise.resolve(calculateProtocolMetricsFromData(protocols, dateRange)),
+    Promise.resolve(calculateProtocolTrendsFromData(protocols)),
+    Promise.resolve(calculateReviewProcessMetricsFromData(protocols)),
+    fetchReviewerAssignments(protocolIds), // Need for reviewer metrics
+    calculateSystemHealthMetrics(dateRange), // Need for data completeness KPI
+  ]);
+  
+  // Calculate minimal reviewer metrics (just for overdue assignments KPI)
+  const reviewerMetrics = await calculateReviewerMetricsFromData(protocols, reviewerAssignments, dateRange, filters);
+  
+  const result = {
+    protocolMetrics,
+    protocolTrends,
+    reviewProcessMetrics,
+    reviewerMetrics,
+    systemHealthMetrics,
+  };
+  
+  // Store in cache (async, don't await)
+  cache.set(dateRange, result, filters, cacheKey, CACHE_TTL_MS);
+  
+  return result;
+}
+
+/**
+ * Get protocols tab data
+ * Uses multi-layer caching for performance
+ */
+export async function getProtocolsData(
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<Pick<AnalyticsData, 'protocolMetrics' | 'protocolTrends'>> {
+  const cache = getAnalyticsCache();
+  const cacheKey = 'protocols';
+  
+  // Try cache first
+  const cached = await cache.get<Pick<AnalyticsData, 'protocolMetrics' | 'protocolTrends'>>(
+    dateRange,
+    filters,
+    cacheKey,
+    CACHE_TTL_MS
+  );
+  
+  if (cached) {
+    return cached;
+  }
+  
+  // Cache miss - fetch and compute
+  const protocols = await fetchSubmissionsData(dateRange, filters);
+  
+  const [protocolMetrics, protocolTrends] = await Promise.all([
+    Promise.resolve(calculateProtocolMetricsFromData(protocols, dateRange)),
+    Promise.resolve(calculateProtocolTrendsFromData(protocols)),
+  ]);
+  
+  const result = {
+    protocolMetrics,
+    protocolTrends,
+  };
+  
+  // Store in cache
+  cache.set(dateRange, result, filters, cacheKey, CACHE_TTL_MS);
+  
+  return result;
+}
+
+/**
+ * Get reviewers tab data
+ * Uses multi-layer caching for performance
+ */
+export async function getReviewersData(
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<Pick<AnalyticsData, 'reviewerMetrics' | 'reviewerPerformance'>> {
+  const cache = getAnalyticsCache();
+  const cacheKey = 'reviewers';
+  
+  // Try cache first
+  const cached = await cache.get<Pick<AnalyticsData, 'reviewerMetrics' | 'reviewerPerformance'>>(
+    dateRange,
+    filters,
+    cacheKey,
+    CACHE_TTL_MS
+  );
+  
+  if (cached) {
+    return cached;
+  }
+  
+  // Cache miss - fetch and compute
+  const protocols = await fetchSubmissionsData(dateRange, filters);
+  const protocolIds = protocols.map(p => p.id);
+  const reviewerAssignments = await fetchReviewerAssignments(protocolIds);
+  
+  const [reviewerMetrics, reviewerPerformance] = await Promise.all([
+    calculateReviewerMetricsFromData(protocols, reviewerAssignments, dateRange, filters),
+    calculateReviewerPerformanceFromData(protocols, reviewerAssignments, dateRange, filters),
+  ]);
+  
+  const result = {
+    reviewerMetrics,
+    reviewerPerformance,
+  };
+  
+  // Store in cache
+  cache.set(dateRange, result, filters, cacheKey, CACHE_TTL_MS);
+  
+  return result;
+}
+
+/**
+ * Get review process tab data
+ * Uses multi-layer caching for performance
+ */
+export async function getReviewProcessData(
+  dateRange: DateRange,
+  filters?: AnalyticsFilters
+): Promise<Pick<AnalyticsData, 'reviewProcessMetrics'>> {
+  const cache = getAnalyticsCache();
+  const cacheKey = 'review-process';
+  
+  // Try cache first
+  const cached = await cache.get<Pick<AnalyticsData, 'reviewProcessMetrics'>>(
+    dateRange,
+    filters,
+    cacheKey,
+    CACHE_TTL_MS
+  );
+  
+  if (cached) {
+    return cached;
+  }
+  
+  // Cache miss - fetch and compute
+  const protocols = await fetchSubmissionsData(dateRange, filters);
+  const reviewProcessMetrics = calculateReviewProcessMetricsFromData(protocols);
+  
+  const result = {
+    reviewProcessMetrics,
+  };
+  
+  // Store in cache
+  cache.set(dateRange, result, filters, cacheKey, CACHE_TTL_MS);
+  
+  return result;
+}
+
+/**
+ * Get system health tab data
+ * Uses multi-layer caching for performance (longer TTL since it changes less frequently)
+ */
+export async function getSystemHealthData(
+  dateRange: DateRange
+): Promise<Pick<AnalyticsData, 'systemHealthMetrics' | 'errorTrends'>> {
+  const cache = getAnalyticsCache();
+  const cacheKey = 'system-health';
+  
+  // Try cache first (longer TTL for system health)
+  const cached = await cache.get<Pick<AnalyticsData, 'systemHealthMetrics' | 'errorTrends'>>(
+    dateRange,
+    undefined,
+    cacheKey,
+    CACHE_TTL_LONG_MS
+  );
+  
+  if (cached) {
+    return cached;
+  }
+  
+  // Cache miss - fetch and compute
+  const [systemHealthMetrics, errorTrends] = await Promise.all([
+    calculateSystemHealthMetrics(dateRange),
+    calculateErrorTrends(dateRange),
+  ]);
+  
+  const result = {
+    systemHealthMetrics,
+    errorTrends,
+  };
+  
+  // Store in cache (longer TTL)
+  cache.set(dateRange, result, undefined, cacheKey, CACHE_TTL_LONG_MS);
+  
+  return result;
+}
+
+/**
+ * Get all analytics data (OPTIMIZED - single submissions query)
+ * Use this only when you need all data at once
  */
 export async function getAnalyticsData(
   dateRange: DateRange,
   filters?: AnalyticsFilters
 ): Promise<AnalyticsData> {
+  // Fetch submissions once and share across all calculations
+  const protocols = await fetchSubmissionsData(dateRange, filters);
+  
+  // Get protocol IDs for reviewer assignment fetching
+  const protocolIds = protocols.map(p => p.id);
+  
+  // Fetch reviewer assignments in parallel with other independent operations
+  const [
+    reviewerAssignments,
+    systemHealthMetrics,
+    errorTrends,
+  ] = await Promise.all([
+    fetchReviewerAssignments(protocolIds),
+    calculateSystemHealthMetrics(dateRange),
+    calculateErrorTrends(dateRange),
+  ]);
+  
+  // Now calculate all metrics using shared data
   const [
     protocolMetrics,
     protocolTrends,
     reviewerMetrics,
     reviewerPerformance,
     reviewProcessMetrics,
-    systemHealthMetrics,
-    errorTrends,
   ] = await Promise.all([
-    calculateProtocolMetrics(dateRange, filters),
-    calculateProtocolTrends(dateRange, filters),
-    calculateReviewerMetrics(dateRange, filters),
-    calculateReviewerPerformance(dateRange, filters),
-    calculateReviewProcessMetrics(dateRange, filters),
-    calculateSystemHealthMetrics(dateRange),
-    calculateErrorTrends(dateRange),
+    Promise.resolve(calculateProtocolMetricsFromData(protocols, dateRange)),
+    Promise.resolve(calculateProtocolTrendsFromData(protocols)),
+    calculateReviewerMetricsFromData(protocols, reviewerAssignments, dateRange, filters),
+    calculateReviewerPerformanceFromData(protocols, reviewerAssignments, dateRange, filters),
+    Promise.resolve(calculateReviewProcessMetricsFromData(protocols)),
   ]);
   
   return {

@@ -448,11 +448,17 @@ export default function ReviewerProfilePage() {
                 <div className="relative w-32 h-32">
                   <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-primary/20">
                     <Image
-                      src={reviewerImage}
+                      src={reviewerImage || '/SPUP-Logo-with-yellow.png'}
                       alt={reviewer.name}
                       fill
                       className="object-cover"
-                      unoptimized
+                      unoptimized={reviewerImage?.startsWith('http') || reviewerImage?.startsWith('blob:')}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        if (target.src !== '/SPUP-Logo-with-yellow.png') {
+                          target.src = '/SPUP-Logo-with-yellow.png';
+                        }
+                      }}
                     />
                   </div>
                   {/* Edit Button on Edge of Circle */}

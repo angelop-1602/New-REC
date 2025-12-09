@@ -24,7 +24,6 @@ if (process.env.NODE_ENV === 'development') {
     console.warn('Missing Firebase configuration keys:', missingKeys);
     console.warn('Make sure all Firebase environment variables are set in your .env.local file');
   } else {
-    console.log('Firebase configuration loaded successfully');
   }
 }
 

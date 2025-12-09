@@ -36,8 +36,6 @@ export function useRealtimeProtocol({
       return;
     }
 
-    console.log(`🔄 Setting up real-time listener for protocol ${protocolId}`);
-
     try {
       const protocolRef = doc(db, collectionName, protocolId);
 
@@ -47,11 +45,6 @@ export function useRealtimeProtocol({
         (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data();
-            console.log(`📋 Protocol ${protocolId} updated - Status: ${data.status}`, {
-              status: data.status,
-              spupCode: data.spupCode,
-              updatedAt: data.updatedAt
-            });
             setProtocol({
               id: snapshot.id,
               ...data,
@@ -73,7 +66,6 @@ export function useRealtimeProtocol({
 
       // Cleanup subscription on unmount
       return () => {
-        console.log(`🔌 Unsubscribing from protocol listener for ${protocolId}`);
         unsubscribe();
       };
     } catch (err) {

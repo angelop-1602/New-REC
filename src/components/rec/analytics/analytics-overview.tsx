@@ -19,12 +19,12 @@ interface AnalyticsOverviewProps {
 export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
   const { protocolMetrics, reviewerMetrics, reviewProcessMetrics, systemHealthMetrics, protocolTrends } = analyticsData;
 
-  // Primary KPIs
+  // Primary KPIs - handle missing data gracefully
   const primaryKPIs = [
     {
       id: 'avg-time-to-approval',
       label: 'Avg Time to Approval',
-      value: protocolMetrics.averageTimeToApproval,
+      value: protocolMetrics?.averageTimeToApproval ?? 0,
       unit: 'days',
       isPrimary: true,
       description: 'Average time from draft to approval',
@@ -34,7 +34,7 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
     {
       id: 'approval-rate',
       label: 'Approval Rate',
-      value: reviewProcessMetrics.approvalRate,
+      value: reviewProcessMetrics?.approvalRate ?? 0,
       unit: '%',
       isPrimary: true,
       description: 'Percentage of protocols approved',
@@ -44,7 +44,7 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
     {
       id: 'avg-review-cycle',
       label: 'Avg Review Cycle Time',
-      value: reviewProcessMetrics.averageReviewCycleTime,
+      value: reviewProcessMetrics?.averageReviewCycleTime ?? 0,
       unit: 'days',
       isPrimary: true,
       description: 'Average time for complete review cycle',
@@ -54,7 +54,7 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
     {
       id: 'overdue-assignments',
       label: 'Overdue Assignments',
-      value: reviewerMetrics.overdueAssignments,
+      value: reviewerMetrics?.overdueAssignments ?? 0,
       isPrimary: true,
       description: 'Reviewer assignments past deadline',
       icon: AlertTriangle,
@@ -63,7 +63,7 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
     {
       id: 'data-completeness',
       label: 'Data Completeness',
-      value: systemHealthMetrics.dataCompleteness,
+      value: systemHealthMetrics?.dataCompleteness ?? 0,
       unit: '%',
       isPrimary: true,
       description: 'Percentage of complete data',
@@ -73,18 +73,19 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
   ];
 
   // Status breakdown data for chart
-  const statusData = Object.entries(protocolMetrics.byStatus)
-    .map(([status, count]) => ({
+  const statusData = protocolMetrics?.byStatus 
+    ? Object.entries(protocolMetrics.byStatus).map(([status, count]) => ({
       status: status.charAt(0).toUpperCase() + status.slice(1),
       count,
-    }));
+      }))
+    : [];
 
   // Trends data
-  const trendsData = protocolTrends.slice(-12).map(trend => ({
+  const trendsData = protocolTrends?.slice(-12).map(trend => ({
     date: new Date(trend.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
     submissions: trend.submissions,
     approvals: trend.approvals,
-  }));
+  })) ?? [];
 
   const statusChartConfig: ChartConfig = {
     count: { label: 'Protocols', color: 'hsl(var(--primary))' },
@@ -104,8 +105,8 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {primaryKPIs.map((kpi) => (
+            <div key={kpi.id} className="min-h-[140px]">
             <KPICard
-              key={kpi.id}
               label={kpi.label}
               value={kpi.value}
               unit={kpi.unit}
@@ -114,6 +115,7 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
               isPrimary={kpi.isPrimary}
               color={kpi.color}
             />
+            </div>
           ))}
         </div>
       </div>
@@ -122,7 +124,7 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Submission Trends */}
         {trendsData.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-2 min-h-[300px]">
             <h3 className="text-base font-semibold">Submission & Approval Trends</h3>
             <ChartContainer config={trendsChartConfig} className="h-[300px] w-full">
               <AreaChart data={trendsData}>
@@ -166,7 +168,7 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
         )}
 
         {/* Status Distribution Pie Chart */}
-        <div className="space-y-2">
+        <div className="space-y-2 min-h-[300px]">
           <h3 className="text-base font-semibold">Protocol Status Distribution</h3>
           <ChartContainer config={statusChartConfig} className="h-[300px] w-full">
             <PieChart>
@@ -196,25 +198,25 @@ export function AnalyticsOverview({ analyticsData }: AnalyticsOverviewProps) {
         <div className="space-y-1 p-3 rounded-lg border border-border bg-muted/20">
           <p className="text-xs text-muted-foreground">Total Protocols</p>
           <p className="text-xl font-bold text-[#036635] dark:text-[#FECC07]">
-            {protocolMetrics.total}
+            {protocolMetrics?.total ?? 0}
           </p>
         </div>
         <div className="space-y-1 p-3 rounded-lg border border-border bg-muted/20">
           <p className="text-xs text-muted-foreground">Pending Review</p>
           <p className="text-xl font-bold text-[#036635] dark:text-[#FECC07]">
-            {protocolMetrics.byStatus.pending}
+            {protocolMetrics?.byStatus?.pending ?? 0}
           </p>
         </div>
         <div className="space-y-1 p-3 rounded-lg border border-border bg-muted/20">
           <p className="text-xs text-muted-foreground">Active Reviewers</p>
           <p className="text-xl font-bold text-[#036635] dark:text-[#FECC07]">
-            {reviewerMetrics.activeReviewers}
+            {reviewerMetrics?.activeReviewers ?? 0}
           </p>
         </div>
         <div className="space-y-1 p-3 rounded-lg border border-border bg-muted/20">
           <p className="text-xs text-muted-foreground">Submission Rate</p>
           <p className="text-xl font-bold text-[#036635] dark:text-[#FECC07]">
-            {protocolMetrics.submissionRate}
+            {protocolMetrics?.submissionRate ?? 0}
             <span className="text-xs font-normal text-muted-foreground ml-1">/month</span>
           </p>
         </div>

@@ -27,8 +27,7 @@ import { toast } from "sonner";
 import { generateDecisionDocuments } from "@/lib/services/documents/documentGenerator";
 import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import firebaseApp from '@/lib/firebaseConfig';
-import { PageLoading } from "@/components/ui/loading";
-import { InlineLoading } from "@/components/ui/loading";
+import { InlineLoading, LoadingSkeleton } from "@/components/ui/loading";
 import { 
   ChairpersonProtocol, 
   toChairpersonProtocol,
@@ -271,7 +270,32 @@ export default function GenerateDocumentsPage() {
   };
 
   if (loading) {
-    return <PageLoading text="Loading protocol data..." />;
+    return (
+      <div className="container mx-auto p-4 md:p-6 max-w-7xl animate-in fade-in duration-500">
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20 pt-6">
+                <LoadingSkeleton className="h-5 w-40 rounded-md mb-2" />
+                <LoadingSkeleton className="h-4 w-56 rounded-md" />
+              </CardHeader>
+              <CardContent className="space-y-3 p-4">
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <LoadingSkeleton className="h-4 w-4 rounded-sm" />
+                    <LoadingSkeleton className="h-4 w-40 rounded-md" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+          <div className="lg:col-span-2 space-y-4">
+            <LoadingSkeleton className="h-6 w-48 rounded-md" />
+            <LoadingSkeleton className="h-72 w-full rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!submission) {

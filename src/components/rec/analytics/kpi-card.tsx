@@ -31,7 +31,7 @@ export function KPICard({
   return (
     <Card 
       className={cn(
-        "border-[#036635]/20 dark:border-[#FECC07]/30 hover:shadow-lg transition-all duration-300",
+        "border-[#036635]/20 dark:border-[#FECC07]/30 hover:shadow-lg transition-all duration-300 min-h-[140px]",
         isPrimary && "ring-2 ring-[#036635]/20 dark:ring-[#FECC07]/30"
       )}
     >

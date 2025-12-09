@@ -27,6 +27,7 @@ import { DecisionDialog } from "@/components/rec/chairperson/components/protocol
 import { getSubmissionById } from "@/lib/firebase/firestore";
 import { documentGenerator } from "@/lib/services/documents/documentGenerator";
 import { extractTemplateData } from "@/lib/services/documents/templateDataMapper";
+import { LoadingSimple } from "@/components/ui/loading";
 
 // Helper function to handle document download (background download without opening tab)
 const handleDocumentDownload = async (doc: any) => {
@@ -43,8 +44,6 @@ const handleDocumentDownload = async (doc: any) => {
     const storage = getStorage(firebaseApp);
     const storageRef = ref(storage, doc.storagePath);
     const downloadUrl = await getDownloadURL(storageRef);
-    
-    console.log('Fresh download URL obtained:', downloadUrl);
     
     // Use hidden iframe to trigger download without opening tab
     const iframe = document.createElement('iframe');
@@ -220,7 +219,7 @@ export function DecisionCard({
     return (
       <Card className={cn("w-full", className)}>
         <CardContent className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <LoadingSimple size="md" text="Loading decision..." />
         </CardContent>
       </Card>
     );

@@ -94,7 +94,6 @@ export class EnhancedDocumentManagementService {
       // Use setDoc with custom ID instead of addDoc
       const docRef = doc(documentsRef, documentId);
       await setDoc(docRef, documentData);
-      console.log(`Document request created with ID: ${documentId}`);
       return documentId;
     } catch (error) {
       console.error('Error creating document request:', error);
@@ -164,7 +163,6 @@ export class EnhancedDocumentManagementService {
       }
       
       await deleteDoc(documentRef);
-      console.log(`Document request ${documentId} cancelled successfully`);
       return true;
     } catch (error) {
       console.error('Error cancelling document request:', error);
@@ -259,7 +257,6 @@ export class EnhancedDocumentManagementService {
         };
         
         await updateDoc(documentRef, updateData);
-        console.log(`Document request fulfilled with ID: ${existingDocumentId}, version 1 stored at: ${documentData.storagePath}`);
         return existingDocumentId;
       } else {
         // Create new document - generate ID first for versioned path
@@ -317,7 +314,6 @@ export class EnhancedDocumentManagementService {
           console.warn("Failed to update protocol activity:", activityError);
         }
         
-        console.log(`Document created with ID: ${finalDocumentId}, version 1 stored at: ${documentData.storagePath}`);
         return finalDocumentId;
       }
     } catch (error) {
@@ -446,8 +442,6 @@ export class EnhancedDocumentManagementService {
       }
       
       await updateDoc(documentRef, updateData);
-      
-      console.log(`Document ${documentId} status updated to ${status}`);
       return true;
     } catch (error) {
       console.error('Error updating document status:', error);
@@ -522,7 +516,6 @@ export class EnhancedDocumentManagementService {
         console.warn("Failed to update protocol activity:", activityError);
       }
       
-      console.log(`New version ${newVersionNumber} added to document ${documentId} at path: ${versionData.storagePath}`);
       return true;
     } catch (error) {
       console.error('Error adding document version:', error);

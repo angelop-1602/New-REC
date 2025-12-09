@@ -12,13 +12,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EllipsisVertical, Eye, MessageSquare, FileText, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { PageLoading } from "@/components/ui/loading";
+import { LoadingSkeleton } from "@/components/ui/loading";
 import { formatDistanceToNow } from "date-fns";
 import { ColumnDef } from "@tanstack/react-table";
 import { getStatusBadge } from "@/lib/utils/statusUtils";
 import { useRealtimeProtocols } from "@/hooks/useRealtimeProtocols";
 import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
-import { reviewerService } from "@/lib/services/reviewers/reviewerService";
 import { Input } from "@/components/ui/input";
 import { 
   ChairpersonProtocol, 
@@ -33,7 +32,6 @@ import {
 export default function UnderReviewProtocolsPage() {
   const router = useRouter();
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-  const [protocolsWithReviewers, setProtocolsWithReviewers] = useState<Set<string>>(new Set());
   const [searchValue, setSearchValue] = useState("");
 
   // ⚡ Real-time data for accepted protocols
@@ -43,38 +41,13 @@ export default function UnderReviewProtocolsPage() {
     enabled: true,
   });
 
-  // Check which protocols have reviewers assigned
-  useEffect(() => {
-    const checkReviewers = async () => {
-      const protocolsWithReviewersSet = new Set<string>();
-      
-      for (const protocol of acceptedProtocols) {
-        try {
-          const reviewers = await reviewerService.getProtocolReviewers(protocol.id);
-          if (reviewers.length > 0) {
-            protocolsWithReviewersSet.add(protocol.id);
-          }
-        } catch (err) {
-          console.error(`Error checking reviewers for protocol ${protocol.id}:`, err);
-        }
-      }
-      
-      setProtocolsWithReviewers(protocolsWithReviewersSet);
-    };
-
-    if (acceptedProtocols.length > 0) {
-      checkReviewers();
-    }
-  }, [acceptedProtocols]);
-
   // Filter to only show protocols with reviewers assigned - Using type system
   const protocols = useMemo(() => {
     const typedProtocols = toChairpersonProtocols(acceptedProtocols);
-    const filtered = typedProtocols.filter(protocol => 
-      protocolsWithReviewers.has(protocol.id)
-    );
+    // Rely on the hasReviewers flag maintained on the submission document
+    const filtered = typedProtocols.filter((protocol) => protocol.hasReviewers);
     return sortProtocolsByDate(filtered);
-  }, [acceptedProtocols, protocolsWithReviewers]);
+  }, [acceptedProtocols]);
 
   const handleViewProtocol = (protocolId: string) => {
     router.push(`/rec/chairperson/protocol/${protocolId}`);
@@ -200,8 +173,26 @@ export default function UnderReviewProtocolsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[400px]">
-        <PageLoading text="Loading protocols..." />
+      <div className="space-y-6 p-4 md:p-6 animate-in fade-in duration-500">
+        <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 dark:to-card p-6">
+            <div className="relative flex-1 max-w-sm">
+              <LoadingSkeleton className="h-10 w-full rounded-md" />
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 pb-6">
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="flex items-center gap-4">
+                  <LoadingSkeleton className="h-4 w-32 rounded-md" />
+                  <LoadingSkeleton className="h-4 w-64 rounded-md" />
+                  <LoadingSkeleton className="h-4 w-24 rounded-md" />
+                  <LoadingSkeleton className="h-4 w-28 rounded-md ml-auto" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

@@ -90,6 +90,10 @@ export const createSubmission = async (
   information: InformationType
 ): Promise<string> => {
   try {
+    // Normalize empty optional fields to "N/A"
+    const { normalizeFormData } = await import('@/lib/utils/normalizeFormData');
+    const normalizedInformation = normalizeFormData(information);
+    
     // Generate custom application ID in REC_YYYY_6random format
     const applicationID = generateApplicationID();
     const submissionRef = doc(db, SUBMISSIONS_COLLECTION, applicationID);
@@ -98,13 +102,13 @@ export const createSubmission = async (
     const submissionData: PendingSubmissionDoc = {
       applicationID,
       tempProtocolCode,
-      title: information.general_information.protocol_title || "Untitled Protocol",
+      title: normalizedInformation.general_information.protocol_title || "Untitled Protocol",
       submitBy: userId,
       createdBy: userId,
       createdAt: serverTimestamp() as Timestamp,
       updatedAt: serverTimestamp() as Timestamp,
       status: "pending",
-      information,
+      information: normalizedInformation,
       // documents removed - stored only in subcollection
     };
 
@@ -124,6 +128,10 @@ export const updateSubmission = async (
   status?: "draft" | "submitted" | "under_review" | "approved" | "rejected"
 ): Promise<void> => {
   try {
+    // Normalize empty optional fields to "N/A"
+    const { normalizeFormData } = await import('@/lib/utils/normalizeFormData');
+    const normalizedInformation = normalizeFormData(information);
+    
     const submissionRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
     
     // Check if submission exists
@@ -133,8 +141,8 @@ export const updateSubmission = async (
     }
 
     const updateData: Partial<SubmissionData> = {
-      information,
-      title: information.general_information.protocol_title || "Untitled Protocol",
+      information: normalizedInformation,
+      title: normalizedInformation.general_information.protocol_title || "Untitled Protocol",
       updatedAt: serverTimestamp() as Timestamp,
     };
 
@@ -241,9 +249,7 @@ export const createCompleteSubmission = async (
 
   try {
     // Step 1: Create submission first
-    console.log("Creating submission...");
     submissionId = await createSubmission(userId, information);
-    console.log(`Submission created with ID: ${submissionId}`);
 
     // Step 2: Upload documents if any exist
     // Filter out documents without valid file references (due to localStorage serialization)
@@ -255,13 +261,11 @@ export const createCompleteSubmission = async (
     }
     
     if (documentsWithFiles.length > 0) {
-      console.log(`Uploading ${documentsWithFiles.length} documents...`);
       const uploadedDocuments: DocumentsType[] = [];
 
       for (const document of documentsWithFiles) {
         if (document._fileRef) {
           try {
-            console.log(`Uploading document: ${document.title}`);
             
             // Zip the file before uploading
             const zippedFile = await zipSingleFile(document._fileRef, {
@@ -298,7 +302,6 @@ export const createCompleteSubmission = async (
             };
             
             uploadedDocuments.push(finalDocument);
-            console.log(`Document uploaded successfully: ${document.title}`);
           } catch (uploadError) {
             console.error(`Error uploading document ${document.id}:`, uploadError);
             throw new Error(`Failed to upload document "${document.title}": ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
@@ -307,7 +310,6 @@ export const createCompleteSubmission = async (
       }
 
       // Step 3: Save document metadata to subcollection
-      console.log("Saving document metadata...");
       const documentsRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, DOCUMENTS_COLLECTION);
       
       for (const document of uploadedDocuments) {
@@ -320,7 +322,6 @@ export const createCompleteSubmission = async (
       });
     }
 
-    console.log("Submission completed successfully");
     return submissionId;
 
   } catch (error) {
@@ -344,7 +345,6 @@ export const cleanupFailedSubmission = async (
   uploadedFiles: string[]
 ): Promise<void> => {
   try {
-    console.log("Cleaning up failed submission...");
     
     // Delete uploaded files from Storage
     if (uploadedFiles.length > 0) {
@@ -354,7 +354,6 @@ export const cleanupFailedSubmission = async (
       for (const filePath of uploadedFiles) {
         try {
           await deleteObject(ref(storage, filePath));
-          console.log(`Deleted file: ${filePath}`);
         } catch (deleteError) {
           console.warn(`Failed to delete file ${filePath}:`, deleteError);
         }
@@ -365,13 +364,11 @@ export const cleanupFailedSubmission = async (
     if (submissionId) {
       try {
         await deleteDoc(doc(db, SUBMISSIONS_COLLECTION, submissionId));
-        console.log(`Deleted submission: ${submissionId}`);
       } catch (deleteError) {
         console.warn(`Failed to delete submission ${submissionId}:`, deleteError);
       }
     }
     
-    console.log("Cleanup completed");
   } catch (cleanupError) {
     console.error("Error during cleanup:", cleanupError);
   }
@@ -400,7 +397,6 @@ export const getAllUserSubmissions = async (userId: string): Promise<any[]> => {
       });
     });
 
-    console.log(`✅ Found ${submissions.length} total submissions for user from single collection`);
     
     // Sort all submissions by creation date in JavaScript (newest first)
     return submissions.sort((a, b) => {
@@ -616,14 +612,6 @@ export const sendMessage = async (
       status: "sent"
     };
 
-    console.log('📤 Sending message with metadata:', {
-      submissionId,
-      senderId: messageData.senderId,
-      senderName: messageData.senderName,
-      type: messageData.type,
-      status: messageData.status
-    });
-
     const docRef = await addDoc(messagesRef, messageData);
     
     // Update protocol activity when message is sent
@@ -678,7 +666,6 @@ export const markMessageAsRead = async (
     await updateDoc(messageRef, {
       status: "read"
     });
-    console.log('✅ Message marked as read:', messageId);
   } catch (error) {
     console.error("Error marking message as read:", error);
     throw new Error("Failed to mark message as read");
@@ -705,14 +692,12 @@ export const markAllMessagesAsRead = async (
           updateDoc(messageRef, {
             status: "read"
           }).then(() => {
-            console.log('✅ Message marked as read:', docSnap.id);
           })
         );
       }
     });
     
     await Promise.all(updatePromises);
-    console.log(`✅ Marked ${updatePromises.length} messages as read for submission ${submissionId}`);
   } catch (error) {
     console.error("Error marking all messages as read:", error);
     throw new Error("Failed to mark messages as read");
@@ -815,7 +800,6 @@ export const getAllSubmissionsByStatus = async (status: SubmissionStatus): Promi
       });
     });
     
-    console.log(`✅ Found ${submissions.length} submissions with status '${status}' from single collection`);
     return submissions;
   } catch (error) {
     console.error('Error fetching submissions by status:', error);
@@ -870,7 +854,14 @@ export const acceptSubmission = async (
       console.warn("Failed to update protocol activity:", activityError);
     }
     
-    console.log(`✅ Submission ${submissionId} status updated to 'accepted' (no collection transfer)`);
+    // Invalidate analytics cache (protocol status changed)
+    try {
+      const { invalidateAnalyticsCache } = await import("@/lib/services/analytics/analyticsCache");
+      await invalidateAnalyticsCache();
+    } catch (cacheError) {
+      console.warn("Failed to invalidate analytics cache:", cacheError);
+    }
+    
   } catch (error) {
     console.error("Error accepting submission:", error);
     throw new Error("Failed to accept submission");
@@ -911,6 +902,14 @@ export const rejectSubmission = async (
       await updateProtocolActivity(submissionId);
     } catch (activityError) {
       console.warn("Failed to update protocol activity:", activityError);
+    }
+    
+    // Invalidate analytics cache (protocol status changed)
+    try {
+      const { invalidateAnalyticsCache } = await import("@/lib/services/analytics/analyticsCache");
+      await invalidateAnalyticsCache();
+    } catch (cacheError) {
+      console.warn("Failed to invalidate analytics cache:", cacheError);
     }
     
   } catch (error) {
@@ -1099,7 +1098,13 @@ export const makeProtocolDecision = async (
       "system"
     );
     
-    console.log(`✅ Decision made for ${submissionId}: ${decision} (status updated, no collection transfer)`)
+    // Invalidate analytics cache (protocol decision made)
+    try {
+      const { invalidateAnalyticsCache } = await import("@/lib/services/analytics/analyticsCache");
+      await invalidateAnalyticsCache();
+    } catch (cacheError) {
+      console.warn("Failed to invalidate analytics cache:", cacheError);
+    }
     
   } catch (error) {
     console.error("Error making decision:", error);
@@ -1121,7 +1126,6 @@ export const transferProtocolToApproved = async (
   const transferLog: string[] = [];
   
   try {
-    console.log(`🔄 Starting robust transfer for protocol: ${submissionId}`);
     
     // Get the main submission document
     const acceptedRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
@@ -1193,7 +1197,6 @@ export const transferProtocolToApproved = async (
     // Clean up accepted collection
     await cleanupAcceptedCollection(submissionId, transferLog);
     
-    console.log(`✅ Transfer completed successfully for ${submissionId}:`, transferLog);
     
   } catch (error) {
     console.error(`❌ Transfer failed for ${submissionId}:`, error);
@@ -1252,7 +1255,6 @@ const copyDocument = async (
     
     if (!sourceSnap.exists()) {
       transferLog.push(`ℹ️ Document ${documentPath} not found`);
-      console.log(`Document not found: ${SUBMISSIONS_COLLECTION}/${submissionId}/${documentPath}`);
       return;
     }
     
@@ -1260,7 +1262,6 @@ const copyDocument = async (
     batch.set(targetRef, sourceSnap.data());
     
     transferLog.push(`✅ Copied document ${documentPath}`);
-    console.log(`Successfully copied: ${documentPath} from accepted to approved`);
   } catch (error) {
     console.error(`Error copying document ${documentPath}:`, error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

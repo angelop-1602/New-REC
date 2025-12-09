@@ -87,8 +87,9 @@ export const Hero = () => {
               src="/heroimage.jpeg"
               alt="SPUP Campus"
               fill
-              className="object-cover"
               priority
+              sizes="(max-width: 1024px) 0vw, 50vw"
+              className="object-cover"
             />
           </div>
         </div>
@@ -104,8 +105,9 @@ export const Hero = () => {
               src="/heroimage.jpeg"
               alt="SPUP Campus"
               fill
-              className="object-cover"
               priority
+              sizes="100vw"
+              className="object-cover"
             />
           </div>
           

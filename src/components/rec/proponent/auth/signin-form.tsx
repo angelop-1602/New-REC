@@ -165,6 +165,7 @@ export function SigninForm({
                   width={200} 
                   height={200} 
                   className="mb-4"
+                  priority
                 />
                 <h1 className="text-2xl font-bold">
                   {isSignUp ? "Create Account" : "Welcome back"}
@@ -351,11 +352,12 @@ export function SigninForm({
           <div className="relative hidden md:block">
             <div className="bg-primary absolute inset-0 h-full w-full"></div>
             <Image
-              src="/images/our-lady-of-chartres.jpg"
-              alt="Image"
+              src="/heroimage.jpeg"
+              alt="SPUP Campus"
+              fill
+              priority
+              sizes="(max-width: 768px) 0vw, 50vw"
               className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale opacity-50"
-              width={1000}
-              height={1000}
             />
           </div>
         </CardContent>

@@ -6,7 +6,7 @@ import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
 import DocumentUploadDialog from "@/components/rec/shared/dialogs/document-upload-dialog";
 import DocumentRevisionUploadDialog from "@/components/rec/shared/dialogs/document-revision-upload-dialog";
 import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
-import { toast } from "sonner";
+import { customToast } from "@/components/ui/custom/toast";
 import { useRealtimeDocuments } from "@/hooks/useRealtimeDocuments";
 import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
 import { ProtocolDocumentsCard } from "./protocol-overview/protocol-documents-card";
@@ -85,8 +85,6 @@ export default function ProtocolOverview({
     if (onDocumentStatusUpdate) {
       onDocumentStatusUpdate();
     }
-    
-    console.log("✅ Request created - real-time listener will update UI");
   };
 
   const handlePreviewDocument = (documentId: string) => {
@@ -100,7 +98,10 @@ export default function ProtocolOverview({
     // For proponent and reviewer, open in new tab
     const document = documents.find(doc => doc.id === documentId);
     if (!document) {
-      toast.error("Document not found");
+      customToast.error(
+        "Document Not Found",
+        "The requested document could not be located."
+      );
       return;
     }
     
@@ -110,7 +111,10 @@ export default function ProtocolOverview({
       : document.originalFileName || document.id;
     
     if (!filename) {
-      toast.error("Document filename not available");
+      customToast.error(
+        "Filename Missing",
+        "Document filename is not available for preview."
+      );
       return;
     }
     
@@ -137,17 +141,21 @@ export default function ProtocolOverview({
   const handleCancelRequest = async (documentId: string) => {
     try {
       await enhancedDocumentManagementService.cancelDocumentRequest(submissionId, documentId);
-      toast.success("Document request cancelled successfully");
+      customToast.success(
+        "Request Cancelled",
+        "The document request was cancelled successfully."
+      );
       
       // Real-time listener will automatically update the list
       if (onDocumentStatusUpdate) {
         onDocumentStatusUpdate();
       }
-      
-      console.log("✅ Request cancelled - real-time listener will update UI");
     } catch (error) {
       console.error("Error cancelling request:", error);
-      toast.error("Failed to cancel document request");
+      customToast.error(
+        "Cancel Failed",
+        "Failed to cancel the document request. Please try again."
+      );
     }
   };
 
@@ -161,8 +169,6 @@ export default function ProtocolOverview({
     if (onDocumentStatusUpdate) {
       onDocumentStatusUpdate();
     }
-    
-    console.log("✅ Upload complete - real-time listener will update UI");
   };
 
   const handleOpenUploadDialog = (document: DocumentsType) => {

@@ -13,7 +13,6 @@ function initializeFirebaseAdmin() {
     const existingApp = getApps().find(app => app.name === '[DEFAULT]');
     
     if (existingApp) {
-      console.log('Using existing Firebase Admin app');
       return existingApp;
     }
     
@@ -21,12 +20,6 @@ function initializeFirebaseAdmin() {
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const privateKey = process.env.FIREBASE_PRIVATE_KEY;
     const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-    
-    console.log('Initializing Firebase Admin SDK...');
-    console.log('Project ID:', projectId);
-    console.log('Client Email:', clientEmail);
-    console.log('Private Key exists:', !!privateKey);
-    console.log('Storage Bucket:', storageBucket);
     
     if (!projectId) {
       throw new Error('FIREBASE_PROJECT_ID environment variable is required');
@@ -54,8 +47,6 @@ function initializeFirebaseAdmin() {
       credential: cert(serviceAccount),
       storageBucket: storageBucket,
     });
-    
-    console.log('Firebase Admin SDK initialized successfully');
     return app;
   } catch (initError) {
     console.error('Firebase Admin SDK initialization failed:', initError);
@@ -99,12 +90,6 @@ export async function GET(
     const auto = searchParams.get('auto');
     const storagePath = searchParams.get('storagePath'); // New parameter for direct storage path
     
-    console.log('API Route - File:', filename);
-    console.log('API Route - Submission ID:', submissionId);
-    console.log('API Route - Entry:', entry);
-    console.log('API Route - Auto:', auto);
-    console.log('API Route - Storage Path:', storagePath);
-    
     if (!submissionId) {
       return NextResponse.json({ error: 'submissionId is required' }, { status: 400 });
     }
@@ -120,15 +105,12 @@ export async function GET(
     
     // If storagePath is provided, use it directly
     if (storagePath) {
-      console.log('Using direct storage path:', storagePath);
       file = bucket.file(storagePath);
       [exists] = await file.exists();
     } else {
       // Fallback to constructing path from filename
       // All documents are now stored in submissions collection
       const storagePath = `submissions/${submissionId}/documents/${filename}`;
-      
-      console.log('Using storage path:', storagePath);
       
       file = bucket.file(storagePath);
       [exists] = await file.exists();
@@ -137,8 +119,6 @@ export async function GET(
     if (!exists) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
-    
-    console.log('File found, proceeding with preview...');
     
     // Get file metadata
     const [metadata] = await file.getMetadata();

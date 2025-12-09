@@ -183,19 +183,19 @@ export const informationFormValidation: ValidationSchema = {
   },
   "general_information.principal_investigator.contact_number": {
     rules: [
-      { required: false }
+      { required: true }
       // Phone validation removed - accepts any format
     ]
   },
   "general_information.principal_investigator.position": {
     rules: [
-      { required: true },
+      { required: false },
       { minLength: 2, maxLength: 100 }
     ]
   },
   "general_information.principal_investigator.institution": {
     rules: [
-      { required: true },
+      { required: false },
       { minLength: 2, maxLength: 100 }
     ]
   },
@@ -207,7 +207,7 @@ export const informationFormValidation: ValidationSchema = {
   },
   "general_information.adviser.name": {
     rules: [
-      { required: true },
+      { required: false },
       { minLength: 2, maxLength: 100 }
     ]
   },

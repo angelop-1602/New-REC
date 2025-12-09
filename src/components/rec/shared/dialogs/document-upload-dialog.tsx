@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Upload, FileText, AlertCircle, CheckCircle, MessageSquare } from "lucide-react";
-import { toast } from "sonner";
+import { customToast } from "@/components/ui/custom/toast";
 import { useEnhancedDocumentUpload } from "@/hooks/useEnhancedDocumentUpload";
 import { DocumentCategory } from "@/types";
 
@@ -68,12 +68,18 @@ export default function DocumentUploadDialog({
   } = useEnhancedDocumentUpload({
     protocolId,
     onUploadComplete: () => {
-      toast.success("Document uploaded successfully!");
+      customToast.success(
+        "Upload Successful",
+        "Document uploaded successfully and is now pending review."
+      );
       setIsOpen(false);
       onUploadComplete?.();
     },
     onUploadError: (error) => {
-      toast.error(`Upload failed: ${error}`);
+      customToast.error(
+        "Upload Failed",
+        `Upload failed: ${error}`
+      );
     }
   });
 
@@ -83,7 +89,10 @@ export default function DocumentUploadDialog({
 
     const validation = validateFile(file);
     if (!validation.isValid) {
-      toast.error(validation.error || "Invalid file");
+      customToast.error(
+        "Invalid File",
+        validation.error || "The selected file is not valid for upload."
+      );
       return;
     }
 
@@ -92,7 +101,10 @@ export default function DocumentUploadDialog({
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      toast.error("Please select a file to upload");
+      customToast.error(
+        "No File Selected",
+        "Please select a file to upload."
+      );
       return;
     }
 

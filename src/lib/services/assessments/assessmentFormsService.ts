@@ -95,7 +95,6 @@ class AssessmentFormsService {
         updatedAt: serverTimestamp()
       }, { merge: true });
 
-      console.log('✅ Draft saved successfully:', { protocolId, formType, status: 'draft' });
       return true;
     } catch (error) {
       console.error('Error saving draft:', error);
@@ -151,7 +150,6 @@ class AssessmentFormsService {
       // Update protocol review status
       await this.updateProtocolReviewStatus(protocolId, reviewerId, formType);
 
-      console.log('✅ Form submitted successfully:', { protocolId, formType, status: 'submitted' });
       return {
         success: true,
         message: 'Form submitted successfully',

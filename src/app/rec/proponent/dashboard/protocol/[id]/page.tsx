@@ -252,7 +252,6 @@ export default function Page() {
           submissionId={submissionId}
           onDocumentEdit={(documentId: string) => {
             // TODO: Implement document editing
-            console.log('Edit document:', documentId);
             // Could navigate to a document edit page or open an edit dialog
           }}
         />

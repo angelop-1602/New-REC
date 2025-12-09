@@ -32,7 +32,6 @@ class FileReferenceManager {
    */
   setFile(documentId: string, file: File): void {
     this.fileReferences.set(documentId, file);
-    console.log(`📁 File reference stored for document: ${documentId}`);
   }
 
   /**
@@ -54,9 +53,6 @@ class FileReferenceManager {
    */
   removeFile(documentId: string): boolean {
     const removed = this.fileReferences.delete(documentId);
-    if (removed) {
-      console.log(`🗑️ File reference removed for document: ${documentId}`);
-    }
     return removed;
   }
 
@@ -71,9 +67,7 @@ class FileReferenceManager {
    * Clear all file references (e.g., after successful submission)
    */
   clearAll(): void {
-    const count = this.fileReferences.size;
     this.fileReferences.clear();
-    console.log(`🧹 Cleared ${count} file references`);
   }
 
   /**
@@ -130,17 +124,7 @@ class FileReferenceManager {
    * Log current state for debugging
    */
   logState(): void {
-    console.log('📊 File Reference Manager State:');
-    console.log(`  - Total files: ${this.getCount()}`);
-    console.log(`  - Total size: ${(this.getTotalSize() / 1024 / 1024).toFixed(2)} MB`);
-    
-    const files = this.getAllFileInfo();
-    if (files.length > 0) {
-      console.log('  - Files:');
-      files.forEach(({ documentId, name, size, type }) => {
-        console.log(`    - ${documentId}: ${name} (${(size / 1024).toFixed(2)} KB, ${type})`);
-      });
-    }
+    // Intentionally no console logging in production
   }
 }
 

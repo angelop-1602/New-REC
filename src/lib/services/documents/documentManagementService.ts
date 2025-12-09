@@ -63,8 +63,6 @@ export class DocumentManagementService {
       } catch (activityError) {
         console.warn("Failed to update protocol activity:", activityError);
       }
-      
-      console.log(`Document ${documentId} status updated to ${status}`);
       return true;
     } catch (error) {
       console.error('Error updating document status:', error);
@@ -128,7 +126,6 @@ export class DocumentManagementService {
       };
       
       const docRef = await addDoc(requestsRef, requestData);
-      console.log(`Document request created with ID: ${docRef.id}`);
       return docRef.id;
     } catch (error) {
       console.error('Error creating document request:', error);
@@ -181,8 +178,6 @@ export class DocumentManagementService {
         fulfilledAt: new Date().toISOString(),
         fulfilledDocumentId
       });
-      
-      console.log(`Document request ${requestId} marked as fulfilled`);
       return true;
     } catch (error) {
       console.error('Error fulfilling document request:', error);
@@ -200,8 +195,6 @@ export class DocumentManagementService {
       await updateDoc(requestRef, {
         status: 'cancelled'
       });
-      
-      console.log(`Document request ${requestId} cancelled`);
       return true;
     } catch (error) {
       console.error('Error cancelling document request:', error);
@@ -249,8 +242,6 @@ export class DocumentManagementService {
       }
       
       await updateDoc(documentRef, updateData);
-      
-      console.log(`Document ${documentId} replaced with new version`);
       return true;
     } catch (error) {
       console.error('Error replacing document:', error);

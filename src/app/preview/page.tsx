@@ -19,6 +19,7 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { DocumentsType } from "@/types";
+import { LoadingSimple } from "@/components/ui/loading";
 
 // Separate component that uses useSearchParams
 function DocumentPreviewContent() {
@@ -109,7 +110,6 @@ function DocumentPreviewContent() {
     setSelectedStatus('accepted');
     
     // Show success message (you can add toast notification here)
-    console.log('Document status updated:', selectedDocument.id, selectedStatus);
   };
 
   // Get status badge
@@ -148,8 +148,7 @@ function DocumentPreviewContent() {
               {loading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                    <p className="text-muted-foreground">Loading preview...</p>
+                    <LoadingSimple size="md" text="Loading preview..." />
                   </div>
                 </div>
               ) : error ? (
@@ -300,14 +299,15 @@ function DocumentPreviewContent() {
 // Main page component with Suspense boundary
 export default function DocumentPreviewPage() {
   return (
-    <React.Suspense fallback={
-      <div className="min-h-screen bg-muted/10 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Loading preview...</p>
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen bg-muted/10 flex items-center justify-center">
+          <div className="text-center">
+            <LoadingSimple size="md" text="Loading preview..." />
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <DocumentPreviewContent />
     </React.Suspense>
   );

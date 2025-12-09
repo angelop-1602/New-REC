@@ -100,14 +100,16 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r border-[#036635]/10 dark:border-[#FECC07]/20">
       <SidebarHeader className="flex flex-col items-center justify-center p-4 border-b border-[#036635]/10 dark:border-[#FECC07]/20 bg-gradient-to-b from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 animate-in fade-in slide-in-from-left-4 duration-500">
+        <div className="relative w-full h-40 flex items-center justify-center">
         <Image
           src="/SPUP-Logo-with-yellow.png"
           alt="SPUP Logo"
-          width={220}
-          height={220}
+            width={160}
+            height={160}
           priority
-          className="w-auto h-40 object-contain animate-in fade-in zoom-in-95 duration-500 delay-150"
+            className="w-auto h-40 object-contain animate-in fade-in duration-500 delay-150"
         />
+        </div>
         <div className="flex flex-col items-center gap-1 mt-2">
           <span className="text-2xl font-bold bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">SPUP</span>
           <span className="text-sm font-bold text-[#036635] dark:text-[#FECC07] text-center">Research Ethics Committee</span>

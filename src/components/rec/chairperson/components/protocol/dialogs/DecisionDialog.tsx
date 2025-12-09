@@ -19,13 +19,14 @@ import {
   DialogHeader, 
   DialogTitle 
 } from "@/components/ui/dialog";
-import { CheckCircle, Loader2, Upload, X } from "lucide-react";
+import { CheckCircle, Upload, X } from "lucide-react";
 import { makeProtocolDecision } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { 
   toChairpersonProtocol
 } from '@/types';
+import { InlineLoading } from "@/components/ui/loading";
 
 interface DecisionDialogProps {
   open: boolean;
@@ -504,8 +505,8 @@ export function DecisionDialog({
       >
         {isProcessing ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
+            <InlineLoading size="sm" />
+            <span className="ml-2">Processing...</span>
           </>
         ) : (
           <>

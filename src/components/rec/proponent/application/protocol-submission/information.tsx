@@ -266,6 +266,7 @@ export const SubmissionInformation = () => {
                   ]?.rules
                 }
                 placeholder="Phone/mobile number"
+                required
                 fieldPath="general_information.principal_investigator.contact_number"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
@@ -293,7 +294,6 @@ export const SubmissionInformation = () => {
                 }
                 placeholder="Institution"
                 format="proper-case"
-                required
                 fieldPath="general_information.principal_investigator.institution"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
@@ -318,7 +318,6 @@ export const SubmissionInformation = () => {
                 }
                 placeholder="Position"
                 format="proper-case"
-                required
                 fieldPath="general_information.principal_investigator.position"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
@@ -381,7 +380,6 @@ export const SubmissionInformation = () => {
                 }
                 placeholder="Adviser name"
                 format="proper-case"
-                required
                 fieldPath="general_information.adviser.name"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}

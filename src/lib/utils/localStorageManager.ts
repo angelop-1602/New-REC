@@ -78,7 +78,6 @@ class LocalStorageManager {
       localStorage.setItem(DRAFT_STORAGE_KEY, serializedData);
       localStorage.setItem(DRAFT_TIMESTAMP_KEY, Date.now().toString());
 
-      console.log("Draft saved successfully with documents:", documentsForStorage.length);
       return true;
     } catch (error) {
       console.error("Failed to save draft:", error);
@@ -98,7 +97,6 @@ class LocalStorageManager {
       const timestampStr = localStorage.getItem(DRAFT_TIMESTAMP_KEY);
 
       if (!serializedData || !timestampStr) {
-        console.log("No draft data found");
         return null;
       }
 
@@ -108,7 +106,6 @@ class LocalStorageManager {
 
       // Check if draft has expired
       if (hoursElapsed > DRAFT_EXPIRY_HOURS) {
-        console.log("Draft data has expired, removing...");
         this.clearDraft();
         return null;
       }
@@ -129,7 +126,6 @@ class LocalStorageManager {
         return null;
       }
 
-      console.log("Draft loaded successfully with documents:", draftData.documents.length);
       return {
         formData: draftData.formData,
         documents: draftData.documents,
@@ -153,7 +149,6 @@ class LocalStorageManager {
     try {
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       localStorage.removeItem(DRAFT_TIMESTAMP_KEY);
-      console.log("Draft cleared successfully");
       return true;
     } catch (error) {
       console.error("Failed to clear draft:", error);

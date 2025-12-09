@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Calendar as CalendarIcon, FileText, CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
-import { PageLoading } from "@/components/ui/loading"
+import { LoadingSkeleton } from "@/components/ui/loading"
 import { getAllSubmissionsByStatus } from "@/lib/firebase/firestore"
 import { format, addMonths, addDays, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isToday, isPast, startOfDay } from "date-fns"
 import { 
@@ -39,7 +39,7 @@ interface CalendarEvent {
 
 export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
-  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [allSubmissions, setAllSubmissions] = useState<ChairpersonProtocol[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedFilters, setSelectedFilters] = useState<Set<EventType | "all">>(new Set(["all"]))
@@ -53,7 +53,7 @@ export default function CalendarPage() {
       setLoading(true)
       setError(null)
 
-      // Fetch all submissions from all statuses
+      // Fetch all submissions from all statuses in parallel
       const [pending, accepted, approved, archived] = await Promise.all([
         getAllSubmissionsByStatus('pending'),
         getAllSubmissionsByStatus('accepted'),
@@ -61,18 +61,42 @@ export default function CalendarPage() {
         getAllSubmissionsByStatus('archived')
       ])
 
-      const allSubmissions = [...pending, ...accepted, ...approved, ...archived]
-      const typedSubmissions = toChairpersonProtocols(allSubmissions)
-      const calendarEvents: CalendarEvent[] = []
+      const combinedSubmissions = [...pending, ...accepted, ...approved, ...archived]
+      const typedSubmissions = toChairpersonProtocols(combinedSubmissions)
+      setAllSubmissions(typedSubmissions)
+    } catch (err) {
+      console.error('Error fetching calendar events:', err)
+      setError('Failed to load calendar events')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      typedSubmissions.forEach((submission: ChairpersonProtocol) => {
-        const submissionId = String(submission.id)
-        const protocolCode = getProtocolCode(submission) || String(submission.applicationID || submission.id)
-        const title = getProtocolTitle(submission)
+  // Memoize event generation - only recompute when submissions or currentMonth changes
+  const events = useMemo(() => {
+    if (allSubmissions.length === 0) return []
+
+    // Calculate date range for filtering events (current month ± 6 months buffer)
+    const monthStart = startOfMonth(currentMonth)
+    const monthEnd = endOfMonth(currentMonth)
+    const filterStart = addMonths(monthStart, -6) // 6 months before
+    const filterEnd = addMonths(monthEnd, 6) // 6 months after
+
+    const calendarEvents: CalendarEvent[] = []
+
+    // Helper function to check if date is within filter range
+    const isDateInRange = (date: Date): boolean => {
+      return date >= filterStart && date <= filterEnd
+    }
+
+    allSubmissions.forEach((submission: ChairpersonProtocol) => {
+      const submissionId = String(submission.id)
+      const protocolCode = getProtocolCode(submission) || String(submission.applicationID || submission.id)
+      const title = getProtocolTitle(submission)
 
         // 1. Submission date
         const submissionDate = toDate(submission.createdAt);
-        if (submissionDate && !isNaN(submissionDate.getTime())) {
+        if (submissionDate && !isNaN(submissionDate.getTime()) && isDateInRange(submissionDate)) {
           calendarEvents.push({
             id: `${submissionId}-submission`,
             date: submissionDate,
@@ -92,7 +116,7 @@ export default function CalendarPage() {
           // Only add resubmission event if updatedAt is significantly different from createdAt (at least 1 day)
           if (resubmissionDate && submissionDate && !isNaN(resubmissionDate.getTime()) && !isNaN(submissionDate.getTime())) {
             const daysDifference = Math.abs((resubmissionDate.getTime() - submissionDate.getTime()) / (1000 * 60 * 60 * 24));
-            if (daysDifference >= 1) {
+            if (daysDifference >= 1 && isDateInRange(resubmissionDate)) {
               calendarEvents.push({
                 id: `${submissionId}-resubmission`,
                 date: resubmissionDate,
@@ -117,7 +141,7 @@ export default function CalendarPage() {
             // If updated after decision date, it's likely a resubmission
             if (updatedDate.getTime() > decisionDate.getTime()) {
               const daysDifference = Math.abs((updatedDate.getTime() - decisionDate.getTime()) / (1000 * 60 * 60 * 24))
-              if (daysDifference >= 1) {
+              if (daysDifference >= 1 && isDateInRange(updatedDate)) {
                 calendarEvents.push({
                   id: `${submissionId}-resubmission-after-decision`,
                   date: updatedDate,
@@ -135,7 +159,7 @@ export default function CalendarPage() {
         // 2. Certificate date (when approved)
         if (submission.approvedAt && (submission.status === 'approved' || submission.status === 'archived')) {
           const approvedDate = toDate(submission.approvedAt)
-          if (approvedDate && !isNaN(approvedDate.getTime())) {
+          if (approvedDate && !isNaN(approvedDate.getTime()) && isDateInRange(approvedDate)) {
             calendarEvents.push({
               id: `${submissionId}-certificate`,
               date: approvedDate,
@@ -154,28 +178,32 @@ export default function CalendarPage() {
           if (approvedDate && !isNaN(approvedDate.getTime())) {
             // First progress report due 6 months after approval
             const firstProgressDue = addMonths(approvedDate, 6)
-            calendarEvents.push({
-              id: `${submissionId}-progress-1`,
-              date: firstProgressDue,
-              type: "progress_report_due",
-              title: `Progress Report Due: ${title}`,
-              protocolCode,
-              submissionId,
-              description: "First progress report due (6 months after approval)"
-            })
-
-            // Second progress report due 12 months after approval (if not archived)
-            if (submission.status === 'approved') {
-              const secondProgressDue = addMonths(approvedDate, 12)
+            if (isDateInRange(firstProgressDue)) {
               calendarEvents.push({
-                id: `${submissionId}-progress-2`,
-                date: secondProgressDue,
+                id: `${submissionId}-progress-1`,
+                date: firstProgressDue,
                 type: "progress_report_due",
                 title: `Progress Report Due: ${title}`,
                 protocolCode,
                 submissionId,
-                description: "Second progress report due (12 months after approval)"
+                description: "First progress report due (6 months after approval)"
               })
+            }
+
+            // Second progress report due 12 months after approval (if not archived)
+            if (submission.status === 'approved') {
+              const secondProgressDue = addMonths(approvedDate, 12)
+              if (isDateInRange(secondProgressDue)) {
+                calendarEvents.push({
+                  id: `${submissionId}-progress-2`,
+                  date: secondProgressDue,
+                  type: "progress_report_due",
+                  title: `Progress Report Due: ${title}`,
+                  protocolCode,
+                  submissionId,
+                  description: "Second progress report due (12 months after approval)"
+                })
+              }
             }
 
             // Check deadlines array if it exists
@@ -183,7 +211,7 @@ export default function CalendarPage() {
               submission.deadlines.forEach((deadline: Record<string, unknown>, index: number) => {
                 if (deadline.type === 'progress_report' && deadline.dueDate) {
                   const dueDate = toDate(deadline.dueDate as FirestoreDate)
-                  if (dueDate && !isNaN(dueDate.getTime())) {
+                  if (dueDate && !isNaN(dueDate.getTime()) && isDateInRange(dueDate)) {
                     calendarEvents.push({
                       id: `${submissionId}-progress-deadline-${index}`,
                       date: dueDate,
@@ -203,7 +231,7 @@ export default function CalendarPage() {
         // 4. Final report due date
         if (submission.approvalValidUntil) {
           const finalReportDue = toDate(submission.approvalValidUntil)
-          if (finalReportDue && !isNaN(finalReportDue.getTime())) {
+          if (finalReportDue && !isNaN(finalReportDue.getTime()) && isDateInRange(finalReportDue)) {
             calendarEvents.push({
               id: `${submissionId}-final-report`,
               date: finalReportDue,
@@ -219,15 +247,17 @@ export default function CalendarPage() {
           const approvedDate = toDate(submission.approvedAt)
           if (approvedDate && !isNaN(approvedDate.getTime())) {
             const estimatedEndDate = addMonths(approvedDate, 12)
-            calendarEvents.push({
-              id: `${submissionId}-final-report-estimated`,
-              date: estimatedEndDate,
-              type: "final_report_due",
-              title: `Final Report Due (Estimated): ${title}`,
-              protocolCode,
-              submissionId,
-              description: "Estimated final report due date (1 year after approval)"
-            })
+            if (isDateInRange(estimatedEndDate)) {
+              calendarEvents.push({
+                id: `${submissionId}-final-report-estimated`,
+                date: estimatedEndDate,
+                type: "final_report_due",
+                title: `Final Report Due (Estimated): ${title}`,
+                protocolCode,
+                submissionId,
+                description: "Estimated final report due date (1 year after approval)"
+              })
+            }
           }
         }
 
@@ -236,7 +266,7 @@ export default function CalendarPage() {
             submission.deadlines.forEach((deadline: Record<string, unknown>, index: number) => {
             if (deadline.type === 'final_report' && deadline.dueDate) {
               const dueDate = toDate(deadline.dueDate as FirestoreDate)
-              if (dueDate && !isNaN(dueDate.getTime())) {
+              if (dueDate && !isNaN(dueDate.getTime()) && isDateInRange(dueDate)) {
                 calendarEvents.push({
                   id: `${submissionId}-final-deadline-${index}`,
                   date: dueDate,
@@ -254,7 +284,7 @@ export default function CalendarPage() {
         // 5. Review completion date
         if (submission.estimatedCompletionDate) {
           const completionDate = toDate(submission.estimatedCompletionDate)
-          if (completionDate && !isNaN(completionDate.getTime())) {
+          if (completionDate && !isNaN(completionDate.getTime()) && isDateInRange(completionDate)) {
             calendarEvents.push({
               id: `${submissionId}-review-completion`,
               date: completionDate,
@@ -270,27 +300,23 @@ export default function CalendarPage() {
           const acceptedDate = toDate(submission.acceptedAt)
           if (acceptedDate && !isNaN(acceptedDate.getTime())) {
             const estimatedCompletion = addDays(acceptedDate, 30)
-            calendarEvents.push({
-              id: `${submissionId}-review-completion-estimated`,
-              date: estimatedCompletion,
-              type: "review_completion",
-              title: `Review Completion (Estimated): ${title}`,
-              protocolCode,
-              submissionId,
-              description: "Estimated review completion (30 days from acceptance)"
-            })
+            if (isDateInRange(estimatedCompletion)) {
+              calendarEvents.push({
+                id: `${submissionId}-review-completion-estimated`,
+                date: estimatedCompletion,
+                type: "review_completion",
+                title: `Review Completion (Estimated): ${title}`,
+                protocolCode,
+                submissionId,
+                description: "Estimated review completion (30 days from acceptance)"
+              })
+            }
           }
         }
       })
 
-      setEvents(calendarEvents)
-    } catch (err) {
-      console.error('Error fetching calendar events:', err)
-      setError('Failed to load calendar events')
-    } finally {
-      setLoading(false)
-    }
-  }
+      return calendarEvents
+    }, [allSubmissions, currentMonth])
 
   // Filter events by selected types
   const filteredEvents = useMemo(() => {
@@ -470,8 +496,50 @@ export default function CalendarPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <PageLoading text="Loading calendar..." />
+      <div className="flex flex-col w-full min-h-full p-4 gap-4 animate-in fade-in duration-500">
+        <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20 pt-6 pb-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <LoadingSkeleton className="h-9 w-9 rounded-full" />
+                <LoadingSkeleton className="h-6 w-40 rounded-md" />
+                <LoadingSkeleton className="h-9 w-9 rounded-full" />
+              </div>
+              <LoadingSkeleton className="h-9 w-20 rounded-md" />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <LoadingSkeleton key={idx} className="h-7 w-32 rounded-full" />
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="grid grid-cols-7 border-t border-l border-[#036635]/20 dark:border-[#FECC07]/30">
+              {/* Weekday headers skeleton */}
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                <div
+                  key={day}
+                  className="border-r border-b border-[#036635]/20 dark:border-[#FECC07]/30 p-2 bg-muted/40"
+                >
+                  <span className="text-xs font-medium text-muted-foreground">{day}</span>
+                </div>
+              ))}
+              {/* Day cells skeleton */}
+              {Array.from({ length: 35 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="border-r border-b border-[#036635]/20 dark:border-[#FECC07]/30 min-h-[120px] p-2 flex flex-col"
+                >
+                  <LoadingSkeleton className="h-4 w-6 mb-2 rounded-md" />
+                  <div className="space-y-1 mt-1">
+                    <LoadingSkeleton className="h-3 w-20 rounded-md" />
+                    <LoadingSkeleton className="h-3 w-16 rounded-md" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }

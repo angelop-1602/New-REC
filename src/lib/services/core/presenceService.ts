@@ -3,7 +3,11 @@ import {
   setDoc, 
   serverTimestamp,
   onSnapshot,
-  getDoc
+  getDoc,
+  collection,
+  query,
+  where,
+  limit
 } from "firebase/firestore";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
@@ -22,25 +26,16 @@ export interface UserPresence {
 }
 
 /**
- * Get presence document ID by email
- * We'll use email as document ID for easy lookup
- */
-function getPresenceDocId(email: string): string {
-  // Use email as document ID (sanitized)
-  return email.replace(/[^a-zA-Z0-9]/g, '_');
-}
-
-/**
  * Initialize presence tracking for the current user
  * Call this when user logs in or app starts
- * Stores presence by both userId and email for easy lookup
+ * Stores presence by userId only (email is stored as a field for querying)
  * 
  * Note: Firestore doesn't have onDisconnect like Realtime Database.
  * We use a heartbeat mechanism - if lastSeen is older than 60 seconds, user is considered offline.
  */
 export async function initializePresence(userId: string, email: string): Promise<void> {
   try {
-    // Store presence by userId
+    // Store presence by userId only (single document per user)
     const presenceRef = doc(db, PRESENCE_COLLECTION, userId);
     await setDoc(presenceRef, {
       userId,
@@ -49,18 +44,6 @@ export async function initializePresence(userId: string, email: string): Promise
       lastSeen: serverTimestamp(),
       updatedAt: serverTimestamp()
     }, { merge: true });
-
-    // Also store by email for easy lookup (e.g., for chairperson)
-    const emailPresenceRef = doc(db, PRESENCE_COLLECTION, getPresenceDocId(email));
-    await setDoc(emailPresenceRef, {
-      userId,
-      email,
-      status: "online",
-      lastSeen: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-
-    console.log(`✅ Presence initialized for user ${userId} (${email})`);
   } catch (error) {
     console.error("Error initializing presence:", error);
   }
@@ -72,9 +55,8 @@ export async function initializePresence(userId: string, email: string): Promise
  */
 export async function updateLastSeen(userId: string, email: string): Promise<void> {
   try {
-    // Update both userId and email-based presence
+    // Update presence by userId only
     const presenceRef = doc(db, PRESENCE_COLLECTION, userId);
-    const emailPresenceRef = doc(db, PRESENCE_COLLECTION, getPresenceDocId(email));
     
     const updateData = {
       userId,
@@ -85,7 +67,6 @@ export async function updateLastSeen(userId: string, email: string): Promise<voi
     };
 
     await setDoc(presenceRef, updateData, { merge: true });
-    await setDoc(emailPresenceRef, updateData, { merge: true });
   } catch (error) {
     console.error("Error updating last seen:", error);
   }
@@ -98,7 +79,6 @@ export async function updateLastSeen(userId: string, email: string): Promise<voi
 export async function setUserOffline(userId: string, email: string): Promise<void> {
   try {
     const presenceRef = doc(db, PRESENCE_COLLECTION, userId);
-    const emailPresenceRef = doc(db, PRESENCE_COLLECTION, getPresenceDocId(email));
     
     const updateData = {
       userId,
@@ -109,8 +89,6 @@ export async function setUserOffline(userId: string, email: string): Promise<voi
     };
 
     await setDoc(presenceRef, updateData, { merge: true });
-    await setDoc(emailPresenceRef, updateData, { merge: true });
-    console.log(`✅ User ${userId} set to offline`);
   } catch (error) {
     console.error("Error setting user offline:", error);
   }
@@ -213,20 +191,25 @@ export async function getChairpersonUserId(): Promise<string | null> {
 
 /**
  * Subscribe to chairperson presence by email
- * Since we know the chairperson email is rec@spup.edu.ph, we can look it up by email
+ * Since we know the chairperson email is rec@spup.edu.ph, we query by email field
  * Automatically determines online/offline based on lastSeen timestamp
  */
 export function subscribeToChairpersonPresence(
   callback: (presence: UserPresence | null) => void
 ): () => void {
   const chairpersonEmail = "rec@spup.edu.ph";
-  const presenceRef = doc(db, PRESENCE_COLLECTION, getPresenceDocId(chairpersonEmail));
+  // Query presence collection by email field instead of using email as document ID
+  const presenceQuery = query(
+    collection(db, PRESENCE_COLLECTION),
+    where("email", "==", chairpersonEmail),
+    limit(1)
+  );
   
   const unsubscribe = onSnapshot(
-    presenceRef,
+    presenceQuery,
     (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data() as UserPresence;
+      if (!snapshot.empty && snapshot.docs.length > 0) {
+        const data = snapshot.docs[0].data() as UserPresence;
         // Determine actual status based on lastSeen
         const actualStatus = isUserOnline(data) ? "online" : "offline";
         callback({

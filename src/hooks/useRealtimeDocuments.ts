@@ -39,7 +39,6 @@ export function useRealtimeDocuments({
       return;
     }
 
-    console.log(`🔄 Setting up real-time listener for documents in ${protocolId}`);
     
     try {
       const protocolRef = doc(db, collectionName, protocolId);
@@ -56,7 +55,6 @@ export function useRealtimeDocuments({
       const unsubscribe = onSnapshot(
         documentsQuery,
         (snapshot) => {
-          console.log(`📄 Documents updated: ${snapshot.docs.length} documents`);
           
           const updatedDocs: DocumentsType[] = [];
           snapshot.forEach((doc) => {
@@ -86,7 +84,6 @@ export function useRealtimeDocuments({
 
       // Cleanup subscription on unmount
       return () => {
-        console.log(`🔌 Unsubscribing from documents listener for ${protocolId}`);
         unsubscribe();
       };
     } catch (err) {

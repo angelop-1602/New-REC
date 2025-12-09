@@ -208,8 +208,6 @@ export async function archiveProtocol(
       `Protocol ${protocolCode} has been archived. ${reasonMessages[reason]} ${details ? `Details: ${details}` : ""}`,
       "system"
     );
-    
-    console.log(`✅ Protocol ${protocolId} archived with reason: ${reason}`);
   } catch (error) {
     console.error("Error archiving protocol:", error);
     throw new Error("Failed to archive protocol");

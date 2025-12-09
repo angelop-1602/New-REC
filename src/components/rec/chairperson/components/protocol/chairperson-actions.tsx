@@ -46,6 +46,7 @@ import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
 import { documentGenerator } from "@/lib/services/documents/documentGenerator";
 import { getCurrentChairName } from "@/lib/services/core/recSettingsService";
 import { extractTemplateData } from "@/lib/services/documents/templateDataMapper";
+import { customToast } from "@/components/ui/custom/toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -152,27 +153,13 @@ export function ChairpersonActions({
           const allAccepted = documents.every((doc) => {
             const docRec = doc as unknown as Record<string, unknown>;
             const docStatus = (docRec.currentStatus as string) || (docRec.status as string);
-            console.log(`📄 Document "${docRec.title}": status="${docRec.status}", currentStatus="${docRec.currentStatus}", final="${docStatus}"`);
             return docStatus === "accepted";
           });
           const noPendingRequests = pending === 0;
           
           const shouldEnableButton = hasDocuments && allAccepted && noPendingRequests;
           setAllDocumentsAccepted(shouldEnableButton);
-          
-          console.log(`✅ Documents check:`, {
-            totalDocs: documents.length,
-            acceptedDocs: documents.filter((d) => {
-              const dRec = d as unknown as Record<string, unknown>;
-              const docStatus = (dRec.currentStatus as string) || (dRec.status as string);
-              return docStatus === "accepted";
-            }).length,
-            pendingRequests: pending,
-            hasDocuments,
-            allAccepted,
-            noPendingRequests,
-            buttonEnabled: shouldEnableButton
-          });
+
         } catch (error) {
           console.error("Error checking documents:", error);
           setAllDocumentsAccepted(false);
@@ -484,7 +471,10 @@ export function ChairpersonActions({
       downloadAssessmentForm(blob, fileName);
     } catch (error) {
       console.error('Error exporting assessment form to template:', error);
-      alert('Failed to export assessment form. Please try again.');
+        customToast.error(
+          "Export Failed",
+          "Failed to export assessment form. Please try again."
+        );
     }
   };
 
@@ -905,7 +895,6 @@ export function ChairpersonActions({
                 try {
                   const fileName = `${submission.spupCode || submission.tempProtocolCode || 'SPUP_REC'}_Archiving_Notification_${file.name}`;
                   const { storagePath, downloadUrl } = await documentGenerator.uploadToStorage(file, fileName, submission.id);
-                  console.log('Uploaded archive notification to:', storagePath, downloadUrl);
                 } catch (e) {
                   console.error('Failed to upload archiving notification:', e);
                 }

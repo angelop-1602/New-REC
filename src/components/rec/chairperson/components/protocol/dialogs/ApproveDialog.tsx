@@ -13,7 +13,7 @@ import {
   DialogHeader, 
   DialogTitle 
 } from "@/components/ui/dialog";
-import { CheckCircle, Loader2 } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { useSpupCodeGenerator } from "@/hooks/useSpupCodeGenerator";
 import { acceptSubmission } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +22,7 @@ import {
   toChairpersonProtocol,
   getPIName
 } from '@/types';
+import { InlineLoading } from "@/components/ui/loading";
 
 interface ApproveDialogProps {
   open: boolean;
@@ -173,8 +174,8 @@ export function ApproveDialog({
           >
             {isProcessing ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                <InlineLoading size="sm" />
+                <span className="ml-2">Processing...</span>
               </>
             ) : (
               <>

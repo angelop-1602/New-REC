@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { DocumentsType, DocumentStatus } from "@/types";
 import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
-import { toast } from "sonner";
+import { customToast } from "@/components/ui/custom/toast";
 
 interface DocumentReviewDialogProps {
   document: DocumentsType;
@@ -104,12 +104,18 @@ export default function DocumentReviewDialog({
         'current-chairperson-id' // TODO: Get actual chairperson ID from auth context
       );
       
-      toast.success('Document status updated successfully');
+      customToast.success(
+        'Status Updated',
+        'Document status has been updated successfully.'
+      );
       onStatusUpdate?.();
       setOpen(false);
     } catch (error) {
       console.error('Error updating document status:', error);
-      toast.error('Failed to update document status');
+      customToast.error(
+        'Update Failed',
+        'Failed to update document status. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }

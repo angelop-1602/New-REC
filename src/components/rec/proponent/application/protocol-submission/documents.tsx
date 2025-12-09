@@ -117,7 +117,6 @@ export default function SubmissionDocuments() {
       
       // If there's an existing document, remove it and its file reference first
       if (existingDoc) {
-        console.log(`🔄 Replacing document "${requirement.title}"`);
         removeDocument(existingDoc.id);
         removeFileReference(existingDoc.id);
       }
@@ -127,7 +126,6 @@ export default function SubmissionDocuments() {
 
       // Store file reference in memory (separate from context)
       setFileReference(documentId, file);
-      console.log(`📁 File reference stored in memory for "${requirement.title}"`);
 
       // Create DocumentsType object for the uploaded file
       const document: DocumentsType = {
@@ -158,7 +156,6 @@ export default function SubmissionDocuments() {
 
       // Add to submission context
       addDocument(document);
-      console.log(`✅ Document "${requirement.title}" added to context with file reference in memory`);
     } catch (error) {
       console.error("Error handling file upload:", error);
     }

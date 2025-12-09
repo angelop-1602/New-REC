@@ -12,13 +12,14 @@ import {
   DialogHeader, 
   DialogTitle 
 } from "@/components/ui/dialog";
-import { XCircle, Loader2 } from "lucide-react";
+import { XCircle } from "lucide-react";
 import { rejectSubmission } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { 
   toChairpersonProtocol
 } from '@/types';
+import { InlineLoading } from "@/components/ui/loading";
 
 interface RejectDialogProps {
   open: boolean;
@@ -107,8 +108,8 @@ export function RejectDialog({
           >
             {isProcessing ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                <InlineLoading size="sm" />
+                <span className="ml-2">Processing...</span>
               </>
             ) : (
               <>

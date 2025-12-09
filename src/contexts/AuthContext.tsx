@@ -15,6 +15,7 @@ import {
   User as FirebaseUser,
   AuthError
 } from "firebase/auth";
+import { getFirestore, doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { customToast } from "@/components/ui/custom/toast";
 import firebaseApp from "@/lib/firebaseConfig";
 import { AuthContextType, User, convertFirebaseUser } from "@/types";
@@ -144,11 +145,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Handle OAuth redirect result (for Google redirect flow)
     const handleRedirectResult = async () => {
       try {
-        console.log('Checking for redirect result...');
         const result = await getRedirectResult(auth);
         
         if (result) {
-          console.log('Redirect result found:', result);
           isRedirectHandled = true;
           setLoading(false);
           
@@ -180,7 +179,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             window.location.href = redirectUrl;
           }, 1000);
         } else {
-          console.log('No redirect result found');
           setLoading(false);
         }
       } catch (error) {
@@ -286,23 +284,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } catch (signInError: any) {
         // If account doesn't exist and it's the chairperson, create it
         if ((signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') && isChairperson && email === 'rec@spup.edu.ph') {
-          console.log('📝 Chairperson account not found. Creating account...');
           try {
             // Create the chairperson account
             userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            console.log('✅ Chairperson account created successfully');
             
             // Send email verification (optional, but good practice)
             try {
               await firebaseSendEmailVerification(userCredential.user);
-              console.log('📧 Verification email sent');
             } catch (verifyError) {
               console.warn('⚠️ Could not send verification email:', verifyError);
             }
             
             // Sign in with the newly created account
             userCredential = await firebaseSignInWithEmailAndPassword(auth, email, password);
-            console.log('✅ Chairperson signed in with new account');
           } catch (createError: any) {
             console.error('❌ Failed to create chairperson account:', createError);
             handleAuthError(createError as AuthError);
@@ -317,6 +311,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Check if email is verified for email/password sign-in
       // Chairperson can sign in even if email is not verified (system account)
       if (userCredential.user.emailVerified || isChairperson) {
+        // Create chairperson settings document if it doesn't exist
+        if (isChairperson && userCredential.user.email === 'rec@spup.edu.ph') {
+          try {
+            const db = getFirestore(firebaseApp);
+            const userId = userCredential.user.uid;
+            const recSettingsRef = doc(db, 'rec_settings', userId);
+            const recSettingsDoc = await getDoc(recSettingsRef);
+            
+            if (!recSettingsDoc.exists()) {
+              await setDoc(recSettingsRef, {
+                initialized: true,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              });
+            }
+          } catch (error) {
+            console.warn('⚠️ Could not create chairperson settings document:', error);
+            // Don't block sign-in if this fails
+          }
+        }
+        
         customToast.success(
           "Sign In Successful", 
           "Welcome back! You have been signed in successfully."
@@ -459,7 +474,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       },
       () => {
         // User cancelled - do nothing
-        console.log("Sign out cancelled");
       },
       "Yes, Sign Out"
     );

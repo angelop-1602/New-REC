@@ -72,11 +72,11 @@ interface ReviewerAnalytics {
   completionTrend: { month: string; completed: number; total: number }[];
 }
 
-export default function ReviewerProfilePage() {
+export default function RECMemberProfilePage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const reviewerId = params.id as string; // Using actual ID
+  const memberId = params.id as string; // Using actual ID
   
   const [reviewer, setReviewer] = useState<Reviewer | null>(null);
   const [recMember, setRecMember] = useState<RECMember | null>(null);
@@ -109,23 +109,23 @@ export default function ReviewerProfilePage() {
   }>({});
 
   useEffect(() => {
-    if (reviewerId) {
+    if (memberId) {
       loadData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewerId]);
+  }, [memberId]);
 
   const loadData = async () => {
     // Load data in the background without blocking UI
     try {
       // Load reviewer data by ID
-      const reviewerData = await reviewersManagementService.getReviewerById(reviewerId);
+      const reviewerData = await reviewersManagementService.getReviewerById(memberId);
       if (!reviewerData) {
         customToast.error(
-          'Reviewer Not Found',
-          'The requested reviewer profile could not be found.'
+          'Member Not Found',
+          'The requested member profile could not be found.'
         );
-        router.push('/rec/chairperson/reviewers');
+        router.push('/rec/chairperson/rec-members');
         return;
       }
       
@@ -165,7 +165,7 @@ export default function ReviewerProfilePage() {
       console.error('Error loading data:', error);
       customToast.error(
         'Load Failed',
-        'Failed to load reviewer profile. Please try again.'
+        'Failed to load member profile. Please try again.'
       );
     }
   };
@@ -281,22 +281,22 @@ export default function ReviewerProfilePage() {
       );
       if (success) {
         customToast.success(
-          'Reviewer Updated',
-          'Reviewer details have been updated successfully.'
+          'Member Updated',
+          'Member details have been updated successfully.'
         );
         setEditing(false);
         await loadData();
       } else {
         customToast.error(
           'Update Failed',
-          'Failed to update reviewer details.'
+          'Failed to update member details.'
         );
       }
     } catch (error) {
-      console.error('Error updating reviewer:', error);
+      console.error('Error updating member:', error);
       customToast.error(
         'Update Failed',
-        'Failed to update reviewer details. Please try again.'
+        'Failed to update member details. Please try again.'
       );
     } finally {
       setSaving(false);
@@ -311,20 +311,20 @@ export default function ReviewerProfilePage() {
       if (success) {
         customToast.success(
           'Status Updated',
-          `Reviewer was ${checked ? 'activated' : 'deactivated'} successfully.`
+          `Member was ${checked ? 'activated' : 'deactivated'} successfully.`
         );
         await loadData();
       } else {
         customToast.error(
           'Status Update Failed',
-          'Failed to update reviewer status.'
+          'Failed to update member status.'
         );
       }
     } catch (error) {
-      console.error('Error toggling reviewer status:', error);
+      console.error('Error toggling member status:', error);
       customToast.error(
         'Status Update Failed',
-        'Failed to update reviewer status. Please try again.'
+        'Failed to update member status. Please try again.'
       );
     }
   };
@@ -464,7 +464,7 @@ export default function ReviewerProfilePage() {
     <div className="container mx-auto p-4 md:p-6 max-w-7xl">
       {/* Bento Box Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Side - Reviewer Details Card */}
+        {/* Left Side - Member Details Card */}
         <div className="lg:col-span-1">
           <Card className="sticky top-6 gap-0">
             <CardHeader>
@@ -1088,7 +1088,7 @@ export default function ReviewerProfilePage() {
                 Review Assignments
               </CardTitle>
               <CardDescription>
-                All protocols assigned to this reviewer
+                All protocols assigned to this member
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1181,3 +1181,4 @@ export default function ReviewerProfilePage() {
     </div>
   );
 }
+

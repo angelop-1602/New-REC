@@ -37,8 +37,6 @@ export function useRealtimeMessages({
       setMessages([]);
       return;
     }
-
-    console.log(`🔄 Setting up real-time listener for messages in ${submissionId}`);
     
     try {
       const submissionRef = doc(db, collectionName, submissionId);
@@ -49,8 +47,6 @@ export function useRealtimeMessages({
       const unsubscribe = onSnapshot(
         messagesQuery,
         (snapshot) => {
-          console.log(`💬 Messages updated: ${snapshot.docs.length} messages for ${submissionId}`);
-          
           const updatedMessages: MessagesType[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
@@ -64,17 +60,6 @@ export function useRealtimeMessages({
               type: data.type || 'reply',
               status: data.status || 'sent',
             };
-            
-            // Debug: Log message data
-            if (process.env.NODE_ENV === 'development') {
-              console.log('📨 Message extracted from Firestore:', {
-                id: message.id,
-                senderId: message.senderId,
-                senderName: message.senderName,
-                content: message.content.substring(0, 50),
-                rawData: data
-              });
-            }
             
             updatedMessages.push(message);
           });
@@ -93,7 +78,6 @@ export function useRealtimeMessages({
 
       // Cleanup subscription on unmount
       return () => {
-        console.log(`🔌 Unsubscribing from messages listener for ${submissionId}`);
         unsubscribe();
       };
     } catch (err) {

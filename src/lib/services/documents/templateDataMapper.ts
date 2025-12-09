@@ -151,8 +151,7 @@ export function extractTemplateData(
   submissionData: any,
   chairpersonName?: string
 ): TemplateData {
-  console.log('📋 Extracting template data from submission:', submissionData.id || submissionData.spupCode);
-  
+  // Extract core submission details for template mapping
   // ============================================================================
   // STEP 1: Extract nested objects for easier access
   // ============================================================================
@@ -161,9 +160,6 @@ export function extractTemplateData(
   const generalInfo = information.general_information || {};
   const principalInvestigator = generalInfo.principal_investigator || {};
   const adviser = generalInfo.adviser || {};
-  
-  console.log('👤 Principal Investigator data:', principalInvestigator);
-  console.log('🏢 Institution value:', principalInvestigator.position_institution);
   
   // ============================================================================
   // STEP 2: Extract dates from Firestore
@@ -174,14 +170,10 @@ export function extractTemplateData(
     ? formatFirestoreDate(submissionData.approvedAt)
     : formatToday(); // Fallback to today only if no approvedAt exists
   
-  console.log('📅 Approved Date:', approvedDate);
-  
   // Initial Review Date - When reviewers were assigned
   const initialReviewDate = submissionData.assignedAt 
     ? formatFirestoreDate(submissionData.assignedAt)
     : '';
-  
-  console.log('📅 Initial Review Date (assignedAt):', initialReviewDate);
   
   // ============================================================================
   // STEP 3: Build the template data object
@@ -242,18 +234,6 @@ export function extractTemplateData(
     DECISION_DETAILS: submissionData.decisionDetails || '',
     TIMELINE: submissionData.timeline || '',
   };
-  
-  // ============================================================================
-  // STEP 4: Debug logging
-  // ============================================================================
-  
-  console.log('✅ Template data extracted:');
-  console.log('   SPUP_REC_CODE:', templateData.SPUP_REC_CODE);
-  console.log('   PROTOCOL_TITLE:', templateData.PROTOCOL_TITLE);
-  console.log('   PRINCIPAL_INVESTIGATOR:', templateData.PRINCIPAL_INVESTIGATOR);
-  console.log('   🏢 INSTITUTION:', templateData.INSTITUTION, '← CHECK THIS!');
-  console.log('   APPROVED_DATE:', templateData.APPROVED_DATE);
-  console.log('   INITIAL_REVIEW_DATE:', templateData.INITIAL_REVIEW_DATE);
   
   return templateData;
 }

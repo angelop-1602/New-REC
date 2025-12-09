@@ -22,7 +22,7 @@ import {
   IconChevronsRight,
 } from "@tabler/icons-react"
 import { formatDistanceToNow } from "date-fns"
-import { PageLoading } from "@/components/ui/loading"
+import { LoadingSkeleton } from "@/components/ui/loading"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -202,8 +202,23 @@ export function DataTable() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[400px] px-4 lg:px-6">
-        <PageLoading text="Loading protocols..." />
+      <div className="w-full space-y-3 sm:space-y-4 min-w-0 px-4 lg:px-6">
+        <div className="rounded-md border border-[#036635]/10 dark:border-[#FECC07]/20 overflow-hidden">
+          {/* Header skeleton */}
+          <div className="border-b border-[#036635]/10 dark:border-[#FECC07]/20 bg-[#036635]/5 dark:bg-[#FECC07]/10 px-4 py-3">
+            <LoadingSkeleton className="h-4 w-40 rounded-md" />
+          </div>
+          {/* Rows skeleton */}
+          <div className="divide-y divide-[#036635]/10 dark:divide-[#FECC07]/20">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <div key={idx} className="flex items-center gap-4 px-4 py-3">
+                <LoadingSkeleton className="h-4 w-28 rounded-md" />
+                <LoadingSkeleton className="h-4 w-64 rounded-md hidden sm:block" />
+                <LoadingSkeleton className="h-4 w-24 rounded-md ml-auto" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

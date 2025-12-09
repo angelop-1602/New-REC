@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
 import { DocumentsType, DocumentCategory } from "@/types";
-import { toast } from "sonner";
+import { customToast } from "@/components/ui/custom/toast";
 
 interface DocumentRequestDialogProps {
   protocolId: string;
@@ -215,12 +215,18 @@ export default function DocumentRequestDialog({
   const handleSubmit = async () => {
     if (activeTab === "initial") {
       if (selectedRequiredDocs.length === 0) {
-        toast.error('Please select at least one document to request');
+        customToast.error(
+          'No Documents Selected',
+          'Please select at least one document to request.'
+        );
         return;
       }
     } else {
       if (!title.trim() || !description.trim()) {
-        toast.error('Please fill in all required fields');
+        customToast.error(
+          'Missing Information',
+          'Please fill in all required fields for the document request.'
+        );
         return;
       }
     }
@@ -247,7 +253,10 @@ export default function DocumentRequestDialog({
         });
         
         await Promise.all(requests);
-        toast.success(`${selectedRequiredDocs.length} document request(s) created successfully`);
+        customToast.success(
+          'Requests Created',
+          `${selectedRequiredDocs.length} document request(s) created successfully.`
+        );
       } else {
         // Single new document request using enhanced service
         await enhancedDocumentManagementService.createDocumentRequest(
@@ -262,14 +271,20 @@ export default function DocumentRequestDialog({
           false, // multiple - default to false for custom requests
           undefined // templateUrl - no template for custom requests
         );
-        toast.success('Document request created successfully');
+        customToast.success(
+          'Request Created',
+          'Document request created successfully.'
+        );
       }
       
       onRequestCreated?.();
       setOpen(false);
     } catch (error) {
       console.error('Error creating document request:', error);
-      toast.error('Failed to create document request');
+      customToast.error(
+        'Request Failed',
+        'Failed to create document request. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }

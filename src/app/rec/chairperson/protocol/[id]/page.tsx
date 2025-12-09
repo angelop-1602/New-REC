@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { PageLoading } from "@/components/ui/loading";
+import { LoadingSkeleton } from "@/components/ui/loading";
 import { getSubmissionById, getSubmissionWithDocuments, SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
 import CustomBanner from "@/components/rec/proponent/application/components/protocol/banner";
 import { reviewerService } from "@/lib/services/reviewers/reviewerService";
@@ -156,7 +156,24 @@ export default function ChairpersonProtocolDetailPage() {
   };
 
   if (loading) {
-    return <PageLoading text="Loading protocol..." />;
+    return (
+      <div className="container mx-auto py-6 px-4 md:px-6 space-y-6 animate-in fade-in duration-500">
+        <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+          <LoadingSkeleton className="h-10 w-64 rounded-md mb-2" />
+          <LoadingSkeleton className="h-4 w-40 rounded-md" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="md:col-span-2 space-y-4">
+            <LoadingSkeleton className="h-40 w-full rounded-xl" />
+            <LoadingSkeleton className="h-64 w-full rounded-xl" />
+          </div>
+          <div className="space-y-4">
+            <LoadingSkeleton className="h-40 w-full rounded-xl" />
+            <LoadingSkeleton className="h-40 w-full rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error) {

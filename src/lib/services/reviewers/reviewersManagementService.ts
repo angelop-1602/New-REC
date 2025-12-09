@@ -509,7 +509,6 @@ export class ReviewersManagementService {
           
           if (success) {
             updated++;
-            console.log(`✅ Updated image for ${reviewer.name}: ${imagePath}`);
           } else {
             failed++;
             console.error(`❌ Failed to update image for ${reviewer.name}`);
@@ -640,6 +639,288 @@ export class ReviewersManagementService {
       throw new Error('Failed to export reviewers to JSON');
     }
   }
+
+  /**
+   * Parse date string from JSON format (e.g., "January 23, 2025 at 2:44:55 PM UTC+8")
+   */
+  private parseDateString(dateString: string | null | undefined): Date | null {
+    if (!dateString) return null;
+    try {
+      // Handle format: "January 23, 2025 at 2:44:55 PM UTC+8"
+      // Remove "at" and timezone info for simpler parsing
+      const cleaned = dateString.replace(' at ', ' ').replace(/ UTC[+-]\d+/, '');
+      const date = new Date(cleaned);
+      return isNaN(date.getTime()) ? null : date;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Parse appointment and tenure string (e.g., "Aug 2026-July 2026")
+   * Returns both dateOfAppointment and tenure
+   */
+  private parseAppointmentAndTenure(
+    dateString: string | null | undefined
+  ): { dateOfAppointment?: { month: number; year: number }; tenure?: { month: number; year: number } } {
+    if (!dateString) return {};
+    
+    try {
+      // Format: "Aug 2026-July 2026" or "Aug 2025-July 2026"
+      const parts = dateString.split('-');
+      if (parts.length !== 2) return {};
+      
+      const monthMap: Record<string, number> = {
+        jan: 1, january: 1,
+        feb: 2, february: 2,
+        mar: 3, march: 3,
+        apr: 4, april: 4,
+        may: 5,
+        jun: 6, june: 6,
+        jul: 7, july: 7,
+        aug: 8, august: 8,
+        sep: 9, september: 9,
+        oct: 10, october: 10,
+        nov: 11, november: 11,
+        dec: 12, december: 12
+      };
+      
+      const parseDatePart = (part: string): { month: number; year: number } | null => {
+        const trimmed = part.trim().toLowerCase();
+        const match = trimmed.match(/([a-z]+)\s+(\d{4})/);
+        if (!match) return null;
+        
+        const monthName = match[1];
+        const year = parseInt(match[2]);
+        const month = monthMap[monthName];
+        
+        if (!month || isNaN(year)) return null;
+        return { month, year };
+      };
+      
+      const startDate = parseDatePart(parts[0]);
+      const endDate = parseDatePart(parts[1]);
+      
+      return {
+        dateOfAppointment: startDate || undefined,
+        tenure: endDate || undefined
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Bulk import reviewers from JSON array
+   * @param jsonData Array of reviewer objects from JSON file
+   * @returns Result with success count, failure count, and errors
+   */
+  async bulkImportReviewers(jsonData: any[]): Promise<{
+    success: number;
+    failed: number;
+    skipped: number;
+    errors: Array<{ index: number; name: string; error: string }>;
+  }> {
+    const errors: Array<{ index: number; name: string; error: string }> = [];
+    let success = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    // Load all existing reviewers once at the start to check for duplicates
+    const existingReviewers = await this.getAllReviewers();
+    
+    // Create lookup maps for faster duplicate checking
+    const nameMap = new Map<string, string>(); // normalized name -> reviewer id
+    const codeMap = new Map<string, string>(); // code -> reviewer id
+    
+    existingReviewers.forEach(reviewer => {
+      const normalizedName = reviewer.name.trim().toLowerCase();
+      nameMap.set(normalizedName, reviewer.id);
+      if (reviewer.code) {
+        codeMap.set(reviewer.code.trim().toUpperCase(), reviewer.id);
+      }
+    });
+
+    // Track names and codes in the current batch to detect duplicates within the file
+    const batchNames = new Set<string>();
+    const batchCodes = new Set<string>();
+
+    for (let i = 0; i < jsonData.length; i++) {
+      const item = jsonData[i];
+      
+      try {
+        // Validate required fields
+        if (!item.name || typeof item.name !== 'string') {
+          errors.push({
+            index: i,
+            name: item.name || 'Unknown',
+            error: 'Missing or invalid name field'
+          });
+          failed++;
+          continue;
+        }
+
+        const normalizedName = item.name.trim().toLowerCase();
+        const providedCode = item.code && typeof item.code === 'string' ? item.code.trim().toUpperCase() : null;
+
+        // Check for duplicate by name in existing database
+        if (nameMap.has(normalizedName)) {
+          errors.push({
+            index: i,
+            name: item.name.trim(),
+            error: `Duplicate: A reviewer with the name "${item.name.trim()}" already exists in the database`
+          });
+          skipped++;
+          continue;
+        }
+
+        // Check for duplicate by name within the same file
+        if (batchNames.has(normalizedName)) {
+          errors.push({
+            index: i,
+            name: item.name.trim(),
+            error: `Duplicate: The name "${item.name.trim()}" appears multiple times in this file`
+          });
+          skipped++;
+          continue;
+        }
+
+        // Check for duplicate by code in existing database (if code is provided)
+        if (providedCode && codeMap.has(providedCode)) {
+          errors.push({
+            index: i,
+            name: item.name.trim(),
+            error: `Duplicate code: A reviewer with the code "${providedCode}" already exists in the database`
+          });
+          skipped++;
+          continue;
+        }
+
+        // Check for duplicate by code within the same file
+        if (providedCode && batchCodes.has(providedCode)) {
+          errors.push({
+            index: i,
+            name: item.name.trim(),
+            error: `Duplicate code: The code "${providedCode}" appears multiple times in this file`
+          });
+          skipped++;
+          continue;
+        }
+
+        // Mark this name and code as seen in the batch
+        batchNames.add(normalizedName);
+        if (providedCode) {
+          batchCodes.add(providedCode);
+        }
+
+        // Build reviewer data
+        const reviewerData: CreateReviewerRequest = {
+          name: item.name.trim()
+        };
+
+        // Map role if present
+        if (item.role && typeof item.role === 'string') {
+          const validRoles: ReviewerRole[] = ['chairperson', 'vice-chair', 'member', 'secretary', 'office-secretary'];
+          if (validRoles.includes(item.role as ReviewerRole)) {
+            reviewerData.role = item.role as ReviewerRole;
+          }
+        }
+
+        // Map member profile fields
+        if (item.specialty !== null && item.specialty !== undefined) {
+          reviewerData.specialty = String(item.specialty);
+        }
+        if (item.sex !== null && item.sex !== undefined) {
+          reviewerData.sex = String(item.sex);
+        }
+        if (item.ageCategory !== null && item.ageCategory !== undefined) {
+          reviewerData.ageCategory = String(item.ageCategory);
+        }
+        if (item.highestEducationalAttainment !== null && item.highestEducationalAttainment !== undefined) {
+          reviewerData.highestEducationalAttainment = String(item.highestEducationalAttainment);
+        }
+        if (item.roleInREC !== null && item.roleInREC !== undefined) {
+          reviewerData.roleInREC = String(item.roleInREC);
+        }
+
+        // Map staff profile fields
+        if (item.birthYear !== null && item.birthYear !== undefined && typeof item.birthYear === 'number') {
+          reviewerData.birthYear = item.birthYear;
+        }
+
+        // Parse appointment and tenure
+        if (item.dateOfAppointmentAndTenure) {
+          const parsed = this.parseAppointmentAndTenure(item.dateOfAppointmentAndTenure);
+          if (parsed.dateOfAppointment) {
+            reviewerData.dateOfAppointment = parsed.dateOfAppointment;
+          }
+          if (parsed.tenure) {
+            reviewerData.tenure = parsed.tenure;
+          }
+        }
+
+        // Create reviewer (code will be generated automatically)
+        const reviewerId = await this.createReviewer(reviewerData);
+        
+        if (reviewerId) {
+          // If JSON has a specific code, update it (preserve original codes from import)
+          if (providedCode) {
+            try {
+              // Double-check code doesn't exist (race condition protection)
+              const currentReviewers = await this.getAllReviewers();
+              const codeExists = currentReviewers.some(r => 
+                r.code && r.code.trim().toUpperCase() === providedCode && r.id !== reviewerId
+              );
+              
+              if (!codeExists) {
+                // Direct update of code field
+                const reviewerRef = doc(db, REVIEWERS_COLLECTION, reviewerId);
+                await updateDoc(reviewerRef, { code: item.code.trim() });
+                
+                // Update our maps to prevent duplicates in the same batch
+                codeMap.set(providedCode, reviewerId);
+              } else {
+                // Code conflict - log but don't fail
+                console.warn(`Code ${providedCode} already exists, keeping generated code for ${item.name.trim()}`);
+              }
+            } catch (codeError) {
+              // If code update fails, continue with generated code
+              console.warn(`Failed to update code for ${item.name.trim()}:`, codeError);
+            }
+          }
+          
+          // Handle isActive if provided
+          if (item.isActive !== undefined && typeof item.isActive === 'boolean') {
+            await this.updateReviewer(reviewerId, { isActive: item.isActive });
+          }
+          
+          // Update our maps to prevent duplicates in the same batch
+          nameMap.set(normalizedName, reviewerId);
+          if (providedCode) {
+            codeMap.set(providedCode, reviewerId);
+          }
+          
+          success++;
+        } else {
+          errors.push({
+            index: i,
+            name: item.name.trim(),
+            error: 'Failed to create reviewer in database'
+          });
+          failed++;
+        }
+      } catch (error) {
+        errors.push({
+          index: i,
+          name: item.name || 'Unknown',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        failed++;
+      }
+    }
+
+    return { success, failed, skipped, errors };
+  }
 }
 
 // Export singleton instance
@@ -653,3 +934,4 @@ export const updateReviewer = reviewersManagementService.updateReviewer.bind(rev
 export const toggleReviewerStatus = reviewersManagementService.toggleReviewerStatus.bind(reviewersManagementService);
 export const getReviewerStats = reviewersManagementService.getReviewerStats.bind(reviewersManagementService);
 export const exportReviewersToJSON = reviewersManagementService.exportReviewersToJSON.bind(reviewersManagementService);
+export const bulkImportReviewers = reviewersManagementService.bulkImportReviewers.bind(reviewersManagementService);

@@ -87,7 +87,6 @@ export function ReviewerAuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!reviewer?.id || !isAuthenticated) return;
 
-    console.log('🔄 Setting up real-time listeners for reviewer:', reviewer.id);
     const unsubscribeFunctions: (() => void)[] = [];
 
     // Listen to all protocols where this reviewer is assigned
@@ -119,7 +118,6 @@ export function ReviewerAuthProvider({ children }: { children: React.ReactNode }
             // Listen to assessment form changes
             const unsubscribeForms = onSnapshot(assessmentFormsRef, async () => {
               // Reload protocols when assessment status changes
-              console.log('📊 Assessment form changed, reloading protocols...');
               const [protocols, reassignedProtocols] = await Promise.all([
                 reviewerAuthService.getAssignedProtocols(reviewer.id),
                 reviewerAuthService.getReassignedProtocols(reviewer.id)
@@ -143,7 +141,6 @@ export function ReviewerAuthProvider({ children }: { children: React.ReactNode }
 
     // Cleanup function
     return () => {
-      console.log('🔌 Cleaning up real-time listeners');
       unsubscribeFunctions.forEach(unsub => unsub());
     };
   }, [reviewer?.id, isAuthenticated]);

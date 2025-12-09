@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MessageSquare, Search, Send, FileText } from 'lucide-react';
-import { PageLoading, InlineLoading } from '@/components/ui/loading';
+import { InlineLoading, LoadingSkeleton } from '@/components/ui/loading';
 import { useAuth } from '@/hooks/useAuth';
 import { MessagesType } from '@/types';
 import { getMessagesForSubmission, sendMessageToSubmission, markAllMessagesAsRead } from '@/lib/firebase/firestore';
@@ -20,12 +20,7 @@ import {
   getPIName
 } from '@/types';
 import { cn } from '@/lib/utils';
-import { collection, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { getFirestore } from 'firebase/firestore';
-import firebaseApp from '@/lib/firebaseConfig';
 import { isMessageFromUser, getMessageSenderDisplayName } from '@/lib/utils/messageUtils';
-
-const db = getFirestore(firebaseApp);
 
 interface ProtocolConversation {
   protocolId: string;
@@ -90,42 +85,50 @@ export default function MessagesPage() {
   const loadConversations = async () => {
     setLoading(true);
     try {
-      const conversationsData: ProtocolConversation[] = [];
-
       const typedProtocols = toChairpersonProtocols(protocols);
-      
-      for (const protocol of typedProtocols) {
-        try {
-          const protocolMessages = await getMessagesForSubmission(String(protocol.id));
-          
-          if (protocolMessages.length > 0) {
-            // Sort messages by date (newest last)
-            const sortedMessages = [...protocolMessages].sort((a, b) => {
-              return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-            });
 
-            const lastMessage = sortedMessages[sortedMessages.length - 1];
-            const unreadCount = sortedMessages.filter(
-              msg => msg.status !== 'read' && msg.senderId !== currentUserId
-            ).length;
+      const conversationsData = (
+        await Promise.all(
+          typedProtocols.map(async (protocol) => {
+            try {
+              const protocolMessages = await getMessagesForSubmission(String(protocol.id));
 
-            // Extract principal investigator name using typed getter
-            const principalInvestigatorName = getPIName(protocol) || protocol.submittedByName || 'Unknown Investigator';
+              if (protocolMessages.length === 0) {
+                return null;
+              }
 
-            conversationsData.push({
-              protocolId: String(protocol.id),
-              protocolTitle: getProtocolTitle(protocol),
-              protocolCode: getProtocolCode(protocol) || String(protocol.id),
-              principalInvestigatorName,
-              lastMessage,
-              unreadCount,
-              messages: sortedMessages
-            });
-          }
-        } catch (error) {
-          console.error(`Error loading messages for protocol ${protocol.id}:`, error);
-        }
-      }
+              // Sort messages by date (newest last)
+              const sortedMessages = [...protocolMessages].sort((a, b) => {
+                return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+              });
+
+              const lastMessage = sortedMessages[sortedMessages.length - 1];
+              const unreadCount = sortedMessages.filter(
+                (msg) => msg.status !== 'read' && msg.senderId !== currentUserId
+              ).length;
+
+              // Extract principal investigator name using typed getter
+              const principalInvestigatorName =
+                getPIName(protocol) || protocol.submittedByName || 'Unknown Investigator';
+
+              const conversation: ProtocolConversation = {
+                protocolId: String(protocol.id),
+                protocolTitle: getProtocolTitle(protocol),
+                protocolCode: getProtocolCode(protocol) || String(protocol.id),
+                principalInvestigatorName,
+                lastMessage,
+                unreadCount,
+                messages: sortedMessages,
+              };
+
+              return conversation;
+            } catch (error) {
+              console.error(`Error loading messages for protocol ${protocol.id}:`, error);
+              return null;
+            }
+          })
+        )
+      ).filter((conv): conv is ProtocolConversation => conv !== null);
 
       // Sort conversations by last message date (newest first)
       conversationsData.sort((a, b) => {
@@ -136,7 +139,7 @@ export default function MessagesPage() {
       });
 
       setConversations(conversationsData);
-      
+
       // Auto-select first conversation if none selected
       if (!selectedProtocolId && conversationsData.length > 0) {
         setSelectedProtocolId(conversationsData[0].protocolId);
@@ -157,111 +160,9 @@ export default function MessagesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocols, protocolsLoading]);
 
-  // Set up real-time listeners for all conversations to update the list
-  useEffect(() => {
-    if (protocolsLoading || protocols.length === 0) return;
-
-    console.log('🔄 Setting up real-time listeners for all conversations');
-    const unsubscribeFunctions: (() => void)[] = [];
-
-    protocols.forEach((protocol) => {
-      try {
-        const protocolRef = doc(db, 'submissions', protocol.id);
-        const messagesRef = collection(protocolRef, 'messages');
-        const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
-
-        const unsubscribe = onSnapshot(
-          messagesQuery,
-          (snapshot) => {
-            const protocolMessages: MessagesType[] = [];
-            snapshot.forEach((doc) => {
-              const data = doc.data();
-              protocolMessages.push({
-                id: doc.id,
-                ...data,
-              } as MessagesType);
-            });
-
-            if (protocolMessages.length > 0) {
-              // Update conversation in the list
-              setConversations((prevConversations) => {
-                const sortedMessages = [...protocolMessages].sort((a, b) => {
-                  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-                });
-
-                const lastMessage = sortedMessages[sortedMessages.length - 1];
-            const unreadCount = sortedMessages.filter(
-              (msg) => msg.status !== 'read' && msg.senderId !== currentUserId
-            ).length;
-
-                const principalInvestigatorName =
-                  (protocol.information?.general_information as {principal_investigator?: {name?: string}})?.principal_investigator?.name ||
-                  protocol.principalInvestigator?.name ||
-                  protocol.submittedByName ||
-                  protocol.information?.principal_investigator?.name ||
-                  'Unknown Investigator';
-
-                const updatedConversation: ProtocolConversation = {
-                  protocolId: protocol.id,
-                  protocolTitle:
-                    protocol.title ||
-                    (protocol.information?.general_information as {protocol_title?: string})?.protocol_title ||
-                    'Untitled Protocol',
-                  protocolCode:
-                    protocol.code || protocol.spupCode || protocol.tempProtocolCode || protocol.id,
-                  principalInvestigatorName,
-                  lastMessage,
-                  unreadCount,
-                  messages: sortedMessages,
-                };
-
-                // Update or add conversation
-                const existingIndex = prevConversations.findIndex(
-                  (c) => c.protocolId === protocol.id
-                );
-                let updatedConversations: ProtocolConversation[];
-
-                if (existingIndex >= 0) {
-                  // Update existing conversation
-                  updatedConversations = [...prevConversations];
-                  updatedConversations[existingIndex] = updatedConversation;
-                } else {
-                  // Add new conversation
-                  updatedConversations = [...prevConversations, updatedConversation];
-                }
-
-                // Sort by last message date (newest first)
-                updatedConversations.sort((a, b) => {
-                  if (!a.lastMessage && !b.lastMessage) return 0;
-                  if (!a.lastMessage) return 1;
-                  if (!b.lastMessage) return -1;
-                  return (
-                    new Date(b.lastMessage.createdAt).getTime() -
-                    new Date(a.lastMessage.createdAt).getTime()
-                  );
-                });
-
-                return updatedConversations;
-              });
-            }
-          },
-          (err) => {
-            console.error(`❌ Error in real-time messages listener for ${protocol.id}:`, err);
-          }
-        );
-
-        unsubscribeFunctions.push(unsubscribe);
-      } catch (error) {
-        console.error(`Error setting up listener for protocol ${protocol.id}:`, error);
-      }
-    });
-
-    // Cleanup all listeners on unmount or when protocols change
-    return () => {
-      console.log('🔌 Unsubscribing from all conversation listeners');
-      unsubscribeFunctions.forEach((unsubscribe) => unsubscribe());
-    };
-  }, [protocols, protocolsLoading, currentUserId]);
+  // We deliberately avoid setting up extra per-protocol realtime listeners here.
+  // The conversation list is hydrated via an initial fetch (loadConversations),
+  // and the currently selected conversation stays live through useRealtimeMessages.
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -341,7 +242,59 @@ export default function MessagesPage() {
   };
 
   if (loading || protocolsLoading) {
-    return <PageLoading text="Loading messages..." />;
+    return (
+      <div className="flex h-full w-full overflow-hidden animate-in fade-in duration-500">
+        <div className="flex flex-1 min-h-0 overflow-hidden w-full">
+          {/* Left Sidebar Skeleton */}
+          <div className="w-80 border-r border-[#036635]/10 dark:border-[#FECC07]/20 bg-muted/30 flex flex-col min-h-0 flex-shrink-0">
+            <div className="p-4 border-b border-[#036635]/10 dark:border-[#FECC07]/20 flex-shrink-0">
+              <LoadingSkeleton className="h-10 w-full rounded-md" />
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="divide-y divide-[#036635]/10 dark:divide-[#FECC07]/20">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <div key={idx} className="p-4 flex items-start gap-3">
+                    <LoadingSkeleton className="h-10 w-10 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <LoadingSkeleton className="h-4 w-32 rounded-md" />
+                      <LoadingSkeleton className="h-3 w-24 rounded-md" />
+                      <LoadingSkeleton className="h-3 w-40 rounded-md" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Panel Skeleton */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="p-4 border-b border-[#036635]/10 dark:border-[#FECC07]/20 flex-shrink-0">
+              <div className="space-y-2">
+                <LoadingSkeleton className="h-4 w-40 rounded-md" />
+                <LoadingSkeleton className="h-3 w-32 rounded-md" />
+              </div>
+            </div>
+            <div className="flex-1 p-4 space-y-3 bg-gradient-to-b from-muted/20 to-muted/10">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <div key={idx} className="flex gap-3">
+                  <LoadingSkeleton className="h-8 w-8 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <LoadingSkeleton className="h-3 w-32 rounded-md" />
+                    <LoadingSkeleton className="h-4 w-48 rounded-md" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t border-[#036635]/10 dark:border-[#FECC07]/20 flex-shrink-0">
+              <div className="flex gap-2">
+                <LoadingSkeleton className="h-10 flex-1 rounded-md" />
+                <LoadingSkeleton className="h-10 w-10 rounded-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

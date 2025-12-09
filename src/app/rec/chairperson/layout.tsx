@@ -10,11 +10,11 @@ import { PageLoading } from "@/components/ui/loading"
 import { getAuth, signOut as firebaseSignOut } from "firebase/auth"
 import firebaseApp from "@/lib/firebaseConfig"
 import { usePresence } from "@/hooks/usePresence"
-
-const CHAIRPERSON_EMAIL = "rec@spup.edu.ph"
+import { useChairpersonPermission } from "@/hooks/useChairpersonPermission"
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
+  const { isChairperson, loading: permissionLoading, error: permissionError } = useChairpersonPermission()
   const router = useRouter()
   const pathname = usePathname()
   const auth = getAuth(firebaseApp)
@@ -25,7 +25,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkChairpersonAuth = async () => {
       // If still loading, wait
-      if (loading) {
+      if (authLoading || permissionLoading) {
         return
       }
 
@@ -36,8 +36,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
 
       // If user is logged in but NOT the chairperson, sign them out and redirect
-      if (user.email !== CHAIRPERSON_EMAIL) {
-        console.log('⚠️ User is logged in but not the chairperson. Signing out and redirecting...')
+      if (!isChairperson) {
         try {
           await firebaseSignOut(auth)
           router.push(`/auth/signin?redirect=${encodeURIComponent(pathname)}&role=chairperson`)
@@ -49,19 +48,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
 
       // User is authenticated as chairperson, allow access
-      console.log('✅ Chairperson authenticated:', user.email)
     }
 
     checkChairpersonAuth()
-  }, [user, loading, router, pathname, auth])
+  }, [user, authLoading, isChairperson, permissionLoading, router, pathname, auth])
 
-  // Show loading while checking auth
-  if (loading) {
+  // Show loading while checking auth or permissions
+  if (authLoading || permissionLoading) {
+    return <PageLoading />
+  }
+
+  // If there was an error checking permissions, show error and redirect
+  if (permissionError) {
+    console.error('Permission check error:', permissionError)
+    // Still redirect to sign-in for safety
+    router.push(`/auth/signin?redirect=${encodeURIComponent(pathname)}&role=chairperson`)
     return <PageLoading />
   }
 
   // If user is not authenticated or not the chairperson, show nothing (redirect will happen)
-  if (!user || user.email !== CHAIRPERSON_EMAIL) {
+  if (!user || !isChairperson) {
     return <PageLoading />
   }
 

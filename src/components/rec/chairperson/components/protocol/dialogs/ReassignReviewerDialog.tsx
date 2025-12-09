@@ -33,11 +33,12 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserX, Check, ChevronsUpDown, AlertTriangle, Loader2 } from "lucide-react";
+import { UserX, Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { reviewerService, Reviewer } from "@/lib/services/reviewers/reviewerService";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { toDate, FirestoreDate } from '@/types';
+import { InlineLoading } from "@/components/ui/loading";
 
 interface ReassignReviewerDialogProps {
   open: boolean;
@@ -357,8 +358,8 @@ export function ReassignReviewerDialog({
           >
             {isReassigning ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Reassigning...
+                <InlineLoading size="sm" />
+                <span className="ml-2">Reassigning...</span>
               </>
             ) : (
               <>

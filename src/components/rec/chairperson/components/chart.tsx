@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useMemo, useEffect } from "react"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
-import { Loader2 } from "lucide-react"
+import { LoadingSkeleton } from "@/components/ui/loading"
 import { useTheme } from "next-themes"
 
 import { useIsMobile } from "@/hooks/useMobile"
@@ -210,8 +210,11 @@ export function ChartAreaInteractive() {
           <CardDescription>Loading protocol data...</CardDescription>
         </CardHeader>
         <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-          <div className="h-[250px] flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="h-[250px] flex flex-col justify-between space-y-4">
+            {/* Simulated axis line */}
+            <LoadingSkeleton className="h-4 w-24 rounded-md bg-muted mb-2" />
+            {/* Simulated chart area */}
+            <LoadingSkeleton className="h-full w-full rounded-xl bg-muted" />
           </div>
         </CardContent>
       </Card>

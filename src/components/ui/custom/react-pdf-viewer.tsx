@@ -49,22 +49,18 @@ export default function ReactPdfViewer({
         setLoading(true);
         setError(null);
         
-        console.log('ReactPdfViewer: Loading document from', url);
-        
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`Failed to load document: ${response.status} ${response.statusText}`);
         }
         
         const contentType = response.headers.get('content-type') || '';
-        console.log('ReactPdfViewer: Content-Type:', contentType);
         
         if (!contentType.includes('pdf')) {
           throw new Error(`Expected PDF but got ${contentType}`);
         }
         
         const arrayBuffer = await response.arrayBuffer();
-        console.log('ReactPdfViewer: Document loaded, size:', arrayBuffer.byteLength);
         
         setDocumentData(arrayBuffer);
       } catch (err: any) {
@@ -82,7 +78,6 @@ export default function ReactPdfViewer({
     setPageNumber(1);
     setLoading(false);
     setError(null);
-    console.log(`ReactPdfViewer: PDF loaded successfully, pages: ${numPages}`);
   }, []);
 
   const onDocumentLoadError = useCallback((error: Error) => {

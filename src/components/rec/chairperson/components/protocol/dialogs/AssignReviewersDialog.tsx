@@ -26,10 +26,10 @@ import {
   DialogHeader, 
   DialogTitle 
 } from "@/components/ui/dialog";
-import { Users, Check, ChevronsUpDown, AlertTriangle, Loader2 } from "lucide-react";
+import { Users, Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { reviewerService, Reviewer, REVIEWER_REQUIREMENTS } from "@/lib/services/reviewers/reviewerService";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
+import { customToast } from "@/components/ui/custom/toast";
 import { 
   ChairpersonReviewerAssignment,
   toChairpersonProtocol, 
@@ -37,6 +37,7 @@ import {
   toDate,
   getString
 } from "@/types";
+import { InlineLoading } from "@/components/ui/loading";
 
 interface AssignReviewersDialogProps {
   open: boolean;
@@ -126,7 +127,10 @@ export function AssignReviewersDialog({
         setOpenPopovers(new Array(requirements.count).fill(false));
       } catch (error) {
         console.error("Error loading reviewers:", error);
-        toast.error("Failed to load reviewers");
+        customToast.error(
+          "Load Failed",
+          "Failed to load reviewers. Please try again."
+        );
       } finally {
         setIsLoadingReviewers(false);
       }
@@ -175,12 +179,18 @@ export function AssignReviewersDialog({
     
     const validReviewers = selectedReviewers.filter(id => id && id.trim() !== "");
     if (validReviewers.length !== requirements.count) {
-      toast.error(`Please select all ${requirements.count} reviewers for ${requirements.label}`);
+      customToast.error(
+        "Incomplete Selection",
+        `Please select all ${requirements.count} reviewers for ${requirements.label}.`
+      );
       return;
     }
     
     if (!user) {
-      toast.error("You must be logged in to assign reviewers");
+      customToast.error(
+        "Not Authenticated",
+        "You must be logged in to assign reviewers."
+      );
       return;
     }
     
@@ -190,7 +200,10 @@ export function AssignReviewersDialog({
     });
     
     if (invalidReviewers.length > 0) {
-      toast.error("Some selected reviewers have missing information. Please select different reviewers.");
+      customToast.error(
+        "Invalid Reviewers",
+        "Some selected reviewers have missing information. Please select different reviewers."
+      );
       return;
     }
     
@@ -208,18 +221,27 @@ export function AssignReviewersDialog({
       );
       
       if (success) {
-        toast.success(`Successfully assigned ${requirements.count} reviewers with appropriate deadlines`);
+        customToast.success(
+          "Reviewers Assigned",
+          `Successfully assigned ${requirements.count} reviewers with appropriate deadlines.`
+        );
         onOpenChange(false);
         setSelectedReviewers([]);
         setSearchTerm("");
         setOpenPopovers([]);
         onAssignmentsUpdate();
       } else {
-        toast.error("Failed to assign reviewers. Please try again.");
+        customToast.error(
+          "Assign Failed",
+          "Failed to assign reviewers. Please try again."
+        );
       }
     } catch (error) {
       console.error("Error assigning reviewers:", error);
-      toast.error("Failed to assign reviewers. Please try again.");
+      customToast.error(
+        "Assign Failed",
+        "Failed to assign reviewers. Please try again."
+      );
     } finally {
       setIsAssigningReviewers(false);
     }
@@ -468,8 +490,8 @@ export function AssignReviewersDialog({
           >
             {isAssigningReviewers ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Assigning...
+                <InlineLoading size="sm" />
+                <span className="ml-2">Assigning...</span>
               </>
             ) : (
               <>

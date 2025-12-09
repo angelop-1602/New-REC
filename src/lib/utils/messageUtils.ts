@@ -21,23 +21,10 @@ export function isMessageFromUser(
   // Normalize both IDs: convert to string, trim whitespace, lowercase for comparison
   const normalizedMessageSenderId = String(message.senderId).trim().toLowerCase();
   const normalizedUserId = String(userId).trim().toLowerCase();
-
+  
   // Compare normalized IDs
   const isMatch = normalizedMessageSenderId === normalizedUserId && normalizedMessageSenderId !== '';
-
-  // Debug logging in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 Message sender comparison:', {
-      messageId: message.id,
-      messageSenderId: message.senderId,
-      normalizedMessageSenderId,
-      userId,
-      normalizedUserId,
-      isMatch,
-      messageContent: message.content.substring(0, 30)
-    });
-  }
-
+  
   return isMatch;
 }
 

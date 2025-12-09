@@ -21,6 +21,7 @@ import {
 import { useRealtimeProtocols } from "@/hooks/useRealtimeProtocols"
 import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore"
 import { cn } from "@/lib/utils"
+import { LoadingSkeleton } from "@/components/ui/loading"
 
 export const description = "Protocol status distribution chart"
 
@@ -112,18 +113,21 @@ export function ProtocolCharts() {
 
   if (loading) {
     return (
-      <Card className="py-0">
-        <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
-          <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:!py-0">
-            <CardTitle>Protocol Status Distribution</CardTitle>
-            <CardDescription>
+      <Card className="py-0 transition-all duration-300 hover:shadow-lg border border-[#036635]/10 dark:border-[#FECC07]/20 min-w-0">
+        <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row border-[#036635]/10 dark:border-[#FECC07]/20">
+          <div className="flex flex-1 flex-col justify-center gap-1 px-4 sm:px-6 pt-4 pb-3 sm:!py-0">
+            <CardTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent text-lg sm:text-xl">
+              Protocol Status Distribution
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               Loading protocol statistics...
             </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="px-2 sm:p-6">
-          <div className="h-[250px] flex items-center justify-center">
-            <div className="text-muted-foreground">Loading...</div>
+          <div className="h-[250px] flex flex-col justify-between space-y-4">
+            <LoadingSkeleton className="h-4 w-28 rounded-md bg-muted mb-2" />
+            <LoadingSkeleton className="h-full w-full rounded-xl bg-muted" />
           </div>
         </CardContent>
       </Card>

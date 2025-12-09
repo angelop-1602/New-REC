@@ -50,24 +50,18 @@ export default function SimplePdfViewer({
           setPdfUrl('');
         }
         
-        console.log('SimplePdfViewer: Loading document from', url);
-        console.log('SimplePdfViewer: File param:', file);
-        console.log('SimplePdfViewer: SubmissionId:', submissionId);
-        
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`Failed to load document: ${response.status} ${response.statusText}`);
         }
         
         const contentType = response.headers.get('content-type') || '';
-        console.log('SimplePdfViewer: Content-Type:', contentType);
         
         if (!contentType.includes('pdf')) {
           throw new Error(`Expected PDF but got ${contentType}`);
         }
         
         const blob = await response.blob();
-        console.log('SimplePdfViewer: Document loaded, size:', blob.size);
         
         const blobUrl = URL.createObjectURL(blob);
         setPdfUrl(blobUrl);
@@ -148,9 +142,6 @@ export default function SimplePdfViewer({
           style={{
             backgroundColor: '#ffffff',
             display: 'block'
-          }}
-          onLoad={() => {
-            console.log('SimplePdfViewer: PDF iframe loaded successfully');
           }}
           onError={() => {
             console.error('SimplePdfViewer: PDF iframe failed to load');

@@ -117,7 +117,6 @@ export default function ProtocolReviewPage() {
         
         if (existingAssessment && existingAssessment.formData) {
           // Use existing assessment data
-          console.log('✅ Found existing assessment data, using it instead of pre-populated fields');
           setDefaultValues(existingAssessment.formData);
           setAssessmentStatus(existingAssessment.status);
           setReturnReason(existingAssessment.rejectionReason || null);
@@ -125,7 +124,6 @@ export default function ProtocolReviewPage() {
           setSkipFirebaseLoad(true);
         } else {
           // Pre-populate form fields with protocol information for new assessments
-          console.log('✅ No existing assessment found, using pre-populated protocol fields');
           const prepopulatedFields = prePopulateFormFields(completeProtocol);
           const formDefaults = getFormDefaultValues(mappedFormType, prepopulatedFields);
           setDefaultValues(formDefaults);

@@ -35,8 +35,6 @@ const Page = () => {
   };
 
   const handleProtocolAction = (protocolId: string, action: string) => {
-    console.log(`Protocol action: ${action} for protocol: ${protocolId}`);
-    
     if (action === 'review' || action === 'view' || action === 'edit') {
       // Navigate to the protocol review page (client-side)
       router.push(`/rec/reviewers/protocol/${protocolId}`);

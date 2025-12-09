@@ -21,6 +21,7 @@ import { LoadingSimple } from "@/components/ui/loading";
 import { isMessageFromUser, getMessageSenderDisplayName } from "@/lib/utils/messageUtils";
 import { reviewersManagementService } from "@/lib/services/reviewers/reviewersManagementService";
 import { useChairpersonPresence } from "@/hooks/usePresence";
+import { customToast } from "@/components/ui/custom/toast";
 
 // SPUP Logo for chairperson
 const CHAIRPERSON_LOGO = '/SPUP-Logo-with-yellow.png';
@@ -178,7 +179,10 @@ export default function ProtocolMessage({ submissionId, unreadCount: initialUnre
       setInput("");
     } catch (error) {
       console.error("Error sending message:", error);
-      alert("Failed to send message. Please try again.");
+      customToast.error(
+        "Message Failed",
+        "Failed to send message. Please try again."
+      );
     } finally {
       setSending(false);
     }

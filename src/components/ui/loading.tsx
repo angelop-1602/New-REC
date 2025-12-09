@@ -1,6 +1,7 @@
+"use client";
+
 import React from "react";
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
 
 interface LoadingProps {
   variant?: "spinner" | "dots" | "skeleton" | "bar" | "simple";
@@ -31,17 +32,24 @@ export function Loading({
     xl: "text-lg",
   };
 
+  // Legacy "simple" variant now delegates to skeleton for consistency
   if (variant === "simple") {
     return (
       <div className={cn("flex items-center justify-center", className)}>
         <div
           className={cn(
-            "animate-spin rounded-full border-b-2 border-primary",
-            sizeClasses[size]
+            "animate-pulse rounded-md bg-muted",
+            size === "sm"
+              ? "h-3 w-10"
+              : size === "md"
+              ? "h-4 w-16"
+              : size === "lg"
+              ? "h-5 w-24"
+              : "h-6 w-32"
           )}
         />
         {showText && (
-          <span className={cn("ml-2 text-muted-foreground", textSizes[size])}>
+          <span className={cn("ml-3 text-muted-foreground", textSizes[size])}>
             {text}
           </span>
         )}
@@ -98,62 +106,21 @@ export function Loading({
     );
   }
 
-  // Default spinner variant (the sophisticated one)
+  // Default "spinner" variant now uses a skeleton-style placeholder instead of an actual spinner
   return (
     <div className={cn("flex flex-col items-center justify-center", className)}>
-      <div className="relative">
-        <style jsx>{`
-          @keyframes spin {
-            to {
-              transform: rotate(360deg);
-            }
-          }
-          
-          @keyframes spin2 {
-            0% {
-              stroke-dasharray: 1, 800;
-              stroke-dashoffset: 0;
-            }
-            50% {
-              stroke-dasharray: 400, 400;
-              stroke-dashoffset: -200px;
-            }
-            100% {
-              stroke-dasharray: 800, 1;
-              stroke-dashoffset: -800px;
-            }
-          }
-          
-          .spin2 {
-            transform-origin: center;
-            animation: spin2 1.5s ease-in-out infinite,
-              spin 2s linear infinite;
-            animation-direction: alternate;
-          }
-        `}</style>
-        
-        <svg
-          viewBox="0 0 800 800"
-          className={cn(
-            "stroke-primary",
-            size === "sm" ? "h-6 w-6" : 
-            size === "md" ? "h-8 w-8" : 
-            size === "lg" ? "h-12 w-12" : "h-16 w-16"
-          )}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <circle
-            className="spin2"
-            cx="400"
-            cy="400"
-            fill="none"
-            r="200"
-            strokeWidth="50"
-            strokeDasharray="700 1400"
-            strokeLinecap="round"
-          />
-        </svg>
-      </div>
+      <div
+        className={cn(
+          "animate-pulse rounded-full bg-muted",
+          size === "sm"
+            ? "h-6 w-6"
+            : size === "md"
+            ? "h-8 w-8"
+            : size === "lg"
+            ? "h-10 w-10"
+            : "h-12 w-12"
+        )}
+      />
       {showText && (
         <span className={cn("mt-2 text-muted-foreground", textSizes[size])}>
           {text}
@@ -169,6 +136,7 @@ export function LoadingSpinner(props: Omit<LoadingProps, "variant">) {
 }
 
 export function LoadingSimple(props: Omit<LoadingProps, "variant">) {
+  // Simple loader now just uses the skeleton-based layout
   return <Loading variant="simple" {...props} />;
 }
 
@@ -184,21 +152,39 @@ export function LoadingBar(props: Omit<LoadingProps, "variant">) {
   return <Loading variant="bar" {...props} />;
 }
 
-// Full page loading component
+// Full page loading component – skeleton-based layout for pages
 export function PageLoading({ text = "Loading..." }: { text?: string }) {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <LoadingSpinner size="lg" text={text} />
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="w-full max-w-3xl space-y-4">
+        <div className="space-y-2">
+          <LoadingSkeleton className="h-6 w-40 mx-auto rounded-md" />
+          <LoadingSkeleton className="h-4 w-64 mx-auto rounded-md" />
+        </div>
+        <div className="space-y-2">
+          <LoadingSkeleton className="h-10 w-full rounded-md" />
+          <LoadingSkeleton className="h-32 w-full rounded-md" />
+          <LoadingSkeleton className="h-8 w-2/3 rounded-md" />
+        </div>
+        {text && (
+          <p className="text-center text-xs text-muted-foreground">{text}</p>
+        )}
+      </div>
     </div>
   );
 }
 
-// Inline loading component for buttons and small areas
+// Inline loading component for buttons and small areas – subtle skeleton bar
 export function InlineLoading({ size = "sm", text }: { size?: "sm" | "md"; text?: string }) {
+  const barClasses =
+    size === "sm"
+      ? "h-3 w-6 sm:w-8"
+      : "h-4 w-8 sm:w-10";
+
   return (
-    <div className="flex items-center">
-      <Loader2 className={cn("animate-spin", size === "sm" ? "h-4 w-4" : "h-5 w-5")} />
-      {text && <span className="ml-2 text-sm">{text}</span>}
+    <div className="flex items-center gap-2">
+      <div className={cn("animate-pulse rounded-md bg-muted", barClasses)} />
+      {text && <span className="text-xs text-muted-foreground">{text}</span>}
     </div>
   );
-} 
+}

@@ -52,8 +52,6 @@ export class AssessmentSubmissionService {
       // Save to submissions/{protocolId}/reviewers/{assignmentId}/assessment_forms/{formType}
       const assessmentRef = doc(db, 'submissions', protocolId, 'reviewers', reviewerAssignment.id, 'assessment_forms', formType);
       await setDoc(assessmentRef, assessmentData, { merge: true });
-
-      console.log('✅ Assessment saved successfully:', { protocolId, formType, status });
     } catch (error) {
       console.error('❌ Error saving assessment:', error);
       throw new Error('Failed to save assessment');
@@ -95,13 +93,10 @@ export class AssessmentSubmissionService {
           reviewStatus: 'completed',
           completedAt: serverTimestamp(),
         });
-        console.log('✅ Reviewer assignment status updated successfully');
       } else {
         console.warn('⚠️ Reviewer assignment not found for reviewerId:', reviewerId);
         // Don't throw error - assessment is still saved successfully
       }
-
-      console.log('✅ Assessment submitted successfully:', { protocolId, formType });
     } catch (error) {
       console.error('❌ Error submitting assessment:', error);
       throw new Error('Failed to submit assessment');

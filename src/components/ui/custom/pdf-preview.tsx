@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Download, AlertTriangle, FileText, ExternalLink } from "lucide-react";
+import { LoadingSimple } from "@/components/ui/loading";
+import Image from "next/image";
 
 interface PdfPreviewProps {
   file: string;
@@ -57,8 +59,6 @@ export default function PdfPreview({
         setLoading(true);
         setError(null);
         
-        console.log('PdfPreview: Fetching from', apiUrl);
-        
         const response = await fetch(apiUrl);
         
         if (!response.ok) {
@@ -72,21 +72,11 @@ export default function PdfPreview({
         const responseContentType = response.headers.get('content-type') || 'application/octet-stream';
         const responsePreviewEntry = response.headers.get('x-preview-entry') || '';
         
-        console.log('PdfPreview: Response headers:', {
-          'content-type': responseContentType,
-          'content-length': response.headers.get('content-length'),
-          'x-preview-entry': responsePreviewEntry
-        });
-        
         setContentType(responseContentType);
         setPreviewEntry(decodeURIComponent(responsePreviewEntry));
         
         // Convert response to blob
         const blob = await response.blob();
-        console.log('PdfPreview: Blob created:', {
-          size: blob.size,
-          type: blob.type
-        });
         
         if (isCancelled) return;
         
@@ -128,19 +118,11 @@ export default function PdfPreview({
     return (
       <div className={className}>
         <div className="flex items-center justify-center h-full">
-          <div className="text-center space-y-4">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-t-primary mx-auto"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-primary animate-pulse" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Loading preview...</p>
-              <p className="text-xs text-muted-foreground">
-                {entry ? `Loading ${entry}` : auto ? 'Finding previewable file' : `Loading ${file}`}
-              </p>
-            </div>
+          <div className="text-center space-y-2">
+            <LoadingSimple size="md" text="Loading preview..." />
+            <p className="text-xs text-muted-foreground">
+              {entry ? `Loading ${entry}` : auto ? "Finding previewable file" : `Loading ${file}`}
+            </p>
           </div>
         </div>
       </div>
@@ -228,7 +210,6 @@ export default function PdfPreview({
                   display: 'block'
                 }}
                 onLoad={() => {
-                  console.log(`PDF iframe loaded successfully using ${useDirectUrl ? 'direct URL' : 'blob URL'}`);
                   // Check if iframe actually loaded PDF content
                   setTimeout(() => {
                     try {
@@ -239,7 +220,6 @@ export default function PdfPreview({
                         if (!iframeDoc || iframeDoc.body.children.length === 0) {
                           console.warn('PDF iframe appears empty, trying fallback');
                           if (!useDirectUrl) {
-                            console.log('Switching to direct URL approach');
                             setUseDirectUrl(true);
                           } else {
                             setPdfLoadFailed(true);
@@ -248,14 +228,12 @@ export default function PdfPreview({
                       }
                     } catch {
                       // Cross-origin error is expected for blob URLs, this is actually good
-                      console.log('PDF iframe loaded (cross-origin restriction is normal for blob URLs)');
                     }
                   }, 2000);
                 }}
                 onError={(e) => {
                   console.error('PDF iframe failed to load:', e);
                   if (!useDirectUrl) {
-                    console.log('Blob URL failed, trying direct URL');
                     setUseDirectUrl(true);
                   } else {
                     setPdfLoadFailed(true);
@@ -303,7 +281,6 @@ export default function PdfPreview({
                   onClick={() => {
                     setPdfLoadFailed(false);
                     setUseDirectUrl(!useDirectUrl);
-                    console.log(`Switching to ${!useDirectUrl ? 'direct URL' : 'blob URL'} approach`);
                     // Force reload
                     if (iframeRef.current) {
                       const newSrc = !useDirectUrl ? apiUrl : `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&t=${Date.now()}`;
@@ -318,12 +295,18 @@ export default function PdfPreview({
           )}
         </div>
       ) : isImage ? (
-        // Image: Use img element with proper sizing
-        <img
-          src={blobUrl}
-          alt="Document Preview"
-          className="w-full h-[90vh] object-contain bg-white"
-        />
+        // Image: Use regular img tag for blob URLs
+        <div className="relative w-full h-[90vh] bg-white dark:bg-[#272829]">
+          <img
+            src={blobUrl}
+            alt="Document Preview"
+            className="w-full h-full object-contain"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.src = "/SPUP-Logo-with-yellow.png";
+            }}
+          />
+        </div>
       ) : (
         // Other file types: Use iframe as fallback
         <iframe

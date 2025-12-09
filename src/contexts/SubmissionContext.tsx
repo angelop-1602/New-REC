@@ -169,7 +169,6 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
   useEffect(() => {
     const draftData = loadDraft();
     if (draftData) {
-      console.log("Loading draft data:", draftData);
       dispatch({ type: "LOAD_FROM_LOCALSTORAGE", payload: draftData });
     }
   }, []);
@@ -180,13 +179,11 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     if (state.currentStep === 1 || state.currentStep === 2) { // Documents step or Confirmation step
       const draftData = loadDraft();
       if (draftData && draftData.documents && draftData.documents.length > 0) {
-        console.log(`Reloading documents for step ${state.currentStep}:`, draftData.documents);
         
         // Restore file references from memory
         const documentsWithFiles = draftData.documents.map(doc => {
           const fileRef = getFileReference(doc.id);
           if (fileRef) {
-            console.log(`✅ Restored file reference for document: ${doc.title}`);
             return {
               ...doc,
               _fileRef: fileRef,
@@ -363,20 +360,17 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
       dispatch({ type: "SET_SUBMITTING", payload: true });
 
       // Restore file references from memory for all documents
-      console.log("📋 Preparing documents for submission...");
       logFileReferences(); // Log current state for debugging
       
       const documentsWithRestoredFiles = state.documents.map(doc => {
         // First check if document already has a file reference
         if (doc._fileRef instanceof File) {
-          console.log(`✅ Document "${doc.title}" already has file reference`);
           return doc;
         }
         
         // Try to get file reference from memory
         const fileRef = getFileReference(doc.id);
         if (fileRef) {
-          console.log(`✅ Restored file reference for "${doc.title}" from memory`);
           return {
             ...doc,
             _fileRef: fileRef,
@@ -396,7 +390,6 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
         throw new Error(`${skippedDocuments} document(s) are missing file references. Please re-upload these documents before submitting.`);
       }
 
-      console.log(`✅ All ${documentsWithFiles.length} documents have valid file references`);
 
       // Create complete submission with documents in one transaction
       const submissionId = await createCompleteSubmission(
@@ -408,7 +401,6 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
       // Clear localStorage draft and file references after successful submission
       clearDraft();
       clearAllFileReferences();
-      console.log("🎉 Submission successful! Cleared draft and file references.");
 
       // Update state
       dispatch({ type: "SET_SUBMITTING", payload: false });
@@ -430,7 +422,6 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     dispatch({ type: "RESET_FORM" });
     clearDraft();
     clearAllFileReferences();
-    console.log("🔄 Form reset complete");
   }, [dispatch]);
 
   // Context value

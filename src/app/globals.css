@@ -220,3 +220,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Sonner / toast positioning & responsiveness */
+.toaster {
+  z-index: 50;
+  pointer-events: none;
+}
+
+.toaster [data-sonner-toast] {
+  pointer-events: auto;
+  width: min(100%, 24rem);
+  margin-inline: auto;
+}
+
+@media (max-width: 640px) {
+  .toaster {
+    inset-inline: 0;
+  }
+
+  .toaster [data-sonner-toast] {
+    width: min(100% - 1.5rem, 26rem);
+  }
+}

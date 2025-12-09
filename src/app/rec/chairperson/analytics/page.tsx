@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PageLoading } from '@/components/ui/loading';
+import { LoadingSkeleton } from '@/components/ui/loading';
 import { 
   Users, 
   Clock, 
@@ -11,7 +11,13 @@ import {
   FileText
 } from 'lucide-react';
 import { DateRange, AnalyticsData, AnalyticsFilters } from '@/types/analytics.types';
-import { getAnalyticsData } from '@/lib/services/analytics/analyticsService';
+import { 
+  getOverviewData,
+  getProtocolsData,
+  getReviewersData,
+  getReviewProcessData,
+  getSystemHealthData
+} from '@/lib/services/analytics/analyticsService';
 import { AnalyticsOverview } from '@/components/rec/analytics/analytics-overview';
 import { ProtocolAnalytics } from '@/components/rec/analytics/protocol-analytics';
 import { ReviewerAnalytics } from '@/components/rec/analytics/reviewer-analytics';
@@ -23,8 +29,14 @@ import { trackAnalyticsDashboardView } from '@/lib/services/analytics/firebaseAn
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState<Record<string, boolean>>({
+    overview: true,
+    protocols: false,
+    reviewers: false,
+    'review-process': false,
+    'system-health': false,
+  });
+  const [analyticsData, setAnalyticsData] = useState<Partial<AnalyticsData>>({});
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const end = new Date();
     const start = new Date();
@@ -32,25 +44,93 @@ export default function AnalyticsPage() {
     return { start, end, preset: 'last3months' };
   });
   const [filters, setFilters] = useState<AnalyticsFilters>({});
+  const prefetchRef = useRef<Set<string>>(new Set());
 
-  const loadAnalyticsData = useCallback(async () => {
+  // Load overview data first (PRIORITY)
+  const loadOverviewData = useCallback(async () => {
     try {
-      setLoading(true);
-      const data = await getAnalyticsData(dateRange, filters);
-      setAnalyticsData(data);
+      setLoading(prev => ({ ...prev, overview: true }));
+      const data = await getOverviewData(dateRange, filters);
+      setAnalyticsData(prev => ({ ...prev, ...data }));
     } catch (error) {
-      console.error('Error loading analytics:', error);
-      toast.error('Failed to load analytics data');
+      console.error('Error loading overview data:', error);
+      toast.error('Failed to load overview data');
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, overview: false }));
     }
   }, [dateRange, filters]);
 
+  // Prefetch other tabs in background
+  const prefetchTabData = useCallback(async (tab: string) => {
+    if (prefetchRef.current.has(tab)) return; // Already prefetching
+    prefetchRef.current.add(tab);
+
+    try {
+      setLoading(prev => ({ ...prev, [tab]: true }));
+      
+      let data: Partial<AnalyticsData>;
+      switch (tab) {
+        case 'protocols':
+          data = await getProtocolsData(dateRange, filters);
+          break;
+        case 'reviewers':
+          data = await getReviewersData(dateRange, filters);
+          break;
+        case 'review-process':
+          data = await getReviewProcessData(dateRange, filters);
+          break;
+        case 'system-health':
+          data = await getSystemHealthData(dateRange);
+          break;
+        default:
+          return;
+      }
+      
+      setAnalyticsData(prev => ({ ...prev, ...data }));
+    } catch (error) {
+      console.error(`Error loading ${tab} data:`, error);
+      // Don't show toast for background prefetch errors
+    } finally {
+      setLoading(prev => ({ ...prev, [tab]: false }));
+    }
+  }, [dateRange, filters]);
+
+  // Load overview data immediately when filters/dateRange change
   useEffect(() => {
-    loadAnalyticsData();
-    // Track analytics dashboard view
+    prefetchRef.current.clear(); // Reset prefetch tracking
+    loadOverviewData();
+  }, [loadOverviewData]);
+
+  // Prefetch other tabs after overview loads (with small delay to prioritize overview)
+  useEffect(() => {
+    if (!loading.overview && analyticsData.protocolMetrics) {
+      // Start prefetching other tabs in background after overview is ready
+      const timer = setTimeout(() => {
+        ['protocols', 'reviewers', 'review-process', 'system-health'].forEach(tab => {
+          if (tab !== activeTab) {
+            prefetchTabData(tab);
+          }
+        });
+      }, 500); // Small delay to ensure overview renders first
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading.overview, analyticsData.protocolMetrics, prefetchTabData, activeTab]);
+
+  // Load data for active tab if not already loaded
+  useEffect(() => {
+    if (activeTab !== 'overview' && !loading[activeTab]) {
+      const dataKey = getDataKeyForTab(activeTab);
+      if (dataKey && !analyticsData[dataKey]) {
+        prefetchTabData(activeTab);
+      }
+    }
+  }, [activeTab, loading, analyticsData, prefetchTabData]);
+
+  // Track tab views separately so changing tabs doesn't refetch data
+  useEffect(() => {
     trackAnalyticsDashboardView(activeTab);
-  }, [dateRange, filters, activeTab, loadAnalyticsData]);
+  }, [activeTab]);
 
   const handleDateRangeChange = (newDateRange: DateRange) => {
     setDateRange(newDateRange);
@@ -60,9 +140,23 @@ export default function AnalyticsPage() {
     setFilters(newFilters);
   };
 
-  if (loading && !analyticsData) {
-    return <PageLoading />;
-  }
+  // Helper to get data key for tab
+  const getDataKeyForTab = (tab: string): keyof AnalyticsData | null => {
+    switch (tab) {
+      case 'overview':
+        return 'protocolMetrics';
+      case 'protocols':
+        return 'protocolMetrics';
+      case 'reviewers':
+        return 'reviewerMetrics';
+      case 'review-process':
+        return 'reviewProcessMetrics';
+      case 'system-health':
+        return 'systemHealthMetrics';
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -79,12 +173,18 @@ export default function AnalyticsPage() {
         
         {/* Compact Controls - Right Side */}
         <div className="flex-shrink-0">
-          <AnalyticsHeaderControls
-            dateRange={dateRange}
-            filters={filters}
-            onDateRangeChange={handleDateRangeChange}
-            onFiltersChange={handleFiltersChange}
-          />
+          {loading.overview ? (
+            <div className="w-full sm:w-72">
+              <LoadingSkeleton className="h-10 w-full rounded-md" />
+            </div>
+          ) : (
+            <AnalyticsHeaderControls
+              dateRange={dateRange}
+              filters={filters}
+              onDateRangeChange={handleDateRangeChange}
+              onFiltersChange={handleFiltersChange}
+            />
+          )}
         </div>
       </div>
 
@@ -130,43 +230,83 @@ export default function AnalyticsPage() {
             </TabsList>
 
             <TabsContent value="overview" className="mt-6">
-              {analyticsData && (
-                <AnalyticsOverview analyticsData={analyticsData} />
+              {loading.overview ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    {Array.from({ length: 5 }).map((_, idx) => (
+                      <div key={idx} className="p-4 border rounded-lg min-h-[140px]">
+                        <LoadingSkeleton className="h-4 w-24 mb-2 rounded-md" />
+                        <LoadingSkeleton className="h-8 w-16 rounded-md mb-2" />
+                        <LoadingSkeleton className="h-3 w-full rounded-md" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="min-h-[300px]">
+                      <LoadingSkeleton className="h-6 w-48 mb-2 rounded-md" />
+                      <LoadingSkeleton className="h-[300px] w-full rounded-xl" />
+                    </div>
+                    <div className="min-h-[300px]">
+                      <LoadingSkeleton className="h-6 w-48 mb-2 rounded-md" />
+                      <LoadingSkeleton className="h-[300px] w-full rounded-xl" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                analyticsData.protocolMetrics && analyticsData.protocolTrends && analyticsData.reviewProcessMetrics && (
+                  <AnalyticsOverview analyticsData={analyticsData as AnalyticsData} />
+                )
               )}
             </TabsContent>
 
             <TabsContent value="protocols" className="mt-6">
-              {analyticsData && (
-                <ProtocolAnalytics 
-                  protocolMetrics={analyticsData.protocolMetrics}
-                  protocolTrends={analyticsData.protocolTrends}
-                />
+              {loading.protocols ? (
+                <LoadingSkeleton className="h-80 w-full rounded-xl" />
+              ) : (
+                analyticsData.protocolMetrics && analyticsData.protocolTrends && (
+                  <ProtocolAnalytics 
+                    protocolMetrics={analyticsData.protocolMetrics}
+                    protocolTrends={analyticsData.protocolTrends}
+                  />
+                )
               )}
             </TabsContent>
 
             <TabsContent value="reviewers" className="mt-6">
-              {analyticsData && (
-                <ReviewerAnalytics 
-                  reviewerMetrics={analyticsData.reviewerMetrics}
-                  reviewerPerformance={analyticsData.reviewerPerformance}
-                />
+              {loading.reviewers ? (
+                <LoadingSkeleton className="h-80 w-full rounded-xl" />
+              ) : (
+                analyticsData.reviewerMetrics && analyticsData.reviewerPerformance && (
+                  <ReviewerAnalytics 
+                    reviewerMetrics={analyticsData.reviewerMetrics}
+                    reviewerPerformance={analyticsData.reviewerPerformance}
+                  />
+                )
               )}
             </TabsContent>
 
             <TabsContent value="review-process" className="mt-6">
-              {analyticsData && (
-                <ReviewProcessAnalytics 
-                  reviewProcessMetrics={analyticsData.reviewProcessMetrics}
-                />
+              {loading['review-process'] ? (
+                <LoadingSkeleton className="h-80 w-full rounded-xl" />
+              ) : (
+                analyticsData.reviewProcessMetrics && (
+                  <ReviewProcessAnalytics 
+                    reviewProcessMetrics={analyticsData.reviewProcessMetrics}
+                  />
+                )
               )}
             </TabsContent>
 
             <TabsContent value="system-health" className="mt-6">
-              {analyticsData && (
-                <SystemHealthAnalytics 
-                  systemHealthMetrics={analyticsData.systemHealthMetrics}
-                  errorTrends={analyticsData.errorTrends}
-                />
+              {loading['system-health'] ? (
+                <LoadingSkeleton className="h-80 w-full rounded-xl" />
+              ) : (
+                analyticsData.systemHealthMetrics && analyticsData.errorTrends && (
+                  <SystemHealthAnalytics 
+                    systemHealthMetrics={analyticsData.systemHealthMetrics}
+                    errorTrends={analyticsData.errorTrends}
+                  />
+                )
               )}
             </TabsContent>
           </Tabs>

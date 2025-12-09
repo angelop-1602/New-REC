@@ -22,8 +22,8 @@ import {
 import { DocumentsType } from "@/types";
 import SimplePdfViewer from "./simple-pdf-viewer";
 import { enhancedDocumentManagementService } from "@/lib/services/documents/enhancedDocumentManagementService";
-import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { customToast } from "@/components/ui/custom/toast";
 
 interface InlineDocumentPreviewProps {
   documents: DocumentsType[];
@@ -122,15 +122,6 @@ export default function InlineDocumentPreview({
     setSelectedDocument(document);
     setCurrentIndex(index);
     setError(null);
-
-    console.log('Document selected:', {
-      id: document.id,
-      title: document.title,
-      originalFileName: document.originalFileName,
-      storagePath: document.storagePath
-    });
-    
-    console.log('File parameter will be:', document.storagePath?.split('/').pop() || document.originalFileName || `${document.id}.zip`);
   };
 
   // Navigate to previous document
@@ -163,12 +154,18 @@ export default function InlineDocumentPreview({
         user.uid
       );
       
-      toast.success('Document accepted successfully');
+      customToast.success(
+        "Document Accepted",
+        "The document has been marked as accepted successfully."
+      );
       onDocumentStatusUpdate?.(selectedDocument.id, 'accepted');
       setShowAcceptDialog(false);
     } catch (error) {
       console.error('Error accepting document:', error);
-      toast.error('Failed to accept document. Please try again.');
+      customToast.error(
+        "Accept Failed",
+        "Failed to accept document. Please try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -189,13 +186,19 @@ export default function InlineDocumentPreview({
         user.uid
       );
       
-      toast.success('Document revision requested successfully');
+      customToast.success(
+        "Revision Requested",
+        "Document revision has been requested successfully."
+      );
       onDocumentStatusUpdate?.(selectedDocument.id, 'revise', comment.trim());
       setComment("");
       setShowReviseDialog(false);
     } catch (error) {
       console.error('Error requesting document revision:', error);
-      toast.error('Failed to request document revision. Please try again.');
+      customToast.error(
+        "Request Failed",
+        "Failed to request document revision. Please try again."
+      );
     } finally {
       setIsSubmitting(false);
     }

@@ -39,8 +39,6 @@ export function useRealtimeProtocols({
       return;
     }
 
-    console.log(`🔄 Setting up real-time listener for protocols in ${collectionName}`);
-
     try {
       const protocolsRef = collection(db, collectionName);
       
@@ -76,8 +74,6 @@ export function useRealtimeProtocols({
       const unsubscribe = onSnapshot(
         protocolsQuery,
         (snapshot) => {
-          console.log(`📋 Protocols updated: ${snapshot.docs.length} protocols`);
-          
           const updatedProtocols: any[] = [];
           snapshot.forEach((doc) => {
             updatedProtocols.push({
@@ -109,7 +105,6 @@ export function useRealtimeProtocols({
 
       // Cleanup subscription on unmount
       return () => {
-        console.log(`🔌 Unsubscribing from protocols listener`);
         unsubscribe();
       };
     } catch (err) {

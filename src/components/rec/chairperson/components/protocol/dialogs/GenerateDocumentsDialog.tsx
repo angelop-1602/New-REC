@@ -20,7 +20,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { FileText as FileTextIcon, Loader2, Eye } from "lucide-react";
+import { FileText as FileTextIcon, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { generateDecisionDocuments } from "@/lib/services/documents/documentGenerator";
@@ -31,6 +31,7 @@ import {
   getProtocolCode,
   getPIName
 } from '@/types';
+import { InlineLoading } from "@/components/ui/loading";
 
 interface GenerateDocumentsDialogProps {
   open: boolean;
@@ -290,8 +291,8 @@ export function GenerateDocumentsDialog({ open, onOpenChange, submission }: Gene
           >
             {isGenerating ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
+                <InlineLoading size="sm" />
+                <span className="ml-2">Generating...</span>
               </>
             ) : (
               <>

@@ -1091,7 +1091,19 @@ function FileUploadItemPreview(props: FileUploadItemPreviewProps) {
         }
 
         return (
-          <img src={url} alt={file.name} className="size-full object-cover" />
+          <div className="relative size-full">
+            <img
+              src={url}
+              alt={file.name}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (target.src !== '/SPUP-Logo-with-yellow.png') {
+                  target.src = '/SPUP-Logo-with-yellow.png';
+                }
+              }}
+            />
+          </div>
         );
       }
 

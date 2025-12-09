@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Loader2, Users, Crown, Shield, FileText, UserCog, Check } from 'lucide-react';
+import { LoadingSimple, InlineLoading } from "@/components/ui/loading";
 import {
   Dialog,
   DialogContent,
@@ -212,8 +213,7 @@ export function MemberManagementDialog({
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Loading reviewers...</span>
+            <LoadingSimple size="md" text="Loading reviewers..." />
           </div>
         ) : (
           <div className="space-y-6 py-4">
@@ -360,8 +360,8 @@ export function MemberManagementDialog({
           <Button onClick={handleSave} disabled={saving || !chairperson}>
             {saving ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
+                <InlineLoading size="sm" />
+                <span className="ml-2">Saving...</span>
               </>
             ) : (
               <>

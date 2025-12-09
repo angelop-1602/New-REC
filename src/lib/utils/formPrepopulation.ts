@@ -59,19 +59,10 @@ export interface PrepopulatedFields {
  * Pre-populate form fields with protocol data
  */
 export function prePopulateFormFields(protocolData: any): PrepopulatedFields {
-  console.log('🔍 prePopulateFormFields input:', protocolData);
-  
   const generalInfo = protocolData.information?.general_information || {};
   const pi = generalInfo.principal_investigator || {};
   const studySite = protocolData.information?.study_site || {};
   const funding = protocolData.information?.source_of_funding || {};
-  
-  console.log('🔍 Extracted data:', {
-    generalInfo,
-    pi,
-    studySite,
-    funding
-  });
   
   // Format submission date - use createdAt if submittedAt is not available
   let submissionDate = '';
@@ -128,8 +119,6 @@ export function prePopulateFormFields(protocolData: any): PrepopulatedFields {
     principalInvestigator: pi.name || '',
     sponsor: fundingSourceText
   };
-  
-  console.log('🔍 prePopulateFormFields result:', result);
   
   return result;
 }

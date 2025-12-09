@@ -204,27 +204,15 @@ export default function IACUCForm({
           if (skipFirebaseLoad && defaultValues && Object.keys(defaultValues).length > 0) {
             // Merge over existing defaults so missing fields stay controlled
             form.reset({ ...(form.getValues() as any), ...(defaultValues as any) });
-            console.log('✅ IACUC form loaded with provided defaultValues (skipFirebaseLoad)');
             setIsLoadingData(false);
             return;
           }
 
           // Step 1: Try to load existing draft from Firebase/localStorage
           const existingData = await loadDraft();
-          console.log('🔍 loadDraft returned:', existingData);
-          console.log('🔍 existingData keys:', existingData ? Object.keys(existingData) : 'null');
-          console.log('🔍 existingData length:', existingData ? Object.keys(existingData).length : 0);
-          
-          console.log('🔍 Checking existingData condition...');
-          console.log('🔍 existingData exists:', !!existingData);
-          console.log('🔍 existingData.length > 0:', existingData ? Object.keys(existingData).length > 0 : false);
-          
           if (existingData && Object.keys(existingData).length > 0) {
             // Found existing draft - use it
-            console.log('🔍 Resetting form with:', existingData);
             form.reset({ ...(form.getValues() as any), ...(existingData as any) });
-            console.log('✅ IACUC form loaded with existing draft data');
-            console.log('🔍 Form values after reset:', form.getValues());
           } else if (protocolData && !skipFirebaseLoad) {
             // No existing draft - use prefill data
             const prepopulatedFields = prePopulateFormFields(protocolData);
@@ -235,11 +223,9 @@ export default function IACUCForm({
               ...iacucDefaultValues,
               iacucCode: prepopulatedFields.protocolCode,
             });
-            console.log('✅ IACUC form pre-populated with protocol data:', iacucDefaultValues);
           } else if (defaultValues && Object.keys(defaultValues).length > 0) {
             // Fallback: if defaultValues exist, use them
             form.reset({ ...(form.getValues() as any), ...(defaultValues as any) });
-            console.log('✅ IACUC form loaded with provided defaultValues (fallback)');
           }
         } catch (error) {
           console.error('Error loading/prefilling IACUC form:', error);

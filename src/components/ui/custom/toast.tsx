@@ -110,7 +110,7 @@ const CustomToast = ({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-lg border-2 p-4 shadow-lg transition-all duration-300 transform max-w-md",
+        "relative w-full max-w-sm sm:max-w-md mx-auto overflow-hidden rounded-lg border-2 p-4 shadow-lg transition-all duration-300 transform",
         styles.container,
         isClosing ? "scale-95 opacity-0 translate-x-2" : "scale-100 opacity-100 translate-x-0"
       )}
@@ -157,7 +157,7 @@ const CustomToast = ({
 
 // Custom toast functions
 export const customToast = {
-  success: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'bottom-right') => {
+  success: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'top-center') => {
     sonnerToast.custom((t) => (
       <CustomToast
         title={title}
@@ -169,7 +169,7 @@ export const customToast = {
     ), { position });
   },
   
-  error: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'bottom-right') => {
+  error: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'top-center') => {
     sonnerToast.custom((t) => (
       <CustomToast
         title={title}
@@ -181,7 +181,7 @@ export const customToast = {
     ), { position });
   },
   
-  warning: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'bottom-right') => {
+  warning: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'top-center') => {
     sonnerToast.custom((t) => (
       <CustomToast
         title={title}
@@ -193,7 +193,7 @@ export const customToast = {
     ), { position });
   },
   
-  info: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'bottom-right') => {
+  info: (title: string, description: string, duration?: number, position: 'top-center' | 'bottom-right' = 'top-center') => {
     sonnerToast.custom((t) => (
       <CustomToast
         title={title}
@@ -207,7 +207,7 @@ export const customToast = {
   
   confirm: (title: string, description: string, onConfirm: () => void, onCancel?: () => void, buttonText: string = "Confirm") => {
     sonnerToast.custom((t) => (
-      <div className="bg-amber-50 border-amber-200 min-w-[400px] dark:bg-amber-900/20 dark:border-amber-800 relative overflow-hidden rounded-lg border-2 p-4 shadow-lg max-w-md">
+      <div className="bg-amber-50 border-amber-200 w-full max-w-sm sm:min-w-[400px] sm:max-w-md mx-auto dark:bg-amber-900/20 dark:border-amber-800 relative overflow-hidden rounded-lg border-2 p-4 shadow-lg">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 mt-0.5">
             <svg className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

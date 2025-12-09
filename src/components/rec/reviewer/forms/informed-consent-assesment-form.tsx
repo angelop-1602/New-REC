@@ -134,7 +134,6 @@ export default function InformedConsentForm({
           // If parent asked to skip Firebase and supplied defaults, use immediately
           if (skipFirebaseLoad && defaultValues && Object.keys(defaultValues).length > 0) {
             form.reset({ ...(form.getValues() as any), ...(defaultValues as any) });
-            console.log('✅ Informed Consent form loaded with provided defaultValues (skipFirebaseLoad)');
             return;
           }
 
@@ -144,11 +143,9 @@ export default function InformedConsentForm({
           if (existingData && Object.keys(existingData).length > 0) {
             // Found existing draft - use it
             form.reset({ ...(form.getValues() as any), ...(existingData as any) });
-            console.log('✅ Informed Consent form loaded with existing draft data');
           } else if (defaultValues && Object.keys(defaultValues).length > 0) {
             // No existing draft - use prefill data
             form.reset({ ...(form.getValues() as any), ...(defaultValues as any) });
-            console.log('✅ Informed Consent form pre-populated with protocol data');
           }
         } catch (error) {
           console.error('Error loading/prefilling Informed Consent form:', error);

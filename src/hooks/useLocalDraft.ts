@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { toast } from 'sonner';
+import { customToast } from '@/components/ui/custom/toast';
 import { toDate } from '@/types';
 
 interface UseLocalDraftProps {
@@ -33,7 +33,6 @@ export const useLocalDraft = ({
     try {
       // Skip Firebase loading if data is already provided from parent component
       if (skipFirebaseLoad) {
-        console.log('✅ Skipping Firebase load - data provided from parent');
         return null;
       }
 
@@ -41,12 +40,7 @@ export const useLocalDraft = ({
       const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
       const existingAssessment = await AssessmentSubmissionService.getAssessment(protocolId, formType, reviewerId);
       
-      console.log('🔍 loadDraft - existingAssessment from Firebase:', existingAssessment);
-      
       if (existingAssessment && existingAssessment.formData) {
-        console.log('✅ Loaded existing assessment from Firebase:', existingAssessment.status);
-        console.log('🔍 FormData keys:', Object.keys(existingAssessment.formData));
-        console.log('🔍 FormData:', existingAssessment.formData);
         setLastSaved(toDate(existingAssessment.submittedAt) || null);
         // Store in local storage as backup
         const storageKey = getStorageKey();
@@ -59,11 +53,8 @@ export const useLocalDraft = ({
           reviewerId
         };
         localStorage.setItem(storageKey, JSON.stringify(draftData));
-        console.log('🔍 Returning formData:', existingAssessment.formData);
         return existingAssessment.formData;
       }
-      
-      console.log('🔍 No Firebase data found, trying localStorage...');
       
       // If no Firebase data, try localStorage
       const storageKey = getStorageKey();
@@ -78,21 +69,17 @@ export const useLocalDraft = ({
           const now = new Date();
           
           if (now > expiryTime) {
-            console.log('📅 Draft has expired, clearing...');
             localStorage.removeItem(storageKey);
             return null;
           }
         }
         
         setLastSaved(new Date(draftData.savedAt));
-        console.log('✅ Loaded draft from localStorage');
-        console.log('🔍 Returning localStorage formData:', draftData.formData);
         return draftData.formData;
       }
     } catch (error) {
       console.error('❌ Error loading assessment data:', error);
     }
-    console.log('🔍 No data found, returning null');
     return null;
   }, [getStorageKey, protocolId, formType, reviewerId, skipFirebaseLoad]);
 
@@ -148,7 +135,6 @@ export const useLocalDraft = ({
           'Reviewer', // Temporary reviewer name
           'draft'
         );
-        console.log('✅ Draft saved to Firebase with status: draft');
       } catch (firebaseError) {
         console.error('❌ Error saving draft to Firebase:', firebaseError);
         // Don't throw - localStorage save was successful
@@ -175,8 +161,8 @@ export const useLocalDraft = ({
 
     try {
       const success = await saveDraftToLocal(formData);
-      if (success) {
-        console.log('✅ Draft auto-saved to localStorage and Firebase');
+      if (!success) {
+        console.error('Auto-save failed: unable to persist draft locally');
       }
     } catch (error) {
       console.error('Auto-save failed:', error);
@@ -201,13 +187,22 @@ export const useLocalDraft = ({
     try {
       const success = await saveDraftToLocal(formData);
       if (success) {
-        toast.success('Draft saved successfully!');
+        customToast.success(
+          'Draft Saved',
+          'Your draft has been saved successfully.'
+        );
       } else {
-        toast.error('Failed to save draft');
+        customToast.error(
+          'Save Failed',
+          'Failed to save draft.'
+        );
       }
     } catch (error) {
       console.error('Save draft failed:', error);
-      toast.error('Failed to save draft. Please try again.');
+      customToast.error(
+        'Save Failed',
+        'Failed to save draft. Please try again.'
+      );
     }
   }, [saveDraftToLocal]);
 
@@ -226,7 +221,10 @@ export const useLocalDraft = ({
   // Submit form (this will save to Firebase and clear localStorage)
   const submitForm = useCallback(async (formData: any) => {
     if (!protocolId || !formType || !reviewerId) {
-      toast.error('Missing required information for submission');
+      customToast.error(
+        'Missing Information',
+        'Missing required information for submission.'
+      );
       return;
     }
 
@@ -247,14 +245,20 @@ export const useLocalDraft = ({
       // Clear the draft from localStorage after successful submission
       clearDraft();
       
-      toast.success('Assessment submitted successfully!');
+      customToast.success(
+        'Assessment Submitted',
+        'Your assessment has been submitted successfully.'
+      );
       
       if (onSubmissionSuccess) {
         onSubmissionSuccess();
       }
     } catch (error) {
       console.error('Submission failed:', error);
-      toast.error('Failed to submit assessment. Please try again.');
+      customToast.error(
+        'Submission Failed',
+        'Failed to submit assessment. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }

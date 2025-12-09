@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EllipsisVertical, Eye, FileText, Download, MessageSquare, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { PageLoading } from "@/components/ui/loading";
+import { LoadingSkeleton } from "@/components/ui/loading";
 import { formatDistanceToNow } from "date-fns";
 import { ColumnDef } from "@tanstack/react-table";
 import { getStatusBadge } from "@/lib/utils/statusUtils";
@@ -63,12 +63,10 @@ export default function ApprovedProtocolsPage() {
 
   const handleDownloadDocuments = (protocolId: string) => {
     // TODO: Implement document download functionality
-    console.log('Download documents for:', protocolId);
   };
 
   const handleSendMessage = (protocolId: string) => {
     // TODO: Implement message sending
-    console.log('Send message for:', protocolId);
   };
 
   const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
@@ -190,8 +188,26 @@ export default function ApprovedProtocolsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[400px]">
-        <PageLoading text="Loading protocols..." />
+      <div className="space-y-6 p-4 md:p-6 animate-in fade-in duration-500">
+        <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 dark:to-card p-6">
+            <div className="relative flex-1 max-w-sm">
+              <LoadingSkeleton className="h-10 w-full rounded-md" />
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 pb-6">
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="flex items-center gap-4">
+                  <LoadingSkeleton className="h-4 w-32 rounded-md" />
+                  <LoadingSkeleton className="h-4 w-64 rounded-md" />
+                  <LoadingSkeleton className="h-4 w-24 rounded-md" />
+                  <LoadingSkeleton className="h-4 w-28 rounded-md ml-auto" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

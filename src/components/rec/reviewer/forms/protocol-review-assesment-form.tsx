@@ -173,7 +173,6 @@ export default function ProtocolReviewForm({
           // If parent asked to skip Firebase load and provided defaultValues, use immediately
           if (skipFirebaseLoad && Object.keys(defaultValues).length > 0) {
             form.reset({ ...(form.getValues() as any), ...(defaultValues as any) });
-            console.log('✅ Form loaded with provided defaultValues (skipFirebaseLoad)');
             setIsLoadingExistingData(false);
             return;
           }
@@ -184,7 +183,6 @@ export default function ProtocolReviewForm({
           if (existingData && Object.keys(existingData).length > 0) {
             // Found existing draft - use it
             form.reset({ ...(form.getValues() as any), ...(existingData as any) });
-            console.log('✅ Form loaded with existing data from Firebase/localStorage');
             
             // Check assessment status
             const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
@@ -195,7 +193,6 @@ export default function ProtocolReviewForm({
           } else if (Object.keys(defaultValues).length > 0) {
             // No existing draft - use prefill data
             form.reset({ ...(form.getValues() as any), ...(defaultValues as any) });
-            console.log('✅ Form pre-populated with default values:', defaultValues);
           }
         } catch (error) {
           console.error('Error loading/prefilling form:', error);

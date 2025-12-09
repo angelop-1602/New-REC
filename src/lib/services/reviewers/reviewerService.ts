@@ -449,6 +449,15 @@ class ReviewerService {
       });
       
       await Promise.all(assignmentPromises);
+      
+      // Invalidate analytics cache (reviewer assignments changed)
+      try {
+        const { invalidateAnalyticsCache } = await import("@/lib/services/analytics/analyticsCache");
+        await invalidateAnalyticsCache();
+      } catch (cacheError) {
+        console.warn("Failed to invalidate analytics cache:", cacheError);
+      }
+      
       return true;
     } catch (error) {
       console.error('Error assigning reviewers:', error);
@@ -646,9 +655,7 @@ class ReviewerService {
         await deleteDoc(doc(protocolReviewersRef, overdueId));
       }
       
-      if (overdueIds.length > 0) {
-        console.log(`Removed ${overdueIds.length} overdue reviewers from protocol ${protocolId}`);
-      }
+      // Intentionally no console logging in production for removed reviewers
     } catch (error) {
       console.error('Error removing overdue reviewers:', error);
     }
@@ -730,10 +737,9 @@ class ReviewerService {
         
         for (const assessmentDoc of assessmentFormsSnapshot.docs) {
           const assessmentData = assessmentDoc.data();
-          if (assessmentData.reviewerId === oldAssignment.reviewerId) {
-            await deleteDoc(assessmentDoc.ref);
-            console.log(`Deleted assessment form for old reviewer ${oldAssignment.reviewerName}`);
-          }
+            if (assessmentData.reviewerId === oldAssignment.reviewerId) {
+              await deleteDoc(assessmentDoc.ref);
+            }
         }
       } catch (error) {
         console.error('Error deleting old assessment forms:', error);
@@ -772,7 +778,6 @@ class ReviewerService {
         updatedAt: serverTimestamp()
       });
       
-      console.log(`Successfully reassigned reviewer from ${oldAssignment.reviewerName} to ${newReviewerData.name}`);
       return true;
     } catch (error) {
       console.error('Error reassigning reviewer:', error);

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
+import { LoadingSimple } from '@/components/ui/loading';
 
 // Dynamic import for PDF.js to avoid SSR issues
 let pdfjsLib: any = null;
@@ -16,8 +17,6 @@ const initializePdfJs = async () => {
     
     // Set worker source to local file
     pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.js';
-    
-    console.log('PDF.js initialized with worker:', pdfjs.GlobalWorkerOptions.workerSrc);
     pdfjsLib = pdfjs;
     return pdfjs;
   } catch (error) {
@@ -85,13 +84,9 @@ export default function PdfJsPreview({
         // Initialize PDF.js dynamically
         const pdfjs = await initializePdfJs();
 
-        console.log('PdfJsPreview: Loading PDF from', apiUrl);
-        console.log('PdfJsPreview: Worker source:', pdfjs.GlobalWorkerOptions.workerSrc);
-
         // Test worker accessibility
         try {
-          const workerTest = await fetch('/pdfjs/pdf.worker.min.js', { method: 'HEAD' });
-          console.log('PdfJsPreview: Worker file accessible:', workerTest.ok);
+          await fetch('/pdfjs/pdf.worker.min.js', { method: 'HEAD' });
         } catch (workerError) {
           console.warn('PdfJsPreview: Worker file test failed:', workerError);
         }
@@ -102,14 +97,12 @@ export default function PdfJsPreview({
         }
 
         const contentType = response.headers.get('content-type') || '';
-        console.log('PdfJsPreview: Content-Type:', contentType);
         
         if (!contentType.includes('pdf')) {
           throw new Error(`Expected PDF but got ${contentType}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();
-        console.log('PdfJsPreview: ArrayBuffer size:', arrayBuffer.byteLength);
 
         const loadingTask = pdfjs.getDocument({ 
           data: arrayBuffer,
@@ -121,8 +114,6 @@ export default function PdfJsPreview({
         const pdfDoc = await loadingTask.promise;
         
         if (cancelled) return;
-
-        console.log('PdfJsPreview: PDF loaded successfully, pages:', pdfDoc.numPages);
         setPdf(pdfDoc);
         setNumPages(pdfDoc.numPages);
       } catch (e: any) {
@@ -142,8 +133,7 @@ export default function PdfJsPreview({
     return () => {
       cancelled = true;
       // Cancel all ongoing render tasks
-      renderTasksRef.current.forEach((task, pageNum) => {
-        console.log(`Cancelling render task for page ${pageNum} during load cleanup`);
+      renderTasksRef.current.forEach((task) => {
         task.cancel();
       });
       renderTasksRef.current.clear();
@@ -176,14 +166,11 @@ export default function PdfJsPreview({
     // Cancel any ongoing render task for this page
     const existingTask = renderTasksRef.current.get(pageNum);
     if (existingTask) {
-      console.log(`Cancelling previous render task for page ${pageNum}`);
       existingTask.cancel();
       renderTasksRef.current.delete(pageNum);
     }
 
     try {
-      console.log(`PdfJsPreview: Rendering page ${pageNum}`);
-      
       const pageObj = await pdf.getPage(pageNum);
       const viewport = pageObj.getViewport({ scale, rotation });
 
@@ -216,15 +203,11 @@ export default function PdfJsPreview({
       
       // Mark page as rendered
       setRenderedPages(prev => new Set(prev).add(pageNum));
-      
-      console.log(`PdfJsPreview: Page ${pageNum} rendered successfully`);
     } catch (e: any) {
       // Don't log cancellation errors as they're expected
       if (e.name !== 'RenderingCancelledException') {
         console.error(`Error rendering page ${pageNum}:`, e);
         setError(`Failed to render page ${pageNum}`);
-      } else {
-        console.log(`Render task for page ${pageNum} was cancelled`);
       }
     }
   }, [pdf, scale, rotation, numPages]);
@@ -232,8 +215,6 @@ export default function PdfJsPreview({
   // Render all pages
   const renderAllPages = useCallback(async () => {
     if (!pdf || numPages === 0) return;
-    
-    console.log(`Rendering all ${numPages} pages`);
     
     // Render pages sequentially to avoid overwhelming the browser
     for (let i = 1; i <= numPages; i++) {
@@ -303,8 +284,7 @@ export default function PdfJsPreview({
   useEffect(() => {
     return () => {
       // Cancel all ongoing render tasks
-      renderTasksRef.current.forEach((task, pageNum) => {
-        console.log(`Cancelling render task for page ${pageNum}`);
+      renderTasksRef.current.forEach((task) => {
         task.cancel();
       });
       renderTasksRef.current.clear();
@@ -347,9 +327,8 @@ export default function PdfJsPreview({
     return (
       <div className={className}>
         <div className="flex items-center justify-center h-full">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-t-primary mx-auto"></div>
-            <p className="text-sm text-muted-foreground">Loading PDF preview...</p>
+          <div className="text-center space-y-2">
+            <LoadingSimple size="md" text="Loading PDF preview..." />
           </div>
         </div>
       </div>
