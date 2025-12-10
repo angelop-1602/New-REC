@@ -16,12 +16,14 @@ interface ProtocolDocumentsCardProps {
   userType: "proponent" | "reviewer" | "chairperson";
   submissionId: string;
   protocolId: string;
+  submissionStatus?: string;
   isPreviewOpen: boolean;
   selectedDocumentForPreview: string | null;
   onPreviewDocument: (documentId: string) => void;
   onDownloadDocument: (document: DocumentsType) => void;
   onUploadDocument?: (document: DocumentsType) => void;
   onUploadRevision?: (document: DocumentsType) => void;
+  onReplaceDocument?: (document: DocumentsType) => void;
   onCancelRequest?: (documentId: string) => void;
   onRequestCreated?: () => void;
   onDocumentStatusUpdate?: () => void;
@@ -34,12 +36,14 @@ export function ProtocolDocumentsCard({
   userType,
   submissionId,
   protocolId,
+  submissionStatus,
   isPreviewOpen,
   selectedDocumentForPreview,
   onPreviewDocument,
   onDownloadDocument,
   onUploadDocument,
   onUploadRevision,
+  onReplaceDocument,
   onCancelRequest,
   onRequestCreated,
   onDocumentStatusUpdate,
@@ -68,7 +72,7 @@ export function ProtocolDocumentsCard({
           )}
         </div>
       </CardHeader>
-      <CardContent className="pb-6">
+      <CardContent className="py-4">
         {loading ? (
           <div className="flex items-center justify-center pb-6">
             <p className="text-muted-foreground">Loading documents...</p>
@@ -106,10 +110,12 @@ export function ProtocolDocumentsCard({
                             <DocumentActionsMenu
                               document={document}
                               userType={userType}
+                              submissionStatus={submissionStatus}
                               onPreview={onPreviewDocument}
                               onDownload={onDownloadDocument}
                               onUpload={onUploadDocument}
                               onUploadRevision={onUploadRevision}
+                              onReplace={onReplaceDocument}
                               onCancelRequest={onCancelRequest}
                             />
                           </TableCell>

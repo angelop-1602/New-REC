@@ -24,6 +24,7 @@ import {
   Inbox,
   Check,
   Archive,
+  Download,
 } from "lucide-react"
 import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol"
 import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore"
@@ -53,6 +54,7 @@ const ROUTE_MAP: Record<string, { label: string; icon: React.ReactNode }> = {
   "submitted-protocols": { label: "Submitted", icon: <FileText className="h-4 w-4" /> },
   protocol: { label: "Protocols", icon: <FileText className="h-4 w-4" /> },
   "generate-documents": { label: "Generate Documents", icon: <FileEdit className="h-4 w-4" /> },
+  extraction: { label: "Extraction", icon: <Download className="h-4 w-4" /> },
   settings: { label: "Settings", icon: <Settings className="h-4 w-4" /> },
 }
 

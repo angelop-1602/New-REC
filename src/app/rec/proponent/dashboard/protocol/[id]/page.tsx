@@ -110,7 +110,7 @@ export default function Page() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen pt-16 lg:pt-20 w-full flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center px-4">
         <LoadingSpinner size="lg" text="Loading protocol details..." />
       </div>
     );
@@ -119,7 +119,7 @@ export default function Page() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen pt-16 lg:pt-20 w-full flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center px-4">
         <div className="text-center">
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">Error</h2>
           <p className="text-gray-600 mb-4">{error}</p>
@@ -137,7 +137,7 @@ export default function Page() {
   // No submission found
   if (!submission) {
     return (
-      <div className="min-h-screen pt-16 lg:pt-20 w-full flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center px-4">
         <div className="text-center">
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">Submission Not Found</h2>
           <p className="text-gray-600 mb-4">The requested protocol could not be found.</p>
@@ -171,7 +171,7 @@ export default function Page() {
   const isCompleted = submission.status === "archived";
 
   return (
-    <div className="min-h-screen pt-16 lg:pt-20 w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 pb-10">
+    <div className="min-h-screen w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 pb-10">
       {/* Global Back Button */}
       <div className="w-full max-w-7xl mb-4">
         <GlobalBackButton />
@@ -250,9 +250,9 @@ export default function Page() {
           showDocuments={true}
           protocolId={String(submission.id)}
           submissionId={submissionId}
+          submissionStatus={submission.status}
           onDocumentEdit={(documentId: string) => {
-            // TODO: Implement document editing
-            // Could navigate to a document edit page or open an edit dialog
+            // Document editing is handled via onUploadRevision in ProtocolDocumentsCard
           }}
         />
       </div>

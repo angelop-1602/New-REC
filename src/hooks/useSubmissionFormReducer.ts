@@ -375,13 +375,20 @@ export const formReducer = (state: FormState, action: FormAction): FormState => 
     }
 
     case "LOAD_FROM_LOCALSTORAGE": {
+      // Preserve existing documents if loaded documents are empty or missing
+      // This prevents documents from being cleared when loading draft
+      const loadedDocuments = action.payload.documents;
+      const shouldUseLoadedDocuments = loadedDocuments && Array.isArray(loadedDocuments) && loadedDocuments.length > 0;
+      
       return {
         ...state,
-        ...action.payload,
+        formData: action.payload.formData || state.formData,
+        documents: shouldUseLoadedDocuments ? loadedDocuments : state.documents, // Preserve existing if loaded is empty
+        currentStep: action.payload.currentStep ?? state.currentStep,
         // Ensure some fields are properly initialized
         touchedFields: new Set(action.payload.touchedFields || []),
-        isDraftSaved: true,
-        lastSaved: action.payload.lastSaved || new Date(),
+        isDraftSaved: action.payload.isDraftSaved ?? true,
+        lastSaved: action.payload.lastSaved || state.lastSaved || new Date(),
       };
     }
 

@@ -46,6 +46,7 @@ export default function InlineDocumentPreview({
 }: InlineDocumentPreviewProps) {
   const { user } = useAuth();
   const [selectedDocument, setSelectedDocument] = React.useState<DocumentsType | null>(null);
+  const lastPropSelectedId = React.useRef<string | undefined>(undefined);
   const [error, setError] = React.useState<string | null>(null);
   const [comment, setComment] = React.useState("");
   const [currentIndex, setCurrentIndex] = React.useState(0);
@@ -63,23 +64,22 @@ export default function InlineDocumentPreview({
 
   // Auto-select document when documents change or selectedDocumentId is provided
   React.useEffect(() => {
-    if (uploadedDocuments.length > 0) {
-      let documentToSelect = uploadedDocuments[0];
-      let indexToSelect = 0;
-      
-      // If a specific document ID is provided, try to find and select it
-      if (selectedDocumentId) {
-        const foundIndex = uploadedDocuments.findIndex(doc => doc.id === selectedDocumentId);
-        if (foundIndex !== -1) {
-          documentToSelect = uploadedDocuments[foundIndex];
-          indexToSelect = foundIndex;
-        }
+    if (uploadedDocuments.length === 0) return;
+
+    // Respond only when the prop selectedDocumentId changes
+    if (selectedDocumentId && selectedDocumentId !== lastPropSelectedId.current) {
+      const foundIndex = uploadedDocuments.findIndex(doc => doc.id === selectedDocumentId);
+      if (foundIndex !== -1) {
+        handleDocumentSelect(uploadedDocuments[foundIndex], foundIndex);
+        lastPropSelectedId.current = selectedDocumentId;
+        return;
       }
-      
-      // Only select if no document is currently selected or if we found a specific document
-      if (!selectedDocument || selectedDocumentId) {
-        handleDocumentSelect(documentToSelect, indexToSelect);
-      }
+    }
+
+    // On first load (no selection yet), select the first document
+    if (!selectedDocument) {
+      handleDocumentSelect(uploadedDocuments[0], 0);
+      lastPropSelectedId.current = selectedDocumentId || uploadedDocuments[0].id;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedDocuments, selectedDocumentId, selectedDocument]);
@@ -274,20 +274,41 @@ export default function InlineDocumentPreview({
                        <p className="text-sm text-muted-foreground">{error}</p>
                      </div>
                    </div>
-                 ) : selectedDocument ? (
-                   <SimplePdfViewer
-                     key={selectedDocument.id} // Force re-render when document changes
-                     file={selectedDocument.storagePath?.split('/').pop() || selectedDocument.originalFileName || `${selectedDocument.id}.zip`}
-                     submissionId={submissionId || ''}
-                     auto={true}
-                     className="w-full h-full"
-                     storagePath={selectedDocument.storagePath} // Pass the actual storagePath
-                   />
-                 ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <span className="text-muted-foreground">No document selected</span>
-                  </div>
-                )}
+                 ) : selectedDocument ? (() => {
+                   // Get storagePath from document - check versions array first, then root level
+                   const docWithVersions = selectedDocument as any;
+                   let documentStoragePath = selectedDocument.storagePath;
+                   
+                   // If document has versions array, get storagePath from latest version
+                   if (docWithVersions.versions && Array.isArray(docWithVersions.versions) && docWithVersions.versions.length > 0) {
+                     const currentVersion = docWithVersions.currentVersion || docWithVersions.versions.length;
+                     const latestVersion = docWithVersions.versions.find((v: any) => v.version === currentVersion) || 
+                                          docWithVersions.versions[docWithVersions.versions.length - 1];
+                     if (latestVersion && latestVersion.storagePath) {
+                       documentStoragePath = latestVersion.storagePath;
+                     }
+                   }
+                   
+                   // Get filename from storagePath or use fallback
+                   const fileName = documentStoragePath?.split('/').pop() || 
+                                    selectedDocument.originalFileName || 
+                                    `${selectedDocument.id}.zip`;
+                   
+                   return (
+                     <SimplePdfViewer
+                       key={selectedDocument.id} // Force re-render when document changes
+                       file={fileName}
+                       submissionId={submissionId || ''}
+                       auto={true}
+                       className="w-full h-full"
+                       storagePath={documentStoragePath} // Pass the actual storagePath (from version if available)
+                     />
+                   );
+                 })() : (
+                   <div className="flex items-center justify-center h-full">
+                     <span className="text-muted-foreground">No document selected</span>
+                   </div>
+                 )}
               </CardContent>
             </Card>
           </div>

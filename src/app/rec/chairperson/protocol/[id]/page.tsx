@@ -12,7 +12,7 @@ import { ChairpersonDecisionCard } from "@/components/rec/chairperson/components
 import { getUnreadMessageCount } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
-import { checkArchivingConditions, archiveProtocol, updateProtocolActivity } from "@/lib/services/core/archivingService";
+import { updateProtocolActivity } from "@/lib/services/core/archivingService";
 import { 
   ChairpersonProtocol, 
   toChairpersonProtocol,
@@ -64,29 +64,9 @@ export default function ChairpersonProtocolDetailPage() {
           const typedProtocol = toChairpersonProtocol(rawData);
           setInitialSubmission(typedProtocol);
           
-          // Check archiving conditions for non-archived protocols
-          if (data.status !== "archived") {
-            const archivingCheck = await checkArchivingConditions(submissionId);
-            if (archivingCheck.shouldArchive && archivingCheck.reason) {
-              // Automatically archive if conditions are met
-              try {
-                await archiveProtocol(
-                  submissionId,
-                  archivingCheck.reason,
-                  archivingCheck.details,
-                  user?.uid || "system"
-                );
-                // Refresh the submission after archiving
-                const updatedData = await getSubmissionById(submissionId);
-                const updatedWithDocs = await getSubmissionWithDocuments(submissionId);
-                const rawUpdated = updatedWithDocs || updatedData;
-                const typedUpdated = toChairpersonProtocol(rawUpdated);
-                setInitialSubmission(typedUpdated);
-              } catch (archiveError) {
-                console.error("Error archiving protocol:", archiveError);
-              }
-            }
-          }
+          // Note: Archiving should be a manual action by the chairperson, not automatic
+          // Removed automatic archiving check to prevent unwanted archiving when viewing protocols
+          // If automatic archiving is needed, it should be done via a scheduled job or manual action
           
           // Update activity timestamp
           await updateProtocolActivity(submissionId);

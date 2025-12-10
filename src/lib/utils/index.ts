@@ -30,7 +30,7 @@ export {
   useLocalStorageDraft,
   DRAFT_STORAGE_KEY,
   DRAFT_TIMESTAMP_KEY,
-  DRAFT_EXPIRY_HOURS
+  DRAFT_EXPIRY_MINUTES
 } from './localStorageManager';
 
 // Message utilities

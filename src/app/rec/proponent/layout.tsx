@@ -7,7 +7,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Header />
-      <main className="bg-background">
+      <main className="bg-background pt-14 sm:pt-16 md:pt-20">
         {children}
       </main>
       <Footer />

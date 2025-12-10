@@ -174,7 +174,7 @@ export default function Page() {
   }, [fetchUnreadCounts, user, allSubmissions.length]);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-muted/20 to-background pt-16 lg:pt-20">
+    <div className="min-h-screen w-full bg-gradient-to-b from-muted/20 to-background">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6 max-w-7xl">
         {/* Page Header */}
         <div className="mb-4 lg:mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -189,6 +189,7 @@ export default function Page() {
             </div>
             <div className="flex gap-2">
               {/* <MockDataInjector /> */}
+              
               <Button 
                 onClick={() => router.push("/rec/proponent/application")}
                 className="bg-[#036635] hover:bg-[#036635]/90 dark:bg-[#FECC07] dark:hover:bg-[#FECC07]/90 dark:text-[#036635] text-white"

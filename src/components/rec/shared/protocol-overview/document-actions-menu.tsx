@@ -13,23 +13,29 @@ import { Eye, Download, Upload, Trash2, MoreVertical } from "lucide-react";
 interface DocumentActionsMenuProps {
   document: DocumentsType;
   userType: "proponent" | "reviewer" | "chairperson";
+  submissionStatus?: string;
   onPreview: (documentId: string) => void;
   onDownload: (document: DocumentsType) => void;
   onUpload?: (document: DocumentsType) => void;
   onUploadRevision?: (document: DocumentsType) => void;
+  onReplace?: (document: DocumentsType) => void;
   onCancelRequest?: (documentId: string) => void;
 }
 
 export function DocumentActionsMenu({
   document,
   userType,
+  submissionStatus,
   onPreview,
   onDownload,
   onUpload,
   onUploadRevision,
+  onReplace,
   onCancelRequest,
 }: DocumentActionsMenuProps) {
   const docStatus = (document as { currentStatus?: string; status?: string }).currentStatus || document.status;
+  const canEdit = userType === "proponent" && 
+                  (submissionStatus === "pending" || submissionStatus === "draft");
 
   const renderMenuItems = () => {
     // If document is requested
@@ -89,6 +95,7 @@ export function DocumentActionsMenu({
     }
     
     // For all other statuses, show preview/download
+    // If can edit (pending/draft) and proponent, also show replace option
     return (
       <>
         <DropdownMenuItem onClick={() => onPreview(document.id)}>
@@ -99,6 +106,12 @@ export function DocumentActionsMenu({
           <Download className="h-4 w-4 mr-2" />
           Download Document
         </DropdownMenuItem>
+        {canEdit && userType === 'proponent' && onReplace && (
+          <DropdownMenuItem onClick={() => onReplace(document)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Replace Document
+          </DropdownMenuItem>
+        )}
       </>
     );
   };

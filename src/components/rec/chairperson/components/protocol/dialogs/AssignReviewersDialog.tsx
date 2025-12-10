@@ -53,6 +53,8 @@ export function AssignReviewersDialog({
   onAssignmentsUpdate
 }: AssignReviewersDialogProps) {
   const { user } = useAuth();
+  const chairId = user?.uid || "system";
+  const chairName = user?.displayName || "REC Chairperson";
   
   // 🎯 Convert to typed protocol immediately - using our type system!
   const submission = toChairpersonProtocol(rawSubmission);
@@ -217,7 +219,9 @@ export function AssignReviewersDialog({
         submission.id,
         validReviewers,
         researchType as any,
-        researchType === 'EX' ? exemptionSubType : undefined
+        researchType === 'EX' ? exemptionSubType : undefined,
+        chairId,
+        chairName
       );
       
       if (success) {

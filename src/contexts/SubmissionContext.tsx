@@ -12,9 +12,11 @@ import {
 } from "@/lib/utils/localStorageManager";
 import { 
   getFileReference,
+  setFileReference,
   removeFileReference,
   clearAllFileReferences,
-  logFileReferences
+  logFileReferences,
+  validateDocumentFiles
 } from "@/lib/utils/fileReferenceManager";
 import { 
   createCompleteSubmission
@@ -165,38 +167,125 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     };
   }, [state.formData, state.documents, state.currentStep]);
 
-  // Load draft on mount (silently)
+  // Load draft on mount (silently) - restore all data including documents
   useEffect(() => {
-    const draftData = loadDraft();
-    if (draftData) {
-      dispatch({ type: "LOAD_FROM_LOCALSTORAGE", payload: draftData });
-    }
+    const restoreDraft = async () => {
+      const draftData = loadDraft();
+      if (draftData) {
+        // First restore the form data and documents structure
+        dispatch({ type: "LOAD_FROM_LOCALSTORAGE", payload: draftData });
+        
+        // Then restore file references for documents from IndexedDB
+        if (draftData.documents && draftData.documents.length > 0) {
+          const documentsWithFiles = await Promise.all(
+            draftData.documents.map(async (doc) => {
+              try {
+                // Try to get file from IndexedDB (persistent storage)
+                const fileRef = await getFileReference(doc.id);
+                if (fileRef) {
+                  return {
+                    ...doc,
+                    _fileRef: fileRef,
+                    _fileRefLost: false,
+                  };
+                } else if ((doc as any)._fileRefLost) {
+                  console.warn(`⚠️ File reference not found for document: ${doc.title}. Please re-upload.`);
+                }
+              } catch (error) {
+                console.warn(`⚠️ Error restoring file for document ${doc.title}:`, error);
+              }
+              return doc;
+            })
+          );
+          
+          // Update documents with restored file references
+          dispatch({ type: "SET_DOCUMENTS", payload: documentsWithFiles });
+        }
+      }
+    };
+
+    restoreDraft();
   }, []);
 
   // Reload documents from localStorage when accessing documents step or confirmation step
-  // Also restore file references from memory
+  // Also restore file references from IndexedDB (persistent storage)
+  // This ensures documents are always visible when navigating to these steps
   useEffect(() => {
     if (state.currentStep === 1 || state.currentStep === 2) { // Documents step or Confirmation step
-      const draftData = loadDraft();
-      if (draftData && draftData.documents && draftData.documents.length > 0) {
-        
-        // Restore file references from memory
-        const documentsWithFiles = draftData.documents.map(doc => {
-          const fileRef = getFileReference(doc.id);
-          if (fileRef) {
-            return {
-              ...doc,
-              _fileRef: fileRef,
-              _fileRefLost: false,
-            };
-          } else if ((doc as any)._fileRefLost) {
-            console.warn(`⚠️ File reference not found for document: ${doc.title}`);
+      const restoreDocuments = async () => {
+        const draftData = loadDraft();
+        if (draftData && draftData.documents && draftData.documents.length > 0) {
+          // Check if we already have these documents in state
+          const existingDocIds = new Set(state.documents.map(d => d.id));
+          const draftDocIds = new Set(draftData.documents.map((d: any) => d.id));
+          
+          // Only restore if documents are missing or different
+          const needsRestore = draftData.documents.length !== state.documents.length ||
+            !Array.from(draftDocIds).every(id => existingDocIds.has(id));
+          
+          if (needsRestore) {
+            // Restore file references from IndexedDB (async)
+            const documentsWithFiles = await Promise.all(
+              draftData.documents.map(async (doc: any) => {
+                try {
+                  // Try to get file from IndexedDB (persistent storage)
+                  const fileRef = await getFileReference(doc.id);
+                  if (fileRef) {
+                    return {
+                      ...doc,
+                      _fileRef: fileRef,
+                      _fileRefLost: false,
+                    };
+                  } else if (doc._fileRefLost) {
+                    console.warn(`⚠️ File reference not found for document: ${doc.title}. Please re-upload.`);
+                  }
+                } catch (error) {
+                  console.warn(`⚠️ Error restoring file for document ${doc.title}:`, error);
+                }
+                return doc;
+              })
+            );
+            
+            dispatch({ type: "SET_DOCUMENTS", payload: documentsWithFiles });
+          } else {
+            // Documents are already in state, just ensure file references are restored
+            const documentsWithFiles = await Promise.all(
+              state.documents.map(async (doc) => {
+                // If document already has file reference, keep it
+                if (doc._fileRef instanceof File) {
+                  return doc;
+                }
+                
+                // Otherwise, try to restore from IndexedDB
+                try {
+                  const fileRef = await getFileReference(doc.id);
+                  if (fileRef) {
+                    return {
+                      ...doc,
+                      _fileRef: fileRef,
+                      _fileRefLost: false,
+                    };
+                  }
+                } catch (error) {
+                  console.warn(`⚠️ Error restoring file for document ${doc.title}:`, error);
+                }
+                return doc;
+              })
+            );
+            
+            // Only update if any file references were restored
+            const hasChanges = documentsWithFiles.some((doc, index) => 
+              doc._fileRef instanceof File && !(state.documents[index]?._fileRef instanceof File)
+            );
+            
+            if (hasChanges) {
+              dispatch({ type: "SET_DOCUMENTS", payload: documentsWithFiles });
+            }
           }
-          return doc;
-        });
-        
-        dispatch({ type: "SET_DOCUMENTS", payload: documentsWithFiles });
-      }
+        }
+      };
+
+      restoreDocuments();
     }
   }, [state.currentStep]);
 
@@ -220,14 +309,27 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
   }, [dispatch]);
 
   // Documents management
-  const addDocument = useCallback((document: DocumentsType) => {
+  const addDocument = useCallback(async (document: DocumentsType) => {
+    // Ensure file reference is stored (both memory and IndexedDB) if document has one
+    if (document._fileRef instanceof File) {
+      try {
+        await setFileReference(document.id, document._fileRef);
+      } catch (error) {
+        console.warn(`Failed to store file reference for ${document.id}:`, error);
+        // Continue even if storage fails - document will still be added
+      }
+    }
     dispatch({ type: "ADD_DOCUMENT", payload: document });
   }, [dispatch]);
 
-  const removeDocument = useCallback((documentId: string) => {
+  const removeDocument = useCallback(async (documentId: string) => {
     dispatch({ type: "REMOVE_DOCUMENT", payload: documentId });
-    // Also remove file reference from memory
-    removeFileReference(documentId);
+    // Also remove file reference from both memory and IndexedDB
+    try {
+      await removeFileReference(documentId);
+    } catch (error) {
+      console.warn(`Failed to remove file reference for ${documentId}:`, error);
+    }
   }, [dispatch]);
 
   const updateDocument = useCallback((documentId: string, updates: Partial<DocumentsType>) => {
@@ -359,35 +461,71 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
     try {
       dispatch({ type: "SET_SUBMITTING", payload: true });
 
-      // Restore file references from memory for all documents
+      // Validate and restore file references from IndexedDB for all documents
       logFileReferences(); // Log current state for debugging
       
-      const documentsWithRestoredFiles = state.documents.map(doc => {
-        // First check if document already has a file reference
-        if (doc._fileRef instanceof File) {
-          return doc;
-        }
-        
-        // Try to get file reference from memory
-        const fileRef = getFileReference(doc.id);
-        if (fileRef) {
-          return {
-            ...doc,
-            _fileRef: fileRef,
-          };
-        }
-        
-        console.warn(`⚠️ No file reference found for document "${doc.title}"`);
-        return doc;
-      });
+      // First, validate all documents have file references
+      const validation = await validateDocumentFiles(
+        state.documents.map(doc => ({ id: doc.id, title: doc.title }))
+      );
 
-      // Check for documents without file references
+      if (!validation.valid) {
+        const missingDocumentNames = validation.missing
+          .map(doc => `"${doc.title}"`)
+          .join(", ");
+        
+        console.error(`❌ ${validation.missing.length} documents are missing file references:`, missingDocumentNames);
+        
+        const errorMessage = validation.missing.length === 1
+          ? `The document ${missingDocumentNames} is missing its file. Please go back to the Documents step and re-upload this document before submitting.`
+          : `The following ${validation.missing.length} documents are missing their files: ${missingDocumentNames}. Please go back to the Documents step and re-upload these documents before submitting.`;
+        
+        throw new Error(errorMessage);
+      }
+
+      // Restore file references from IndexedDB (persistent storage)
+      const documentsWithRestoredFiles = await Promise.all(
+        state.documents.map(async (doc) => {
+          // First check if document already has a file reference
+          if (doc._fileRef instanceof File) {
+            return doc;
+          }
+          
+          // Try to get file reference from IndexedDB
+          try {
+            const fileRef = await getFileReference(doc.id);
+            if (fileRef) {
+              return {
+                ...doc,
+                _fileRef: fileRef,
+              };
+            }
+          } catch (error) {
+            console.warn(`⚠️ Error retrieving file reference for document "${doc.title}":`, error);
+          }
+          
+          // This should not happen if validation passed, but handle it gracefully
+          console.warn(`⚠️ No file reference found for document "${doc.title}"`);
+          return doc;
+        })
+      );
+
+      // Final check - ensure all documents have file references
       const documentsWithFiles = documentsWithRestoredFiles.filter(doc => doc._fileRef instanceof File);
-      const skippedDocuments = documentsWithRestoredFiles.length - documentsWithFiles.length;
+      const documentsWithoutFiles = documentsWithRestoredFiles.filter(doc => !(doc._fileRef instanceof File));
       
-      if (skippedDocuments > 0) {
-        console.error(`❌ ${skippedDocuments} documents will be skipped during submission due to missing file references`);
-        throw new Error(`${skippedDocuments} document(s) are missing file references. Please re-upload these documents before submitting.`);
+      if (documentsWithoutFiles.length > 0) {
+        const missingDocumentNames = documentsWithoutFiles
+          .map(doc => `"${doc.title}"`)
+          .join(", ");
+        
+        console.error(`❌ ${documentsWithoutFiles.length} documents failed to restore file references:`, missingDocumentNames);
+        
+        const errorMessage = documentsWithoutFiles.length === 1
+          ? `Failed to restore file for document ${missingDocumentNames}. Please go back to the Documents step and re-upload this document.`
+          : `Failed to restore files for the following ${documentsWithoutFiles.length} documents: ${missingDocumentNames}. Please go back to the Documents step and re-upload these documents.`;
+        
+        throw new Error(errorMessage);
       }
 
 
@@ -400,7 +538,7 @@ export const SubmissionProvider: React.FC<SubmissionProviderProps> = ({
 
       // Clear localStorage draft and file references after successful submission
       clearDraft();
-      clearAllFileReferences();
+      await clearAllFileReferences();
 
       // Update state
       dispatch({ type: "SET_SUBMITTING", payload: false });

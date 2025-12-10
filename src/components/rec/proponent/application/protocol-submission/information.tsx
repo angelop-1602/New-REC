@@ -103,7 +103,7 @@ export const SubmissionInformation = () => {
 
   return (
     <>
-      <form className="space-y-8 mt-5">
+      <form className="space-y-6 sm:space-y-8">
         {/* --- GENERAL INFORMATION CARD --- */}
         <Card>
           <CardHeader>
@@ -136,8 +136,8 @@ export const SubmissionInformation = () => {
             />
 
             {/* Principal Investigator & Co-Researchers */}
-            <div className="flex gap-2 items-start w-full">
-              <div className="flex-grow">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 items-start w-full">
+              <div className="flex-grow w-full sm:w-auto">
                 <ValidatedInput
                   label="Principal Investigator"
                   value={
@@ -172,10 +172,11 @@ export const SubmissionInformation = () => {
                 variant="outline"
                 size="sm"
                 onClick={addCoResearcher}
-                className="whitespace-nowrap mt-[30px]" // adjust this to align properly with input
+                className="whitespace-nowrap w-full sm:w-auto sm:mt-[30px]"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 <span className="hidden sm:inline">Add Co-Researcher</span>
+                <span className="sm:hidden">Add Co-Researcher</span>
               </Button>
             </div>
 
@@ -185,7 +186,7 @@ export const SubmissionInformation = () => {
               <div className="flex flex-col gap-2 border-l border-gray-200 pl-3 ml-3">
                 {getFieldValue("general_information.co_researchers").map(
                   (researcher: any, index: number) => (
-                    <div key={index} className="flex items-center gap-2">
+                    <div key={index} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <ValidatedInput
                         label={`Co-Researcher ${index + 1}`}
                         value={researcher.name || ""}
@@ -193,7 +194,7 @@ export const SubmissionInformation = () => {
                         placeholder="Co-Researcher name"
                         format="proper-case"
                         required
-                        className="flex-grow items-center"
+                        className="flex-grow w-full sm:w-auto"
                         fieldPath={`general_information.co_researchers.${index}.name`}
                         registerValidation={registerFieldValidation}
                         unregisterValidation={unregisterFieldValidation}
@@ -206,10 +207,11 @@ export const SubmissionInformation = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => removeCoResearcher(index)}
-                        className="whitespace-nowrap mt-[24px]"
+                        className="whitespace-nowrap w-full sm:w-auto sm:mt-[24px]"
                       >
                         <X className="h-4 w-4 mr-1" />
                         <span className="hidden sm:inline">Remove</span>
+                        <span className="sm:hidden">Remove</span>
                       </Button>
                     </div>
                   )
@@ -218,7 +220,7 @@ export const SubmissionInformation = () => {
             )}
 
             {/* Address & Contact - side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <ValidatedInput
                 label="Address"
                 value={
@@ -304,7 +306,7 @@ export const SubmissionInformation = () => {
             </div>
 
             {/* Position, Email, Course/Program, Adviser */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               
               <ValidatedInput
                 label="Position"
@@ -332,7 +334,7 @@ export const SubmissionInformation = () => {
                   updateField("general_information.principal_investigator.course_program", value)
                 }
                 placeholder="e.g., DIT, BSIT (use abbreviation)"
-                format="proper-case"
+                format="uppercase"
                 fieldPath="general_information.principal_investigator.course_program"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
@@ -401,7 +403,7 @@ export const SubmissionInformation = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Study Level, Study Type, Study Site */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {/* Study Level */}
               <ValidatedSelect
                 label="Nature of Study"
@@ -669,7 +671,7 @@ export const SubmissionInformation = () => {
               Pre-submission Status
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6 flex flex-row justify-center gap-20">
+          <CardContent className="space-y-6 flex flex-col sm:flex-row justify-center gap-6 sm:gap-10 lg:gap-20">
             {/* Technical Review Question */}
             <ValidatedRadioGroup
               label="Has the research undergone technical review/proposal defense?"

@@ -130,6 +130,9 @@ export interface InformationType {
   submitted_to_other_committee?: boolean | null;       // Has the research been submitted to another research ethics committee?
   
   brief_description_of_study?: string;         // Abstract/summary (minimum 50 words, if enforced)
+  
+  // Administrative fields (added by chairperson/admin)
+  or_number?: string;                          // OR Number (Official Receipt Number) - added by admin when data is available
 
   // Optional advanced fields for future-proofing:
   history?: { by: string; at: string; note: string }[]; // (Optional) Log of changes, reviewer comments, etc.

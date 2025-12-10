@@ -202,8 +202,18 @@ class ReviewerAuthService {
             assessmentStatus = assessmentForm.status; // 'draft', 'submitted', 'approved', etc.
           }
           
-          // Determine the status from assessment status, protocol status, and reviewer assignment status
-          let status = assessmentStatus || assignmentData.reviewStatus || 'pending';
+          // Determine status with sensible defaults:
+          // - Use assessment status if present
+          // - Otherwise treat undefined/initial as "draft" (instead of "pending") to reflect no work yet
+          // - If assignment has a more specific reviewStatus (not pending), use it
+          // - Override with protocol terminal statuses
+          let status = 'draft';
+          if (assessmentStatus) {
+            status = assessmentStatus;
+          } else if (assignmentData.reviewStatus && assignmentData.reviewStatus !== 'pending') {
+            status = assignmentData.reviewStatus;
+          }
+
           const protocolStatus = protocolData.status;
           if (protocolStatus === 'approved' || protocolStatus === 'disapproved') {
             status = protocolStatus;

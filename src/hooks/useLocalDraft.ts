@@ -47,7 +47,7 @@ export const useLocalDraft = ({
         const draftData = {
           formData: existingAssessment.formData,
           savedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
           protocolId,
           formType,
           reviewerId
@@ -115,7 +115,7 @@ export const useLocalDraft = ({
       const draftData = {
         formData: cleanedFormData,
         savedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutes from now
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
         protocolId,
         formType,
         reviewerId

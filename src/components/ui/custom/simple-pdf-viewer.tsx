@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, ExternalLink } from 'lucide-react';
 
@@ -25,6 +25,7 @@ export default function SimplePdfViewer({
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string>('');
   const [pdfUrl, setPdfUrl] = useState<string>('');
+  const pdfUrlRef = useRef<string>('');
 
   // Build API URL
   useEffect(() => {
@@ -45,8 +46,9 @@ export default function SimplePdfViewer({
         setError(null);
         
         // Clear previous PDF URL if it exists
-        if (pdfUrl) {
-          URL.revokeObjectURL(pdfUrl);
+        if (pdfUrlRef.current) {
+          URL.revokeObjectURL(pdfUrlRef.current);
+          pdfUrlRef.current = '';
           setPdfUrl('');
         }
         
@@ -64,6 +66,7 @@ export default function SimplePdfViewer({
         const blob = await response.blob();
         
         const blobUrl = URL.createObjectURL(blob);
+        pdfUrlRef.current = blobUrl;
         setPdfUrl(blobUrl);
         setLoading(false);
       } catch (err: any) {
@@ -77,11 +80,13 @@ export default function SimplePdfViewer({
 
     // Cleanup blob URL on unmount
     return () => {
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl);
+      if (pdfUrlRef.current) {
+        URL.revokeObjectURL(pdfUrlRef.current);
+        pdfUrlRef.current = '';
       }
     };
-  }, [file, submissionId, entry, auto, storagePath, pdfUrl]);
+  // Note: Do NOT include pdfUrl in deps to avoid re-fetch loops
+  }, [file, submissionId, entry, auto, storagePath]);
 
   // Loading state
   if (loading) {

@@ -173,12 +173,18 @@ export default function RECMemberProfilePage() {
   const calculateAnalytics = (assignmentsData: ReviewerAssignment[]) => {
     const now = new Date();
     const total = assignmentsData.length;
-    const completed = assignmentsData.filter(a => 
-      a.status === 'submitted' || a.status === 'approved' || a.status === 'completed'
-    ).length;
-    const pending = assignmentsData.filter(a => 
-      a.status === 'pending' || a.status === 'draft' || a.status === 'in-progress'
-    ).length;
+
+    const normalizeStatus = (status?: string) =>
+      (status ? status.toString().trim().toLowerCase() : 'draft');
+    const normalizedStatuses = assignmentsData.map(a => normalizeStatus(a.status));
+
+    const isCompleted = (status: string) =>
+      status === 'submitted' || status === 'approved' || status === 'completed' || status === 'disapproved';
+
+    const completed = normalizedStatuses.filter(isCompleted).length;
+    const pending = normalizedStatuses.filter(s => s === 'pending').length;
+    const draft = normalizedStatuses.filter(s => s === 'draft').length;
+    const inProgress = normalizedStatuses.filter(s => s === 'in-progress' || s === 'in_progress').length;
     
     // Calculate overdue assignments
     const overdue = assignmentsData.filter(a => {
@@ -193,7 +199,7 @@ export default function RECMemberProfilePage() {
 
     // Calculate average completion time
     const completedAssignments = assignmentsData.filter(a => 
-      (a.status === 'submitted' || a.status === 'approved' || a.status === 'completed') && a.assignedAt
+      (isCompleted(normalizeStatus(a.status))) && a.assignedAt
     );
     
     let totalDays = 0;
@@ -213,17 +219,16 @@ export default function RECMemberProfilePage() {
 
     // Status breakdown for pie chart
     const statusCounts: Record<string, number> = {};
-    assignmentsData.forEach(a => {
-      const status = a.status.toLowerCase();
+    normalizedStatuses.forEach(status => {
       statusCounts[status] = (statusCounts[status] || 0) + 1;
     });
 
     const statusBreakdown = [
       { name: 'Completed', value: completed, color: '#10b981' },
       { name: 'Pending', value: pending, color: '#f59e0b' },
-      { name: 'Overdue', value: overdue, color: '#ef4444' },
-      { name: 'Draft', value: statusCounts['draft'] || 0, color: '#6b7280' },
-      { name: 'In Progress', value: statusCounts['in-progress'] || 0, color: '#3b82f6' }
+      { name: 'Draft', value: draft, color: '#6b7280' },
+      { name: 'In Progress', value: inProgress, color: '#3b82f6' },
+      { name: 'Overdue', value: overdue, color: '#ef4444' }
     ].filter(item => item.value > 0);
 
     // Completion trend (last 12 months) - includes both total and completed

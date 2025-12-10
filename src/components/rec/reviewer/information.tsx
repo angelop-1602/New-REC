@@ -23,7 +23,9 @@ export default function ProtocolInformation({ information }: ProtocolInformation
   // Map the information data to display format
   const info = information ? {
     principalInvestigator: information.general_information?.principal_investigator?.name || "-",
-    courseProgram: information.general_information?.principal_investigator?.course_program || "-",
+    courseProgram: information.general_information?.principal_investigator?.course_program 
+      ? information.general_information.principal_investigator.course_program.toUpperCase() 
+      : "-",
     adviser: information.general_information?.adviser?.name || "-",
     email: information.general_information?.principal_investigator?.email || "-",
     // Handle both combined position_institution and separate position/institution fields

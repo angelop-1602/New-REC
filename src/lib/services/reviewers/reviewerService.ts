@@ -23,6 +23,7 @@ import {
   deleteReviewer
 } from '@/lib/services/core/unifiedDataService';
 import { toDate } from '@/types';
+import { sendMessageToSubmission } from '@/lib/firebase/firestore';
 
 const db = getFirestore(firebaseApp);
 
@@ -359,7 +360,9 @@ class ReviewerService {
     protocolId: string,
     reviewerIds: string[],
     researchType: 'SR' | 'PR' | 'HO' | 'BS' | 'EX' | 'social' | 'experimental' | 'exemption',
-    exemptionSubType?: 'experimental' | 'documentary'
+    exemptionSubType?: 'experimental' | 'documentary',
+    assignedById?: string,
+    assignedByName?: string
   ): Promise<boolean> {
     try {
       let requirements = REVIEWER_REQUIREMENTS[researchType];
@@ -449,6 +452,21 @@ class ReviewerService {
       });
       
       await Promise.all(assignmentPromises);
+
+      // Notify proponent that reviewers were assigned (without revealing names)
+      try {
+        const senderId = assignedById || 'system';
+        const senderName = assignedByName || 'REC Chairperson';
+        await sendMessageToSubmission(
+          protocolId,
+          senderId,
+          senderName,
+          `Reviewers have been assigned to your protocol. The review is expected to be completed within approximately ${baseDays} day(s). You will be notified once the review is finished.`,
+          "system"
+        );
+      } catch (msgError) {
+        console.error("Failed to notify proponent about reviewer assignment:", msgError);
+      }
       
       // Invalidate analytics cache (reviewer assignments changed)
       try {

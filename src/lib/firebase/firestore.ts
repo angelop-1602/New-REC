@@ -251,6 +251,43 @@ export const createCompleteSubmission = async (
     // Step 1: Create submission first
     submissionId = await createSubmission(userId, information);
 
+    // Step 1.5: Verify submission exists in Firestore before uploading
+    // This ensures Storage security rules can verify the submission exists
+    // Retry up to 5 times with increasing delays (more retries for Firestore consistency)
+    let submissionExists = false;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const submissionDoc = await getDoc(doc(db, SUBMISSIONS_COLLECTION, submissionId));
+        const data = submissionDoc.data();
+        
+        if (submissionDoc.exists() && data && data.submitBy === userId) {
+          submissionExists = true;
+          console.log(`✅ Submission ${submissionId} verified successfully on attempt ${attempt + 1}`);
+          break;
+        } else {
+          console.warn(`⚠️ Attempt ${attempt + 1}: Submission exists but submitBy mismatch or missing data`);
+        }
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`⚠️ Attempt ${attempt + 1} to verify submission failed:`, error);
+      }
+      
+      // Wait before retry (exponential backoff: 500ms, 1000ms, 1500ms, 2000ms)
+      if (attempt < 4) {
+        const delay = 500 * (attempt + 1);
+        console.log(`⏳ Waiting ${delay}ms before retry ${attempt + 2}...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    if (!submissionExists) {
+      console.error(`❌ Failed to verify submission ${submissionId} after 5 attempts`);
+      console.error('Last error:', lastError);
+      throw new Error(`Failed to verify submission was created. Please try again. Last error: ${lastError?.message || 'Unknown'}`);
+    }
+
     // Step 2: Upload documents if any exist
     // Filter out documents without valid file references (due to localStorage serialization)
     const documentsWithFiles = documents.filter(doc => doc._fileRef instanceof File);

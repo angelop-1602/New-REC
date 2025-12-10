@@ -33,6 +33,9 @@ export * from './chairperson-enhanced.types';
 // Analytics Module
 export * from './analytics.types';
 
+// Extraction Module
+export * from './extraction.types';
+
 // ============================================================================
 // ADDITIONAL TYPE FILES (Still needed, exported for convenience)
 // ============================================================================

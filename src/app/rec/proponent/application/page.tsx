@@ -80,30 +80,32 @@ function ApplicationContent() {
 
 
   return (
-    <div className="min-h-screen lg:pt-30 w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 pb-10">
+    <div className="min-h-screen w-full flex flex-col items-center px-3 sm:px-4 md:px-6 lg:px-8 pb-6 sm:pb-10">
 
-<div className="w-full max-w-7xl mx-auto mb-8 px-4">
-  <div className="flex items-center justify-between">
-    <GlobalBackButton />
+<div className="w-full max-w-7xl mx-auto mb-4 sm:mb-6 lg:mb-8 px-2 sm:px-4">
+  <div className="flex items-center justify-between gap-2 sm:gap-4">
+    <div className="flex-shrink-0">
+      <GlobalBackButton />
+    </div>
 
-    <div className="flex-1 text-center">
-      <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
+    <div className="flex-1 text-center min-w-0 px-2">
+      <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold text-foreground break-words">
         Protocol Review Application
       </h1>
-      <p className="text-sm sm:text-base text-muted-foreground mt-1">
+      <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">
         Submit your research protocol for ethics review
       </p>
     </div>
 
     {/* Empty spacer to balance layout */}
-    <div className="w-[60px] sm:w-[80px]"></div>
+    <div className="w-[40px] sm:w-[60px] md:w-[80px] flex-shrink-0"></div>
   </div>
 </div>
 
 
       
       {/* Progress Steps */}
-      <div className="w-full max-w-4xl flex justify-center mb-6 lg:mb-8">
+      <div className="w-full max-w-4xl flex justify-center mb-4 sm:mb-6 lg:mb-8 px-2">
         <Steps
           steps={STEPS}
           current={currentStep}

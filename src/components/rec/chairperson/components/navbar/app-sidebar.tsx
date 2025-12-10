@@ -1,4 +1,4 @@
-import { Calendar, Check, Home, Inbox, Archive, Settings, Users, Clock, FileSearch, UserCheck, MessageSquare, ChartColumn } from "lucide-react"
+import { Calendar, Check, Home, Inbox, Archive, Settings, Users, Clock, FileSearch, UserCheck, MessageSquare, ChartColumn, Download } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -29,6 +29,11 @@ const menuCategories = [
         title: "Analytics",
         url: "/rec/chairperson/analytics",
         icon: ChartColumn,
+      },
+      {
+        title: "Extraction",
+        url: "/rec/chairperson/extraction",
+        icon: Download,
       },
       {
         title: "Messages",

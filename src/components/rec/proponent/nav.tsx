@@ -129,8 +129,8 @@ export const Header = () => {
   };
 
   return (
-    <header className="w-full z-40 fixed top-0 left-0 bg-background shadow-md p-2">
-      <div className="container mx-auto px-4 py-2 lg:py-0 flex items-center justify-between lg:grid lg:grid-cols-3">
+    <header className="w-full z-50 fixed top-0 left-0 bg-background/95 backdrop-blur shadow-md">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-2 sm:py-3 flex items-center justify-between gap-3">
         {/* Logo (left) */}
         <div className="hidden lg:flex items-center">
           <Link href="/rec/proponent">
@@ -146,7 +146,7 @@ export const Header = () => {
         </div>
 
         {/* Menu (center - desktop only) */}
-        <div className="hidden lg:flex justify-center items-center">
+        <div className="hidden lg:flex justify-center items-center flex-1">
           <NavigationMenu>
             <NavigationMenuList className="flex gap-4">
               {navigationItems.map((item) => (

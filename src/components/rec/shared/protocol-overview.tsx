@@ -19,6 +19,7 @@ interface ProtocolOverviewProps {
   showDocuments?: boolean;
   protocolId: string;
   submissionId: string;
+  submissionStatus?: string; // For determining if editing is allowed
   onDocumentStatusUpdate?: () => void;
   onDocumentEdit?: (documentId: string) => void;
   onProtocolUpdate?: (protocol: Record<string, unknown>) => void;
@@ -31,6 +32,7 @@ export default function ProtocolOverview({
   showDocuments = true,
   protocolId,
   submissionId,
+  submissionStatus,
   onDocumentStatusUpdate,
   onDocumentEdit: _onDocumentEdit, // eslint-disable-line @typescript-eslint/no-unused-vars
   onProtocolUpdate,
@@ -203,12 +205,14 @@ export default function ProtocolOverview({
           userType={userType}
           submissionId={submissionId}
           protocolId={protocolId}
+          submissionStatus={submissionStatus}
           isPreviewOpen={isPreviewOpen}
           selectedDocumentForPreview={selectedDocumentForPreview}
           onPreviewDocument={handlePreviewDocument}
           onDownloadDocument={handleDownloadDocument}
           onUploadDocument={undefined}
           onUploadRevision={undefined}
+          onReplaceDocument={undefined}
           onCancelRequest={undefined}
           onRequestCreated={handleRequestCreated}
           onDocumentStatusUpdate={onDocumentStatusUpdate}
@@ -219,6 +223,9 @@ export default function ProtocolOverview({
       <ProtocolInformationCard
         information={displayInformation}
         isReviewer={isReviewer}
+        userType={userType}
+        protocolId={submissionId}
+        submissionStatus={submissionStatus}
         isStudyDetailsOpen={isStudyDetailsOpen}
         onStudyDetailsOpenChange={setIsStudyDetailsOpen}
         isDurationParticipantsOpen={isDurationParticipantsOpen}
@@ -233,12 +240,14 @@ export default function ProtocolOverview({
           userType={userType}
           submissionId={submissionId}
           protocolId={protocolId}
+          submissionStatus={submissionStatus}
           isPreviewOpen={isPreviewOpen}
           selectedDocumentForPreview={selectedDocumentForPreview}
           onPreviewDocument={handlePreviewDocument}
           onDownloadDocument={handleDownloadDocument}
           onUploadDocument={userType === 'proponent' ? handleOpenUploadDialog : undefined}
           onUploadRevision={userType === 'proponent' ? handleOpenRevisionDialog : undefined}
+          onReplaceDocument={userType === 'proponent' ? handleOpenRevisionDialog : undefined}
           onCancelRequest={userType === 'chairperson' ? handleCancelRequest : undefined}
           onRequestCreated={handleRequestCreated}
           onDocumentStatusUpdate={onDocumentStatusUpdate}

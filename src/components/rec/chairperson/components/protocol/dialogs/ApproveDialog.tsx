@@ -44,7 +44,7 @@ export function ApproveDialog({
   const typedSubmission = toChairpersonProtocol(submission);
   
   const [spupCode, setSpupCode] = useState("");
-  const [reviewType, setReviewType] = useState<'SR' | 'PR' | 'HO' | 'BS' | 'EX'>('SR');
+  const [reviewType, setReviewType] = useState<'SR' | 'EX'>('SR');
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Generate SPUP code when dialog opens
@@ -77,11 +77,8 @@ export function ApproveDialog({
       await acceptSubmission(String(typedSubmission.id), spupCode, user.uid, reviewType);
       const researchTypeNames = {
         'SR': 'Social/Behavioral Research',
-        'PR': 'Public Health Research', 
-        'HO': 'Health Operations',
-        'BS': 'Biomedical Research',
         'EX': 'Exempted from Review'
-      };
+      } as const;
       toast.success(`Protocol accepted with SPUP Code: ${spupCode} (${researchTypeNames[reviewType]})`);
       onStatusUpdate("accepted");
       onOpenChange(false);
@@ -106,29 +103,11 @@ export function ApproveDialog({
           {/* Research Type Selection */}
           <div>
             <Label className="mb-2">Research Type</Label>
-            <RadioGroup value={reviewType} onValueChange={(value) => setReviewType(value as 'SR' | 'PR' | 'HO' | 'BS' | 'EX')}>
+            <RadioGroup value={reviewType} onValueChange={(value) => setReviewType(value as 'SR' | 'EX')}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="SR" id="sr" />
                 <Label htmlFor="sr" className="font-normal cursor-pointer">
                   Social/Behavioral Research (SR)
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="PR" id="pr" />
-                <Label htmlFor="pr" className="font-normal cursor-pointer">
-                  Public Health Research (PR)
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="HO" id="ho" />
-                <Label htmlFor="ho" className="font-normal cursor-pointer">
-                  Health Operations (HO)
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="BS" id="bs" />
-                <Label htmlFor="bs" className="font-normal cursor-pointer">
-                  Biomedical Research (BS)
                 </Label>
               </div>
               <div className="flex items-center space-x-2">

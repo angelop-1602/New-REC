@@ -18,7 +18,6 @@ import {
   AlertCircle,
   Users,
   FileText as FileTextIcon,
-  RefreshCw,
   MoreVertical,
   Download,
   FileJson,
@@ -57,6 +56,7 @@ import {
 import { 
   toChairpersonProtocol,
   getProtocolCode,
+  getProtocolTitle,
   toDate,
   FirestoreDate
 } from '@/types';
@@ -202,18 +202,6 @@ export function ChairpersonActions({
     }
   }, [assignedReviewers, submission.id]);
 
-  // Manual refresh function for assessments
-  const handleRefreshAssessments = async () => {
-    try {
-      setLoadingAssessments(true);
-      const result = await getProtocolReviewerAssessments(String(submission.id));
-      setAssessments(result as unknown as Record<string, unknown> | null);
-    } catch (e) {
-      console.error("Failed to refresh assessments:", e);
-    } finally {
-      setLoadingAssessments(false);
-    }
-  };
 
   // Helpers for row actions
   const handleViewAssessment = (assessment: Record<string, unknown>, reviewerName: string) => {
@@ -671,25 +659,6 @@ export function ChairpersonActions({
                 <h4 className="text-sm font-medium">
                   Reviewer Assessments Summary
                 </h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRefreshAssessments}
-                  disabled={loadingAssessments}
-                  className="text-xs"
-                >
-                  {loadingAssessments ? (
-                    <>
-                      <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
-                      Refreshing...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="mr-1 h-3 w-3" />
-                      Refresh Status
-                    </>
-                  )}
-                </Button>
               </div>
               <div className="flex items-center justify-between mb-2">
                 <Badge
@@ -703,25 +672,37 @@ export function ChairpersonActions({
                     size="sm"
                   className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
                     onClick={async () => {
-                      const { formatAssessmentsToDocxData } = await import(
-                        "@/lib/services/assessments/assessmentAggregationService"
-                      );
-                      const { buildReviewerSummaryDocx } = await import(
-                        "@/lib/services/documents/wordExportService"
-                      );
-                      const docxData = formatAssessmentsToDocxData(
-                        submission,
-                        assessments as unknown as ProtocolAssessmentsResult
-                      );
-                      const blob = await buildReviewerSummaryDocx(docxData);
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `Consolidated_Reviews_${submission.id}.docx`;
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                      URL.revokeObjectURL(url);
+                      try {
+                        // Export assessments to JSON
+                        const exportData = {
+                          protocolId: submission.id,
+                          protocolCode: submission.spupCode || submission.tempProtocolCode,
+                          protocolTitle: getProtocolTitle(submission),
+                          exportDate: new Date().toISOString(),
+                          assessments: (assessments as unknown as ProtocolAssessmentsResult)?.assessments || [],
+                          summary: {
+                            totalAssigned: assessments?.totalAssigned || 0,
+                            totalCompleted: assessments?.totalCompleted || 0,
+                            allCompleted: assessments?.allCompleted || false
+                          }
+                        };
+                        
+                        const jsonString = JSON.stringify(exportData, null, 2);
+                        const blob = new Blob([jsonString], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `Consolidated_Reviews_${submission.id || submission.spupCode || 'protocol'}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(url);
+                        
+                        customToast.success("Export Successful", "Reviewer assessments exported to JSON file");
+                      } catch (error) {
+                        console.error('Error exporting assessments to JSON:', error);
+                        customToast.error("Export Failed", "Failed to export assessments. Please try again.");
+                      }
                     }}
                   >
                     Export All Reviews
@@ -957,7 +938,20 @@ export function ChairpersonActions({
           assessment={selectedAssessmentToView}
           reviewerName={selectedReviewerName}
           protocolId={submission.id}
-          onStatusUpdate={handleRefreshAssessments}
+          onStatusUpdate={async () => {
+            // Reload assessments when status is updated
+            if (assignedReviewers.length > 0) {
+              try {
+                setLoadingAssessments(true);
+                const result = await getProtocolReviewerAssessments(String(submission.id));
+                setAssessments(result as unknown as Record<string, unknown> | null);
+              } catch (e) {
+                console.error("Failed to load reviewer assessments:", e);
+              } finally {
+                setLoadingAssessments(false);
+              }
+            }
+          }}
         />
       )}
     </>

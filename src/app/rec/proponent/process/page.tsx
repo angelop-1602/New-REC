@@ -14,7 +14,7 @@ export default function ProcessPage() {
       <div className="w-full px-4 py-2 sm:px-6 lg:px-8 flex-1">
         <div className="container mx-auto">
           {/* Back Button */}
-          <div className="pt-4 pb-3">
+          <div className="pt-2 pb-2 sm:pt-4 sm:pb-3">
             <Button
               variant="ghost"
               onClick={() => router.push('/rec/proponent')}

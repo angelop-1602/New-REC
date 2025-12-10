@@ -6,7 +6,7 @@ import { InformationType, DocumentsType } from "@/types";
 // Constants for localStorage keys
 export const DRAFT_STORAGE_KEY = "submission_draft";
 export const DRAFT_TIMESTAMP_KEY = "submission_draft_timestamp";
-export const DRAFT_EXPIRY_HOURS = 24; // Draft expires after 24 hours
+export const DRAFT_EXPIRY_MINUTES = 5; // Draft expires after 5 minutes
 
 // Interface for serialized draft data
 interface SerializedDraftData {
@@ -102,10 +102,10 @@ class LocalStorageManager {
 
       const timestamp = parseInt(timestampStr, 10);
       const now = Date.now();
-      const hoursElapsed = (now - timestamp) / (1000 * 60 * 60);
+      const minutesElapsed = (now - timestamp) / (1000 * 60);
 
       // Check if draft has expired
-      if (hoursElapsed > DRAFT_EXPIRY_HOURS) {
+      if (minutesElapsed > DRAFT_EXPIRY_MINUTES) {
         this.clearDraft();
         return null;
       }
@@ -171,9 +171,9 @@ class LocalStorageManager {
 
     const timestamp = parseInt(timestampStr, 10);
     const now = Date.now();
-    const hoursElapsed = (now - timestamp) / (1000 * 60 * 60);
+    const minutesElapsed = (now - timestamp) / (1000 * 60);
 
-    return hoursElapsed <= DRAFT_EXPIRY_HOURS;
+    return minutesElapsed <= DRAFT_EXPIRY_MINUTES;
   }
 
   // Get draft age in hours
@@ -189,7 +189,7 @@ class LocalStorageManager {
 
     const timestamp = parseInt(timestampStr, 10);
     const now = Date.now();
-    return (now - timestamp) / (1000 * 60 * 60);
+    return (now - timestamp) / (1000 * 60); // Returns age in minutes
   }
 
   // Validate draft data structure

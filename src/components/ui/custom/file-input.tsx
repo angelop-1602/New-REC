@@ -17,6 +17,7 @@ export default function StylishFileUpload({
   templateUrl,
   multiple = false,
   accept = ".pdf",
+  disabled = false,
   onChange,
 }: {
   title: string;
@@ -24,6 +25,7 @@ export default function StylishFileUpload({
   templateUrl?: string;
   multiple?: boolean;
   accept?: string;
+  disabled?: boolean;
   onChange?: (file: File | null) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,7 +33,7 @@ export default function StylishFileUpload({
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
+    if (!e.target.files || disabled) return;
     const selected = Array.from(e.target.files);
     const updated = multiple ? [...files, ...selected] : selected;
     setFiles(updated);
@@ -43,8 +45,8 @@ export default function StylishFileUpload({
     e.preventDefault();
     setIsDragging(false);
 
-    // Prevent dropping if not allowed
-    if (!multiple && files.length >= 1) return;
+    // Prevent dropping if disabled or not allowed
+    if (disabled || (!multiple && files.length >= 1)) return;
 
     const dropped = Array.from(e.dataTransfer.files);
     const updated = multiple ? [...files, ...dropped] : dropped;
@@ -53,24 +55,27 @@ export default function StylishFileUpload({
   };
 
   const removeFile = (index: number) => {
+    if (disabled) return;
     const updated = files.filter((_, i) => i !== index);
     setFiles(updated);
+    onChange?.(null);
   };
 
   const isSingleFileFull = !multiple && files.length >= 1;
+  const isInputDisabled = disabled || isSingleFileFull;
 
   return (
-    <div className="max-w-xl w-full mx-auto p-6 bg-white rounded-2xl border border-muted shadow-md space-y-4">
+    <div className="max-w-xl w-full mx-auto p-4 sm:p-6 bg-white rounded-2xl border border-muted shadow-md space-y-3 sm:space-y-4">
       {/* Title and Info */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold">{title}</h2>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <h2 className="text-sm font-semibold truncate">{title}</h2>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Info className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                <Info className="w-4 h-4 text-muted-foreground hover:text-primary flex-shrink-0" />
               </TooltipTrigger>
-              <TooltipContent className="text-xs  border shadow-sm">
+              <TooltipContent className="text-xs border shadow-sm">
                 {description}
               </TooltipContent>
             </Tooltip>
@@ -80,10 +85,11 @@ export default function StylishFileUpload({
           <Link
             href={templateUrl}
             target="_blank"
-            className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+            className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 whitespace-nowrap flex-shrink-0"
           >
             <Download className="w-4 h-4" />
-            Download Template
+            <span className="hidden sm:inline">Download Template</span>
+            <span className="sm:hidden">Template</span>
           </Link>
         )}
       </div>
@@ -92,29 +98,36 @@ export default function StylishFileUpload({
       <div
         onDragOver={(e) => {
           e.preventDefault();
-          if (!isSingleFileFull) setIsDragging(true);
+          if (!isInputDisabled) setIsDragging(true);
         }}
         onDragLeave={(e) => {
           e.preventDefault();
           setIsDragging(false);
         }}
         onDrop={handleDrop}
-        className={`w-full h-40 flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition cursor-pointer 
+        className={`w-full h-40 flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition
           ${
-            isDragging
-              ? "border-primary bg-primary/10"
-              : "border-muted hover:border-primary hover:bg-muted/50"
+            isInputDisabled
+              ? "opacity-50 cursor-not-allowed border-muted bg-muted/20"
+              : isDragging
+              ? "border-primary bg-primary/10 cursor-pointer"
+              : "border-muted hover:border-primary hover:bg-muted/50 cursor-pointer"
           }
-          ${isSingleFileFull ? "opacity-50 cursor-not-allowed" : ""}
         `}
         onClick={() => {
-          if (!isSingleFileFull) fileInputRef.current?.click();
+          if (!isInputDisabled) fileInputRef.current?.click();
         }}
       >
-        <Upload className="w-6 h-6 mb-2 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground text-center">
-          Drag & drop or{" "}
-          <span className="text-primary font-semibold">browse files</span>
+        <Upload className={`w-6 h-6 mb-2 ${isInputDisabled ? "text-muted-foreground/50" : "text-muted-foreground"}`} />
+        <p className={`text-sm text-center ${isInputDisabled ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+          {isInputDisabled ? (
+            "Document already uploaded"
+          ) : (
+            <>
+              Drag & drop or{" "}
+              <span className="text-primary font-semibold">browse files</span>
+            </>
+          )}
         </p>
         <input
           ref={fileInputRef}
@@ -122,8 +135,10 @@ export default function StylishFileUpload({
           multiple={multiple}
           accept={accept}
           className="hidden"
-          disabled={isSingleFileFull}
+          disabled={isInputDisabled}
           onChange={handleFileChange}
+          aria-label={`Upload ${title}`}
+          title={`Upload ${title}`}
         />
         <p className="text-xs text-muted-foreground mt-1">
           Acceptable Types: {accept || "PDF only"}
