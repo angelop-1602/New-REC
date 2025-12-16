@@ -2,7 +2,45 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all authenticated users to read and write everything
+    // Allow reading reviewers collection without authentication for code validation
+    // This is needed for reviewer login with code
+    match /reviewers/{reviewerId} {
+      allow read: if true; // Allow anyone to read for code validation
+      allow write: if request.auth != null; // Only authenticated users can write
+    }
+    
+    // Allow reading submissions collection for reviewers (needed for code-based auth)
+    // Reviewers authenticate via code, not Firebase Auth, so request.auth is null
+    match /submissions/{submissionId} {
+      allow read: if true; // Allow reading submissions (reviewers need this to see assigned protocols)
+      allow write: if request.auth != null; // Only authenticated users can write
+      
+      // Allow reading documents subcollection (needed for protocol review)
+      match /documents/{documentId} {
+        allow read: if true; // Allow reading documents
+        allow write: if request.auth != null; // Only authenticated users can write
+      }
+      
+      // Allow reading reviewers subcollection (assignments)
+      match /reviewers/{reviewerAssignmentId} {
+        allow read: if true; // Allow reading reviewer assignments
+        allow write: if request.auth != null; // Only authenticated users can write
+      }
+      
+      // Allow reading assessment_forms subcollection
+      match /reviewers/{reviewerAssignmentId}/assessment_forms/{formId} {
+        allow read: if true; // Allow reading assessment forms
+        allow write: if request.auth != null; // Only authenticated users can write
+      }
+      
+      // Allow reading reassignment_history subcollection
+      match /reassignment_history/{historyId} {
+        allow read: if true; // Allow reading reassignment history
+        allow write: if request.auth != null; // Only authenticated users can write
+      }
+    }
+    
+    // Allow all authenticated users to read and write everything else
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

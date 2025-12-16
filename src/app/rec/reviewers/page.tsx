@@ -31,7 +31,21 @@ const Page = () => {
     e.preventDefault();
     if (!code.trim()) return;
     
-    await authenticate(code.trim());
+    const success = await authenticate(code.trim());
+
+    // If authentication succeeds, check if there is a stored redirect URL
+    if (success && typeof window !== "undefined") {
+      try {
+        const redirectUrl = localStorage.getItem("reviewerRedirectUrl");
+        if (redirectUrl) {
+          localStorage.removeItem("reviewerRedirectUrl");
+          router.push(redirectUrl);
+          return;
+        }
+      } catch (err) {
+        console.warn("Unable to read reviewer redirect URL:", err);
+      }
+    }
   };
 
   const handleProtocolAction = (protocolId: string, action: string) => {

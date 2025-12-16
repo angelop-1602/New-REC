@@ -194,3 +194,40 @@ export interface ExportOptions {
   includeHeaders?: boolean; // Include column headers (default: true)
 }
 
+// ============================================================================
+// REPORT DATA (REC Format)
+// ============================================================================
+
+/**
+ * Report data structure matching REC reporting format
+ */
+export interface ReportData {
+  protocolCode: string;
+  protocolTitle: string;
+  researcherNames: string;
+  funding: 'R' | 'I' | 'A' | 'D' | 'O';
+  researchType: string;
+  studyLevel?: string;
+  dateReceived: string;
+  reviewType: 'FR' | 'ER' | 'EX';
+  meetingDate: string | null;
+  primaryReviewerName: string | null;
+  decision: 'A' | 'MN' | 'MJ' | 'D' | '';
+  decisionDate: string | null;
+  status: 'OR' | 'A' | 'C' | 'T' | 'W';
+}
+
+/**
+ * Report type
+ */
+export type ReportType = 'monthly' | 'yearly';
+
+/**
+ * Report period configuration
+ */
+export interface ReportPeriod {
+  type: ReportType;
+  month?: number; // 1-12 for monthly reports
+  year: number;
+}
+

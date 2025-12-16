@@ -184,6 +184,7 @@ export interface PrincipalInvestigator {
   contact_number?: string;
   affiliation?: string;
   position_institution?: string;
+  course_program?: string; // Optional course/program for student submissions
   address?: string;
 }
 

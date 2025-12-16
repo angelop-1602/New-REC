@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -71,6 +71,24 @@ export function AssignReviewersDialog({
 
   // Dynamic dialog width (auto-adjust based on required reviewer slots)
   const [dialogWidth, setDialogWidth] = useState<number>(640);
+  const getProtocolTitle = () => {
+    return (
+      getString(submission.title) ||
+      getString(submission.information?.general_information?.protocol_title) ||
+      "<Title of study protocol>"
+    );
+  };
+
+  const getPIName = () => {
+    return (
+      getString(submission.information?.general_information?.principal_investigator?.name) ||
+      "<Name of PI>"
+    );
+  };
+
+  const getSubmissionTypeLabel = () => {
+    return getString(submission.information?.submissionType) || "study protocol";
+  };
 
   const getResearchType = (): string => {
     // First check if researchType is directly stored (from Accept Protocol dialog)
@@ -272,6 +290,9 @@ export function AssignReviewersDialog({
       };
     }
   }
+
+  const primaryReviewerId = selectedReviewers[0];
+  const primaryReviewer = reviewers.find(r => r.id === primaryReviewerId);
 
   return (
     <Dialog

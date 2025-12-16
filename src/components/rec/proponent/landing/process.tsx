@@ -103,7 +103,7 @@ export const Process = () => {
           <p>If complete, the REC Chair:</p>
           <ul className="space-y-1.5 list-disc list-inside ml-4">
             <li>Assigns a <strong>SPUP REC Protocol Code</strong> (format: SPUP_YYYY_00000_SR/EX_XX)</li>
-            <li>Classifies the review type (SR/PR/HO/BS/EX)</li>
+            <li>Classifies the review type (SR/EX)</li>
             <li>Records the submission in the electronic database</li>
             <li>Changes protocol status from &quot;pending&quot; to &quot;accepted&quot;</li>
           </ul>
@@ -125,23 +125,11 @@ export const Process = () => {
           
           <div className="space-y-3">
             <div className="p-4 border-l-4 border-l-primary bg-muted/30 rounded-r-lg">
-              <p className="font-semibold">SR (Standard Review) - Social/Behavioral Research</p>
+              <p className="font-semibold">SR - Social/Behavioral Research</p>
               <p className="text-sm text-muted-foreground">Requires 3 reviewers (2x Protocol Review Assessment + 1x Informed Consent Assessment)</p>
             </div>
             <div className="p-4 border-l-4 border-l-primary bg-muted/30 rounded-r-lg">
-              <p className="font-semibold">PR (Public Health Research)</p>
-              <p className="text-sm text-muted-foreground">Requires 3 reviewers (2x Protocol Review Assessment + 1x Informed Consent Assessment)</p>
-            </div>
-            <div className="p-4 border-l-4 border-l-primary bg-muted/30 rounded-r-lg">
-              <p className="font-semibold">HO (Health Operations)</p>
-              <p className="text-sm text-muted-foreground">Requires 3 reviewers (2x Protocol Review Assessment + 1x Informed Consent Assessment)</p>
-            </div>
-            <div className="p-4 border-l-4 border-l-primary bg-muted/30 rounded-r-lg">
-              <p className="font-semibold">BS (Biomedical Research)</p>
-              <p className="text-sm text-muted-foreground">Requires 3 reviewers (2x Protocol Review Assessment + 1x Informed Consent Assessment)</p>
-            </div>
-            <div className="p-4 border-l-4 border-l-primary bg-muted/30 rounded-r-lg">
-              <p className="font-semibold">EX (Exempted from Review)</p>
+              <p className="font-semibold">EX - Exempted from Review</p>
               <p className="text-sm text-muted-foreground mb-2">Requires 2 reviewers with exemption assessment. For minimal-risk studies using publicly available, de-identified data.</p>
               <p className="text-sm font-medium">Includes subtypes:</p>
               <ul className="text-sm text-muted-foreground ml-4 mt-1 space-y-1">
@@ -168,7 +156,7 @@ export const Process = () => {
           
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-4 bg-muted/50 rounded-lg">
-              <p className="font-semibold mb-2">SR, PR, HO, BS protocols:</p>
+              <p className="font-semibold mb-2">SR protocols:</p>
               <ul className="text-sm space-y-1 list-disc list-inside ml-4">
                 <li>3 reviewers assigned</li>
                 <li>2 reviewers complete Protocol Review Assessment</li>
@@ -189,7 +177,7 @@ export const Process = () => {
             <p className="font-semibold mb-2">Review Process:</p>
             <ol className="space-y-1.5 list-decimal list-inside ml-4 text-sm">
               <li><strong>Reviewer Assessment</strong> – Reviewers access the protocol through the online system and complete their assigned assessment forms</li>
-              <li><strong>Review Period</strong> – Up to 4 weeks for expedited review, 2-6 weeks for full board review</li>
+              <li><strong>Review Period</strong> – Up to 3 weeks for expedited review, 6 weeks for full board review</li>
               <li><strong>Review Consolidation</strong> – REC Chair reviews all completed assessments</li>
               <li><strong>Decision Making</strong> – REC Chair makes decision based on reviewer recommendations</li>
             </ol>
@@ -378,7 +366,7 @@ export const Process = () => {
             const Icon = step.icon;
             // Define section IDs for anchor links
             const sectionIds: Record<number, string> = {
-              1: 'submission',
+              1: 'forms', // Step 1 uses 'forms' for forms link, also serves as submission section
               3: 'review-types',
               5: 'resubmissions',
               6: 'after-approval',

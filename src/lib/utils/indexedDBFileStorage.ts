@@ -55,8 +55,18 @@ class IndexedDBFileStorage {
 
     this.initPromise = new Promise((resolve, reject) => {
       // Check if IndexedDB is available
-      if (typeof window === "undefined" || !window.indexedDB) {
-        console.warn("IndexedDB is not available. File persistence will not work.");
+      // During SSR, window is undefined - this is expected, so we silently skip
+      if (typeof window === "undefined") {
+        resolve();
+        return;
+      }
+      
+      // In the browser, check if IndexedDB is actually available
+      if (!window.indexedDB) {
+        // Only warn in development to avoid console noise in production
+        if (process.env.NODE_ENV === 'development') {
+          console.warn("IndexedDB is not available in this browser. File persistence will not work. This may occur in private/incognito mode or if IndexedDB is disabled.");
+        }
         resolve();
         return;
       }

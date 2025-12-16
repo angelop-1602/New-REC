@@ -22,10 +22,50 @@ import { SUBMISSIONS_COLLECTION } from '@/lib/firebase/firestore';
 import { 
   ExtractionFilters, 
   ProtocolExportData, 
-  ExtractionStats 
+  ExtractionStats,
+  ReportPeriod
 } from '@/types/extraction.types';
 
 const db = getFirestore(firebaseApp);
+
+/**
+ * Calculate date range for monthly report
+ */
+export function getMonthlyDateRange(month: number, year: number): { start: Date; end: Date } {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999); // Last day of month
+  return { start, end };
+}
+
+/**
+ * Calculate date range for yearly report
+ */
+export function getYearlyDateRange(year: number): { start: Date; end: Date } {
+  const start = new Date(year, 0, 1);
+  const end = new Date(year, 11, 31, 23, 59, 59, 999); // Last day of year
+  return { start, end };
+}
+
+/**
+ * Fetch protocols for report (monthly or yearly)
+ */
+export async function fetchProtocolsForReport(
+  period: ReportPeriod
+): Promise<ChairpersonProtocol[]> {
+  const { start, end } = period.type === 'monthly' && period.month
+    ? getMonthlyDateRange(period.month, period.year)
+    : getYearlyDateRange(period.year);
+  
+  const filters: ExtractionFilters = {
+    dateRange: {
+      start,
+      end,
+      field: 'submission', // Use submission date for reports
+    },
+  };
+  
+  return fetchProtocolsForExtraction(filters);
+}
 
 /**
  * Fetch protocols based on extraction filters
@@ -67,7 +107,10 @@ export async function fetchProtocolsForExtraction(
     
     if (filters.researchType && filters.researchType.length > 0) {
       protocols = protocols.filter(p => {
-        const researchType = p.information?.nature_and_type_of_study?.type;
+        const study = p.information?.nature_and_type_of_study;
+        const researchType = study && typeof study === 'object' && 'type' in study 
+          ? (study as { type?: string }).type 
+          : undefined;
         return typeof researchType === 'string' && 
                filters.researchType!.includes(researchType);
       });
@@ -75,7 +118,10 @@ export async function fetchProtocolsForExtraction(
     
     if (filters.studyLevel && filters.studyLevel.length > 0) {
       protocols = protocols.filter(p => {
-        const studyLevel = p.information?.nature_and_type_of_study?.level;
+        const study = p.information?.nature_and_type_of_study;
+        const studyLevel = study && typeof study === 'object' && 'level' in study 
+          ? (study as { level?: string }).level 
+          : undefined;
         return typeof studyLevel === 'string' && 
                filters.studyLevel!.includes(studyLevel);
       });
@@ -127,9 +173,9 @@ export function transformProtocolToExportData(
     tempCode: protocol.tempProtocolCode || undefined,
     title: protocol.title || info?.general_information?.protocol_title || 'Untitled',
     status: protocol.status || 'pending',
-    submissionDate: protocol.createdAt ? toISOString(protocol.createdAt) : undefined,
-    approvalDate: protocol.approvedAt ? toISOString(protocol.approvedAt) : undefined,
-    decisionDate: protocol.decisionDate ? toISOString(protocol.decisionDate) : undefined,
+    submissionDate: protocol.createdAt ? (toISOString(protocol.createdAt) ?? undefined) : undefined,
+    approvalDate: protocol.approvedAt ? (toISOString(protocol.approvedAt) ?? undefined) : undefined,
+    decisionDate: protocol.decisionDate ? (toISOString(protocol.decisionDate) ?? undefined) : undefined,
     
     // Principal Investigator
     piName: pi?.name || undefined,
@@ -141,20 +187,70 @@ export function transformProtocolToExportData(
     adviser: info?.general_information?.adviser?.name || undefined,
     
     // Research Details
-    studyLevel: study?.level || undefined,
-    studyType: study?.type || undefined,
-    studySite: info?.study_site?.location === 'outside' 
-      ? info.study_site.outside_specify 
-      : info?.study_site?.location || undefined,
-    durationStart: info?.duration_of_study?.start_date || undefined,
-    durationEnd: info?.duration_of_study?.end_date || undefined,
-    participants: info?.participants?.number_of_participants || undefined,
-    description: info?.brief_description_of_study || undefined,
+    studyLevel: (study && typeof study === 'object' && 'level' in study)
+      ? (study as { level?: string }).level
+      : undefined,
+    studyType: (study && typeof study === 'object' && 'type' in study)
+      ? (study as { type?: string }).type
+      : undefined,
+    studySite: (() => {
+      const site = info?.study_site;
+      if (site && typeof site === 'object' && 'location' in site) {
+        const location = (site as { location?: string; outside_specify?: string }).location;
+        if (location === 'outside') {
+          return (site as { outside_specify?: string }).outside_specify || undefined;
+        }
+        return location || undefined;
+      }
+      return undefined;
+    })(),
+    durationStart: (() => {
+      const duration = info?.duration_of_study;
+      if (duration && typeof duration === 'object' && 'start_date' in duration) {
+        return (duration as { start_date?: string }).start_date || undefined;
+      }
+      return undefined;
+    })(),
+    durationEnd: (() => {
+      const duration = info?.duration_of_study;
+      if (duration && typeof duration === 'object' && 'end_date' in duration) {
+        return (duration as { end_date?: string }).end_date || undefined;
+      }
+      return undefined;
+    })(),
+    participants: (() => {
+      const participants = info?.participants;
+      if (participants && typeof participants === 'object' && 'number_of_participants' in participants) {
+        return (participants as { number_of_participants?: number }).number_of_participants || undefined;
+      }
+      return undefined;
+    })(),
+    description: typeof info?.brief_description_of_study === 'string'
+      ? info.brief_description_of_study
+      : undefined,
     
     // Funding
-    fundingSource: info?.source_of_funding?.selected || undefined,
-    pharmaceuticalCompany: info?.source_of_funding?.pharmaceutical_company_specify || undefined,
-    otherFunding: info?.source_of_funding?.others_specify || undefined,
+    fundingSource: (() => {
+      const funding = info?.source_of_funding;
+      if (funding && typeof funding === 'object' && 'selected' in funding) {
+        return (funding as { selected?: string }).selected || undefined;
+      }
+      return undefined;
+    })(),
+    pharmaceuticalCompany: (() => {
+      const funding = info?.source_of_funding;
+      if (funding && typeof funding === 'object' && 'pharmaceutical_company_specify' in funding) {
+        return (funding as { pharmaceutical_company_specify?: string }).pharmaceutical_company_specify || undefined;
+      }
+      return undefined;
+    })(),
+    otherFunding: (() => {
+      const funding = info?.source_of_funding;
+      if (funding && typeof funding === 'object' && 'others_specify' in funding) {
+        return (funding as { others_specify?: string }).others_specify || undefined;
+      }
+      return undefined;
+    })(),
     
     // Administrative
     assignedReviewers: protocol.totalReviewers || undefined,
@@ -165,7 +261,7 @@ export function transformProtocolToExportData(
     chairNotes: protocol.chairNotes || undefined,
     
     // Financial
-    orNumber: info?.or_number || undefined,
+    orNumber: typeof info?.or_number === 'string' ? info.or_number : undefined,
   };
 }
 
@@ -186,21 +282,41 @@ export async function getExtractionStatistics(
   };
   
   const byResearchType = {
-    SR: protocols.filter(p => 
-      p.information?.nature_and_type_of_study?.type === 'Social/Behavioral'
-    ).length,
-    PR: protocols.filter(p => 
-      p.information?.nature_and_type_of_study?.type === 'Public Health Research'
-    ).length,
-    HO: protocols.filter(p => 
-      p.information?.nature_and_type_of_study?.type === 'Health Operations'
-    ).length,
-    BS: protocols.filter(p => 
-      p.information?.nature_and_type_of_study?.type === 'Biomedical Studies'
-    ).length,
-    EX: protocols.filter(p => 
-      p.information?.nature_and_type_of_study?.type === 'Clinical Trials'
-    ).length,
+    SR: protocols.filter(p => {
+      const study = p.information?.nature_and_type_of_study;
+      const type = study && typeof study === 'object' && 'type' in study
+        ? (study as { type?: string }).type
+        : undefined;
+      return type === 'Social/Behavioral';
+    }).length,
+    PR: protocols.filter(p => {
+      const study = p.information?.nature_and_type_of_study;
+      const type = study && typeof study === 'object' && 'type' in study
+        ? (study as { type?: string }).type
+        : undefined;
+      return type === 'Public Health Research';
+    }).length,
+    HO: protocols.filter(p => {
+      const study = p.information?.nature_and_type_of_study;
+      const type = study && typeof study === 'object' && 'type' in study
+        ? (study as { type?: string }).type
+        : undefined;
+      return type === 'Health Operations';
+    }).length,
+    BS: protocols.filter(p => {
+      const study = p.information?.nature_and_type_of_study;
+      const type = study && typeof study === 'object' && 'type' in study
+        ? (study as { type?: string }).type
+        : undefined;
+      return type === 'Biomedical Studies';
+    }).length,
+    EX: protocols.filter(p => {
+      const study = p.information?.nature_and_type_of_study;
+      const type = study && typeof study === 'object' && 'type' in study
+        ? (study as { type?: string }).type
+        : undefined;
+      return type === 'Clinical Trials';
+    }).length,
   };
   
   const withOrNumber = protocols.filter(p => !!p.information?.or_number).length;

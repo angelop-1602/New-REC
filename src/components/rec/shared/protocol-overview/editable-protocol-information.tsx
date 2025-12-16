@@ -148,7 +148,7 @@ function EditableFormContent({
     if (formData && JSON.stringify(formData) !== JSON.stringify(initialInformation)) {
       // Update all fields from initialInformation
       Object.keys(initialInformation).forEach((key) => {
-        const value = (initialInformation as Record<string, unknown>)[key];
+        const value = (initialInformation as unknown as Record<string, unknown>)[key];
         if (value !== undefined) {
           updateField(key, value);
         }

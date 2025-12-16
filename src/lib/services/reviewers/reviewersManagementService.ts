@@ -403,85 +403,35 @@ export class ReviewersManagementService {
    * Automatically matches names to image files using flexible matching
    */
   getMemberImagePath(name: string): string | null {
-    // All available member images in public/members/
-    // Note: Some files use Last-First format (e.g., Elizabeth-Iquin.png)
-    const memberImages = [
-      { file: 'Allan-Paulo-Blaquera.png', names: ['Allan Paulo Blaquera', 'Allan Paulo C. Blaquera', 'Allan Paulo', 'Blaquera'] },
-      { file: 'Angelo-Peralta.png', names: ['Angelo Peralta', 'Angelo C. Peralta', 'Angelo', 'Peralta'] },
-      { file: 'Everett-Laureta.png', names: ['Everett Laureta', 'Everett C. Laureta', 'Everett', 'Laureta'] },
-      { file: 'Elizabeth-Iquin.png', names: ['Iquin Elizabeth', 'Elizabeth Iquin', 'Iquin Elizabeth C.', 'Iquin', 'Elizabeth'] },
-      { file: 'Maria-Felina-Agbayani.png', names: ['Maria Felina Agbayani', 'Maria Felina C. Agbayani', 'Maria Felina', 'Agbayani'] },
-      { file: 'Marjorie-Bambalan.png', names: ['Marjorie Bambalan', 'Marjorie C. Bambalan', 'Marjorie', 'Bambalan'] },
-      { file: 'Mark-Klimson-Luyun.png', names: ['Mark Klimson Luyun', 'Mark Klimson C. Luyun', 'Mark Klimson', 'Luyun'] },
-      { file: 'Milrose-Tangonan.png', names: ['Milrose Tangonan', 'Milrose C. Tangonan', 'Milrose', 'Tangonan'] },
-      { file: 'Nova-Domingo.png', names: ['Nova Domingo', 'Nova C. Domingo', 'Nova', 'Domingo'] },
-      { file: 'Rita-Daliwag.jpg', names: ['Rita Daliwag', 'Rita C. Daliwag', 'Rita', 'Daliwag'] },
-      { file: 'Vercel-Baccay.png', names: ['Vercel Baccay', 'Vercel C. Baccay', 'Vercel', 'Baccay'] },
-      { file: 'Normie-Anne-Tuazon.png', names: ['Normie Anne Tuazon', 'Normie Anne C. Tuazon', 'Normie Anne', 'Tuazon', 'Normie', 'Anne Tuazon'] },
-      { file: 'Kristine-Joy-Cortes.png', names: ['Kristine Joy Cortes', 'Kristine Joy C. Cortes', 'Kristine Joy', 'Cortes', 'Kristine', 'Joy Cortes'] },
-    ];
-
-    // Normalize the input name
-    const normalizeName = (n: string) => n.toLowerCase().replace(/\s+/g, ' ').trim();
+    // Normalize the input name (remove extra spaces, trim)
+    const normalizeName = (n: string) => n.trim().replace(/\s+/g, ' ');
     const normalizedInput = normalizeName(name);
+    const normalizedLower = normalizedInput.toLowerCase();
 
-    // Try exact match first
-    for (const image of memberImages) {
-      for (const mappedName of image.names) {
-        if (normalizeName(mappedName) === normalizedInput) {
-          return `/members/${image.file}`;
+    // Handle Rita Daliwag - file is "Mrs. Rita B. Daliwag.jpg" (uses .jpg extension)
+    if (normalizedLower.includes('rita') && normalizedLower.includes('daliwag')) {
+      // Always return the exact filename with .jpg
+      return `/members/Mrs. Rita B. Daliwag.jpg`;
+    }
+
+    // Handle Maria Felina Agbayani - file is "Mrs. Maria Felina B. Agbayan.png" (Agbayan, not Agbayani)
+    if (normalizedLower.includes('maria felina')) {
+      // Replace Agbayani with Agbayan if present
+      if (normalizedLower.includes('agbayani')) {
+        // Return the exact filename
+        return `/members/Mrs. Maria Felina B. Agbayan.png`;
+      }
+      // If already has Agbayan, return as-is
+      if (normalizedLower.includes('agbayan')) {
+        if (!normalizedInput.includes('Mrs.')) {
+          return `/members/Mrs. ${normalizedInput}.png`;
         }
+        return `/members/${normalizedInput}.png`;
       }
     }
 
-    // Try matching by last name (most reliable identifier)
-    const nameParts = normalizedInput.split(' ');
-    if (nameParts.length >= 2) {
-      const firstName = nameParts[0];
-      const lastName = nameParts[nameParts.length - 1];
-      
-      for (const image of memberImages) {
-        const imageParts = image.file.toLowerCase().replace(/\.(png|jpg)$/i, '').split('-');
-        const imageFirst = imageParts[0];
-        const imageLast = imageParts[imageParts.length - 1];
-        
-        // Try matching: name format could be First-Last or Last-First
-        // Check if last name matches (most reliable)
-        if (lastName === imageLast || lastName === imageFirst) {
-          return `/members/${image.file}`;
-        }
-        
-        // Try matching first and last name (both orders)
-        if (nameParts.length >= 2 && imageParts.length >= 2) {
-          // First-Last format match
-          if (firstName === imageFirst && lastName === imageLast) {
-            return `/members/${image.file}`;
-          }
-          // Last-First format match (e.g., "Elizabeth Iquin" matches "Elizabeth-Iquin.png")
-          if (firstName === imageLast && lastName === imageFirst) {
-            return `/members/${image.file}`;
-          }
-        }
-      }
-    }
-
-    // Try partial match with first name
-    if (nameParts.length > 0) {
-      const firstName = nameParts[0];
-      for (const image of memberImages) {
-        const imageParts = image.file.toLowerCase().replace(/\.(png|jpg)$/i, '').split('-');
-        if (imageParts[0] === firstName && nameParts.length >= 2) {
-          // Check if any other part matches
-          for (let i = 1; i < imageParts.length && i < nameParts.length; i++) {
-            if (imageParts[i] === nameParts[i]) {
-              return `/members/${image.file}`;
-            }
-          }
-        }
-      }
-    }
-
-    return null;
+    // For all others, use .png and return as-is (assuming filename matches Firebase name)
+    return `/members/${normalizedInput}.png`;
   }
 
   /**

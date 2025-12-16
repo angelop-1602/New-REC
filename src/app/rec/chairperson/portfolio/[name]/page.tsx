@@ -168,9 +168,29 @@ export default function ReviewerProfilePage() {
     const now = new Date();
     const total = assignmentsData.length;
 
-    const normalizeStatus = (status?: string) =>
-      (status ? status.toString().trim().toLowerCase() : 'draft');
-    const normalizedStatuses = assignmentsData.map(a => normalizeStatus(a.status));
+    // Helper function to normalize status consistently
+    const normalizeStatus = (status?: string | null): string => {
+      if (!status) return 'draft';
+      const normalized = status.toString().trim().toLowerCase();
+      // Handle variations
+      if (normalized === 'in_progress') return 'in-progress';
+      return normalized;
+    };
+
+    // Helper function to check if a date is valid (not the epoch date)
+    const isValidDate = (date: Date | null): boolean => {
+      if (!date) return false;
+      // Check if date is not the epoch (Jan 1, 1970) which toDate returns for null values
+      return date.getTime() > 0;
+    };
+
+    // Normalize all statuses
+    const assignmentsWithNormalizedStatus = assignmentsData.map(a => ({
+      ...a,
+      normalizedStatus: normalizeStatus(a.status)
+    }));
+
+    const normalizedStatuses = assignmentsWithNormalizedStatus.map(a => a.normalizedStatus);
 
     const isCompleted = (status: string) =>
       status === 'submitted' || status === 'approved' || status === 'completed' || status === 'disapproved';
@@ -178,35 +198,62 @@ export default function ReviewerProfilePage() {
     const completed = normalizedStatuses.filter(isCompleted).length;
     const pending = normalizedStatuses.filter(s => s === 'pending').length;
     const draft = normalizedStatuses.filter(s => s === 'draft').length;
-    const inProgress = normalizedStatuses.filter(s => s === 'in-progress' || s === 'in_progress').length;
+    const inProgress = normalizedStatuses.filter(s => s === 'in-progress').length;
     
-    // Calculate overdue assignments
-    const overdue = assignmentsData.filter(a => {
-      if (a.status === 'submitted' || a.status === 'approved' || a.status === 'completed') {
-        return false; // Completed assignments are not overdue
+    // Calculate overdue assignments - use normalized status
+    const overdue = assignmentsWithNormalizedStatus.filter(a => {
+      const status = a.normalizedStatus;
+      // Completed assignments are not overdue
+      if (isCompleted(status)) {
+        return false;
       }
+      // Need a valid deadline to be overdue
       if (!a.deadline) return false;
       const deadline = toDate(a.deadline);
-      if (!deadline) return false;
+      if (!isValidDate(deadline)) return false;
       return deadline < now;
     }).length;
 
     // Calculate average completion time
-    const completedAssignments = assignmentsData.filter(a => 
-      (isCompleted(normalizeStatus(a.status))) && a.assignedAt
-    );
-    
-    let totalDays = 0;
-    completedAssignments.forEach(a => {
-      const assignedDate = toDate(a.assignedAt);
-      if (!assignedDate) return;
-      const completedDate = a.assessmentStatus === 'submitted' ? now : assignedDate;
-      const days = Math.ceil((completedDate.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24));
-      totalDays += days;
+    const completedAssignments = assignmentsWithNormalizedStatus.filter(a => {
+      const status = a.normalizedStatus;
+      return isCompleted(status) && a.assignedAt;
     });
     
-    const avgCompletionTime = completedAssignments.length > 0 
-      ? Math.round(totalDays / completedAssignments.length) 
+    let totalDays = 0;
+    let validCompletionTimes = 0;
+    
+    completedAssignments.forEach(a => {
+      const assignedDate = toDate(a.assignedAt);
+      if (!isValidDate(assignedDate)) return;
+      
+      // Try to get actual completion date from submissionDate, otherwise use now as fallback
+      let completedDate: Date | null = null;
+      
+      // Check if there's a submission date
+      if (a.submissionDate) {
+        completedDate = toDate(a.submissionDate);
+        if (!isValidDate(completedDate)) {
+          completedDate = null;
+        }
+      }
+      
+      // If no valid submission date, use now as fallback (for recently completed items)
+      if (!completedDate) {
+        completedDate = now;
+      }
+      
+      const days = Math.ceil((completedDate.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Only count positive days (sanity check)
+      if (days >= 0) {
+        totalDays += days;
+        validCompletionTimes++;
+      }
+    });
+    
+    const avgCompletionTime = validCompletionTimes > 0 
+      ? Math.round(totalDays / validCompletionTimes) 
       : 0;
 
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -237,14 +284,17 @@ export default function ReviewerProfilePage() {
       completionTrend[month] = { completed: 0, total: 0 };
     });
 
-    assignmentsData.forEach(a => {
+    assignmentsWithNormalizedStatus.forEach(a => {
       if (a.assignedAt) {
         const assignedDate = toDate(a.assignedAt);
-        const monthKey = assignedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        if (completionTrend[monthKey]) {
-          completionTrend[monthKey].total++;
-          if (a.status === 'submitted' || a.status === 'approved' || a.status === 'completed') {
-            completionTrend[monthKey].completed++;
+        if (isValidDate(assignedDate)) {
+          const monthKey = assignedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          if (completionTrend[monthKey]) {
+            completionTrend[monthKey].total++;
+            // Use normalized status for completion check
+            if (isCompleted(a.normalizedStatus)) {
+              completionTrend[monthKey].completed++;
+            }
           }
         }
       }
@@ -1094,10 +1144,35 @@ export default function ReviewerProfilePage() {
                     </TableHeader>
                     <TableBody>
                       {assignments.map((assignment) => {
+                        // Helper to check if date is valid (not epoch date)
+                        const isValidDate = (date: Date | null): boolean => {
+                          if (!date) return false;
+                          return date.getTime() > 0;
+                        };
+
                         const deadline = toDate(assignment.deadline);
                         const assignedDate = toDate(assignment.assignedAt);
-                        if (!deadline || !assignedDate) return null;
-                        const isOverdue = deadline < new Date() && assignment.status !== 'completed' && assignment.status !== 'submitted' && assignment.status !== 'approved';
+                        const hasValidDeadline = isValidDate(deadline);
+                        const hasValidAssignedDate = isValidDate(assignedDate);
+                        
+                        // Normalize status for overdue check
+                        const normalizeStatus = (status?: string | null): string => {
+                          if (!status) return 'draft';
+                          const normalized = status.toString().trim().toLowerCase();
+                          if (normalized === 'in_progress') return 'in-progress';
+                          return normalized;
+                        };
+                        
+                        const normalizedStatus = normalizeStatus(assignment.status);
+                        const isCompleted = normalizedStatus === 'submitted' || 
+                                          normalizedStatus === 'approved' || 
+                                          normalizedStatus === 'completed' || 
+                                          normalizedStatus === 'disapproved';
+                        
+                        const now = new Date();
+                        const isOverdue = hasValidDeadline && 
+                                        deadline < now && 
+                                        !isCompleted;
                         
                         return (
                           <TableRow
@@ -1113,38 +1188,38 @@ export default function ReviewerProfilePage() {
                             <TableCell>
                               <div className="flex items-center gap-1 text-sm">
                                 <FileText className="h-3 w-3 text-muted-foreground" />
-                                {assignment.spupCode}
+                                {assignment.spupCode || 'N/A'}
                               </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1 text-sm">
                                 <Users className="h-3 w-3 text-muted-foreground" />
-                                {assignment.principalInvestigator}
+                                {assignment.principalInvestigator || 'Unknown'}
                               </div>
                             </TableCell>
                             <TableCell>
-                              {getStatusBadge(assignment.status)}
+                              {getStatusBadge(assignment.status || 'draft')}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
-                                {assignment.assessmentType}
+                                {assignment.assessmentType || 'N/A'}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
-                                {assignment.researchType}
+                                {assignment.researchType || 'N/A'}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1 text-sm">
                                 <Calendar className="h-3 w-3 text-muted-foreground" />
-                                {toLocaleDateString(assignedDate)}
+                                {hasValidAssignedDate ? toLocaleDateString(assignedDate) : 'Not set'}
                               </div>
                             </TableCell>
                             <TableCell>
                               <div className={`flex items-center gap-1 text-sm ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : ''}`}>
                                 <Clock className="h-3 w-3" />
-                                {toLocaleDateString(deadline)}
+                                {hasValidDeadline ? toLocaleDateString(deadline) : 'Not set'}
                               </div>
                             </TableCell>
                           </TableRow>

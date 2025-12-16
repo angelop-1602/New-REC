@@ -157,7 +157,7 @@ export const Footer = () => {
           <p className="text-sm text-primary-foreground/85 text-center">
             © {new Date().getFullYear()} St. Paul University Philippines Research Ethics Committee. All rights reserved.
           </p>
-          <p className="text-sm text-primary-foreground/85 text-center mt-2">
+          <p className="text-sm text-primary-foreground/85 text-center mt-2 opacity-0 hover:opacity-100 transition-all duration-300">
             developed by <Link href="mailto:a.peralta0216@gmail.com" className="hover:underline hover:text-primary-foreground transition-all duration-300">
               Angelo Peralta
             </Link>

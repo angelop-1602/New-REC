@@ -21,6 +21,7 @@ import {
   MoreVertical,
   Download,
   FileJson,
+  Copy,
 } from "lucide-react";
 import { reviewerService } from "@/lib/services/reviewers/reviewerService";
 import { ApproveDialog } from "./dialogs/ApproveDialog";
@@ -29,7 +30,10 @@ import { DecisionDialog } from "./dialogs/DecisionDialog";
 import { AssignReviewersDialog } from "./dialogs/AssignReviewersDialog";
 import { ReassignReviewerDialog } from "./dialogs/ReassignReviewerDialog";
 import { ViewAssessmentDialog } from "./dialogs/ViewAssessmentDialog";
-import { getProtocolReviewerAssessments, ProtocolAssessmentsResult } from "@/lib/services/assessments/assessmentAggregationService";
+import {
+  getProtocolReviewerAssessments,
+  ProtocolAssessmentsResult,
+} from "@/lib/services/assessments/assessmentAggregationService";
 import { Separator } from "@/components/ui/separator";
 import { ProtocolReports } from "@/components/rec/proponent/application/components/protocol/report";
 import { SUBMISSIONS_COLLECTION } from "@/lib/firebase/firestore";
@@ -53,13 +57,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { 
+import {
   toChairpersonProtocol,
   getProtocolCode,
   getProtocolTitle,
   toDate,
-  FirestoreDate
-} from '@/types';
+  FirestoreDate,
+} from "@/types";
 
 interface ChairpersonActionsProps {
   submission: Record<string, unknown>;
@@ -71,10 +75,10 @@ export function ChairpersonActions({
   onStatusUpdate,
 }: ChairpersonActionsProps) {
   const router = useRouter();
-  
+
   // Convert to typed protocol at the top
   const typedInitialSubmission = toChairpersonProtocol(initialSubmission);
-  
+
   // ⚡ Use real-time protocol hook for all protocol data updates
   const { protocol: realtimeProtocol } = useRealtimeProtocol({
     protocolId: String(typedInitialSubmission.id),
@@ -93,27 +97,41 @@ export function ChairpersonActions({
     useState(false);
   const [decisionDialogOpen, setDecisionDialogOpen] = useState(false);
   const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
-  const [viewAssessmentDialogOpen, setViewAssessmentDialogOpen] = useState(false);
+  const [viewAssessmentDialogOpen, setViewAssessmentDialogOpen] =
+    useState(false);
 
   // Reviewer assignment states
-  const [assignedReviewers, setAssignedReviewers] = useState<Record<string, unknown>[]>([]);
-  const [selectedAssignmentToReassign, setSelectedAssignmentToReassign] = useState<Record<string, unknown> | null>(null);
-  const [selectedAssessmentToView, setSelectedAssessmentToView] = useState<Record<string, unknown> | null>(null);
+  const [assignedReviewers, setAssignedReviewers] = useState<
+    Record<string, unknown>[]
+  >([]);
+  const [selectedAssignmentToReassign, setSelectedAssignmentToReassign] =
+    useState<Record<string, unknown> | null>(null);
+  const [selectedAssessmentToView, setSelectedAssessmentToView] =
+    useState<Record<string, unknown> | null>(null);
   const [selectedReviewerName, setSelectedReviewerName] = useState<string>("");
-  const [assessments, setAssessments] = useState<Record<string, unknown> | null>(null);
+  const [assessments, setAssessments] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [loadingAssessments, setLoadingAssessments] = useState(false);
+  const [isCopyingLetterId, setIsCopyingLetterId] = useState<string | null>(
+    null
+  );
 
   // ⚡ Use real-time documents hook for auto-updates
-  const { documents: realtimeDocs, loading: loadingDocuments } = useRealtimeDocuments({
-    protocolId: String(submission.id),
-    collectionName: SUBMISSIONS_COLLECTION,
-    enabled: submission.status === "pending",
-  });
+  const { documents: realtimeDocs, loading: loadingDocuments } =
+    useRealtimeDocuments({
+      protocolId: String(submission.id),
+      collectionName: SUBMISSIONS_COLLECTION,
+      enabled: submission.status === "pending",
+    });
 
   // Document validation states
   const documents = realtimeDocs;
   const [allDocumentsAccepted, setAllDocumentsAccepted] = useState(false);
-  const [documentRequests, setDocumentRequests] = useState<Record<string, unknown>[]>([]);
+  const [documentRequests, setDocumentRequests] = useState<
+    Record<string, unknown>[]
+  >([]);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   // Load assigned reviewers when component mounts
@@ -138,28 +156,35 @@ export function ChairpersonActions({
       if (submission.status === "pending" && !loadingDocuments) {
         try {
           // Load document requests
-          const requests = await enhancedDocumentManagementService.getProtocolDocumentRequests(String(submission.id));
+          const requests =
+            await enhancedDocumentManagementService.getProtocolDocumentRequests(
+              String(submission.id)
+            );
           setDocumentRequests(requests as unknown as Record<string, unknown>[]);
-          
+
           // Count pending requests (documents with status "requested")
           const pending = requests.filter((r) => {
-            const status = ((r as unknown as Record<string, unknown>).currentStatus as string) || ((r as unknown as Record<string, unknown>).status as string);
-            return status === 'requested';
+            const status =
+              ((r as unknown as Record<string, unknown>)
+                .currentStatus as string) ||
+              ((r as unknown as Record<string, unknown>).status as string);
+            return status === "requested";
           }).length;
           setPendingRequestsCount(pending);
-          
+
           // Check if all documents are accepted AND no pending requests
           const hasDocuments = documents.length > 0;
           const allAccepted = documents.every((doc) => {
             const docRec = doc as unknown as Record<string, unknown>;
-            const docStatus = (docRec.currentStatus as string) || (docRec.status as string);
+            const docStatus =
+              (docRec.currentStatus as string) || (docRec.status as string);
             return docStatus === "accepted";
           });
           const noPendingRequests = pending === 0;
-          
-          const shouldEnableButton = hasDocuments && allAccepted && noPendingRequests;
-          setAllDocumentsAccepted(shouldEnableButton);
 
+          const shouldEnableButton =
+            hasDocuments && allAccepted && noPendingRequests;
+          setAllDocumentsAccepted(shouldEnableButton);
         } catch (error) {
           console.error("Error checking documents:", error);
           setAllDocumentsAccepted(false);
@@ -187,7 +212,9 @@ export function ChairpersonActions({
     const loadAggregated = async () => {
       try {
         setLoadingAssessments(true);
-        const result = await getProtocolReviewerAssessments(String(submission.id));
+        const result = await getProtocolReviewerAssessments(
+          String(submission.id)
+        );
         setAssessments(result as unknown as Record<string, unknown> | null);
       } catch (e) {
         console.error("Failed to load reviewer assessments:", e);
@@ -202,212 +229,380 @@ export function ChairpersonActions({
     }
   }, [assignedReviewers, submission.id]);
 
+  // Helpers for reviewer messaging and row actions
+  const getPIName = () => {
+    return (
+      (submission as any)?.information?.general_information
+        ?.principal_investigator?.name || "<Name of PI>"
+    );
+  };
+
+  const formatDateMMDDYYYY = (date: Date | null) => {
+    if (!date) return "<deadline>";
+    const mm = `${date.getMonth() + 1}`.padStart(2, "0");
+    const dd = `${date.getDate()}`.padStart(2, "0");
+    return `${mm}/${dd}/${date.getFullYear()}`;
+  };
+
+  const formatFormType = (formType?: string) => {
+    if (!formType) return "Assessment";
+    const map: Record<string, string> = {
+      "protocol-review": "Protocol Review Assessment",
+      "informed-consent": "Informed Consent Assessment",
+      "iacuc-review": "IACUC Review Assessment",
+      "iacuc-protocol-review-assessment": "IACUC Protocol Review Assessment",
+      "checklist-for-exemption-form-review":
+        "Checklist for Exemption Form Review",
+      "exemption-assessment": "Exemption Assessment",
+    };
+    if (map[formType]) return map[formType];
+    // Fallback: prettify slug
+    return formType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const getPortalLink = () => {
+    const path = `/rec/reviewers/protocol/${submission.id}`;
+    // Always use production URL, never localhost
+    if (typeof window !== "undefined" && window.location?.origin) {
+      const origin = window.location.origin;
+      // Check if origin is localhost or local development URL
+      if (origin.includes("localhost") || origin.includes("127.0.0.1") || origin.includes(":3000")) {
+        return `https://e-rec-system-2025.web.app${path}`;
+      }
+      return `${origin}${path}`;
+    }
+    return `https://e-rec-system-2025.web.app${path}`;
+  };
+
+  const buildReviewerLetter = (
+    assignment: Record<string, unknown>,
+    assessment?: Record<string, unknown>
+  ) => {
+    const today = new Date();
+    const reviewerName = String(
+      assignment.reviewerName || "<Name of Reviewer>"
+    );
+    const protocolTitle = getProtocolTitle(submission);
+    const protocolCode = getProtocolCode(submission);
+    const piName = getPIName();
+    const formLabel =
+      formatFormType(assessment?.formType as string) ||
+      formatFormType(String(assignment.assessmentType || "<assessment form>"));
+    const deadline = toDate(assignment.deadline as FirestoreDate) || null;
+    const deadlineDisplay = formatDateMMDDYYYY(deadline);
+
+    const plain = `${formatDateMMDDYYYY(today)}
+
+Dear ${reviewerName},
+
+Good day.
+
+You are hereby requested to review the research protocol titled "${protocolTitle}" (REC Code: ${protocolCode}), submitted by ${piName}. Please access the complete protocol package and submit your assessment through the Reviewer Portal.
+
+Portal Access: ${getPortalLink()} (login required)
+Assessment Form: ${formLabel}
+Deadline for Submission: ${deadlineDisplay}
+
+Confidentiality Notice: All protocol materials are strictly confidential and must be handled in accordance with REC policies.
+
+If you encounter any issues accessing the portal or have questions regarding the assigned review, please contact the REC Office at rec@spup.edu.ph.
+
+We respectfully request timely submission. If the review is not completed by the deadline, the protocol may be reassigned to another reviewer.
+
+Thank you for your assistance and continued support.
+
+Very truly yours,
+
+${(submission as any)?.chairName || "REC Chairperson"}`;
+
+    const html = `${formatDateMMDDYYYY(today)}<br><br>
+<p>Dear <strong>${reviewerName}</strong>,</p>
+<p>Good day.</p>
+<p>You are hereby requested to review the research protocol titled <strong>"${protocolTitle}"</strong> (REC Code: <strong>${protocolCode}</strong>), submitted by <strong>${piName}</strong>. Please access the complete protocol package and submit your assessment through the Reviewer Portal.</p>
+<p><strong>Portal Access:</strong> <a href="${getPortalLink()}">${getPortalLink()}</a> (login required)<br>
+<strong>Assessment Form:</strong> ${formLabel}<br>
+<strong>Deadline for Submission:</strong> <strong>${deadlineDisplay}</strong></p>
+<p><strong>Confidentiality Notice:</strong> All protocol materials are strictly confidential and must be handled in accordance with REC policies.</p>
+<p>If you encounter any issues accessing the portal or have questions regarding the assigned review, please contact the REC Office at <a href="mailto:rec@spup.edu.ph">rec@spup.edu.ph</a>.</p>
+<p><strong>We respectfully request timely submission. If the review is not completed by the deadline, the protocol may be reassigned to another reviewer.</strong></p>
+<p>Thank you for your assistance and continued support.</p>
+<p>Very truly yours,<br>${(submission as any)?.chairName || "REC Chairperson"}</p>`;
+
+    return { plain, html };
+  };
+
+  const handleCopyReviewerLetter = async (
+    assignment: Record<string, unknown>,
+    assessment?: Record<string, unknown>
+  ) => {
+    const id = String(assignment.id || assignment.reviewerId || "");
+    try {
+      setIsCopyingLetterId(id || null);
+      const { plain, html } = buildReviewerLetter(assignment, assessment);
+      if (typeof ClipboardItem !== "undefined") {
+        const data: Record<string, Blob> = {
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" })
+        };
+        await navigator.clipboard.write([new ClipboardItem(data)]);
+      } else {
+        await navigator.clipboard.writeText(plain);
+      }
+      customToast.success("Copied", "Reviewer letter copied to clipboard with formatting.");
+    } catch (error) {
+      console.error("Error copying reviewer letter:", error);
+      customToast.error(
+        "Copy failed",
+        "Unable to copy the letter. Please try again."
+      );
+    } finally {
+      setIsCopyingLetterId(null);
+    }
+  };
 
   // Helpers for row actions
-  const handleViewAssessment = (assessment: Record<string, unknown>, reviewerName: string) => {
+  const handleViewAssessment = (
+    assessment: Record<string, unknown>,
+    reviewerName: string
+  ) => {
     setSelectedAssessmentToView(assessment);
     setSelectedReviewerName(reviewerName);
     setViewAssessmentDialogOpen(true);
   };
 
-  const handleDownloadJson = (assessment: Record<string, unknown>, submissionId: string, reviewerId: string) => {
+  const handleDownloadJson = (
+    assessment: Record<string, unknown>,
+    submissionId: string,
+    reviewerId: string
+  ) => {
     // Structure JSON to follow question sequence (same as ViewAssessmentDialog)
     const formData = (assessment.formData ?? {}) as Record<string, unknown>;
     const formType = assessment.formType;
-    
+
     // Define sections in order (same structure as ViewAssessmentDialog)
     const getOrderedStructure = () => {
       const protocolInfo: Record<string, unknown> = {
-        'iacucCode': formData.iacucCode,
-        'protocolCode': formData.protocolCode,
-        'submissionDate': formData.submissionDate,
-        'title': formData.title,
-        'studySite': formData.studySite,
-        'principalInvestigator': formData.principalInvestigator,
-        'sponsor': formData.sponsor,
-        'typeOfReview': formData.typeOfReview,
+        iacucCode: formData.iacucCode,
+        protocolCode: formData.protocolCode,
+        submissionDate: formData.submissionDate,
+        title: formData.title,
+        studySite: formData.studySite,
+        principalInvestigator: formData.principalInvestigator,
+        sponsor: formData.sponsor,
+        typeOfReview: formData.typeOfReview,
       };
 
       switch (formType) {
-        case 'protocol-review':
+        case "protocol-review":
           return {
-            'Protocol Information': protocolInfo,
-            '1. SOCIAL VALUE': {
-              'socialValue': formData.socialValue,
-              'socialValueComments': formData.socialValueComments,
+            "Protocol Information": protocolInfo,
+            "1. SOCIAL VALUE": {
+              socialValue: formData.socialValue,
+              socialValueComments: formData.socialValueComments,
             },
-            '2. SCIENTIFIC SOUNDNESS': {
-              'studyObjectives': formData.studyObjectives,
-              'studyObjectivesComments': formData.studyObjectivesComments,
-              'literatureReview': formData.literatureReview,
-              'literatureReviewComments': formData.literatureReviewComments,
-              'researchDesign': formData.researchDesign,
-              'researchDesignComments': formData.researchDesignComments,
-              'dataCollection': formData.dataCollection,
-              'dataCollectionComments': formData.dataCollectionComments,
-              'inclusionExclusion': formData.inclusionExclusion,
-              'inclusionExclusionComments': formData.inclusionExclusionComments,
-              'withdrawalCriteria': formData.withdrawalCriteria,
-              'withdrawalCriteriaComments': formData.withdrawalCriteriaComments,
-              'facilities': formData.facilities,
-              'facilitiesComments': formData.facilitiesComments,
-              'investigatorQualification': formData.investigatorQualification,
-              'investigatorQualificationComments': formData.investigatorQualificationComments,
+            "2. SCIENTIFIC SOUNDNESS": {
+              studyObjectives: formData.studyObjectives,
+              studyObjectivesComments: formData.studyObjectivesComments,
+              literatureReview: formData.literatureReview,
+              literatureReviewComments: formData.literatureReviewComments,
+              researchDesign: formData.researchDesign,
+              researchDesignComments: formData.researchDesignComments,
+              dataCollection: formData.dataCollection,
+              dataCollectionComments: formData.dataCollectionComments,
+              inclusionExclusion: formData.inclusionExclusion,
+              inclusionExclusionComments: formData.inclusionExclusionComments,
+              withdrawalCriteria: formData.withdrawalCriteria,
+              withdrawalCriteriaComments: formData.withdrawalCriteriaComments,
+              facilities: formData.facilities,
+              facilitiesComments: formData.facilitiesComments,
+              investigatorQualification: formData.investigatorQualification,
+              investigatorQualificationComments:
+                formData.investigatorQualificationComments,
             },
-            '3. ETHICAL SOUNDNESS': {
-              'privacyConfidentiality': formData.privacyConfidentiality,
-              'privacyConfidentialityComments': formData.privacyConfidentialityComments,
-              'conflictOfInterest': formData.conflictOfInterest,
-              'conflictOfInterestComments': formData.conflictOfInterestComments,
-              'humanParticipants': formData.humanParticipants,
-              'humanParticipantsComments': formData.humanParticipantsComments,
-              'vulnerablePopulations': formData.vulnerablePopulations,
-              'vulnerablePopulationsComments': formData.vulnerablePopulationsComments,
-              'voluntaryRecruitment': formData.voluntaryRecruitment,
-              'voluntaryRecruitmentComments': formData.voluntaryRecruitmentComments,
-              'riskBenefit': formData.riskBenefit,
-              'riskBenefitComments': formData.riskBenefitComments,
-              'informedConsent': formData.informedConsent,
-              'informedConsentComments': formData.informedConsentComments,
-              'communityConsiderations': formData.communityConsiderations,
-              'communityConsiderationsComments': formData.communityConsiderationsComments,
-              'collaborativeTerms': formData.collaborativeTerms,
-              'collaborativeTermsComments': formData.collaborativeTermsComments,
+            "3. ETHICAL SOUNDNESS": {
+              privacyConfidentiality: formData.privacyConfidentiality,
+              privacyConfidentialityComments:
+                formData.privacyConfidentialityComments,
+              conflictOfInterest: formData.conflictOfInterest,
+              conflictOfInterestComments: formData.conflictOfInterestComments,
+              humanParticipants: formData.humanParticipants,
+              humanParticipantsComments: formData.humanParticipantsComments,
+              vulnerablePopulations: formData.vulnerablePopulations,
+              vulnerablePopulationsComments:
+                formData.vulnerablePopulationsComments,
+              voluntaryRecruitment: formData.voluntaryRecruitment,
+              voluntaryRecruitmentComments:
+                formData.voluntaryRecruitmentComments,
+              riskBenefit: formData.riskBenefit,
+              riskBenefitComments: formData.riskBenefitComments,
+              informedConsent: formData.informedConsent,
+              informedConsentComments: formData.informedConsentComments,
+              communityConsiderations: formData.communityConsiderations,
+              communityConsiderationsComments:
+                formData.communityConsiderationsComments,
+              collaborativeTerms: formData.collaborativeTerms,
+              collaborativeTermsComments: formData.collaborativeTermsComments,
             },
-            'III. RECOMMENDATION': {
-              'recommendation': formData.recommendation,
-              'justification': formData.justification,
+            "III. RECOMMENDATION": {
+              recommendation: formData.recommendation,
+              justification: formData.justification,
             },
           };
-        case 'informed-consent':
+        case "informed-consent":
           const questions: Record<string, unknown> = {};
           for (let i = 1; i <= 17; i++) {
             questions[`q${i}`] = formData[`q${i}`];
             questions[`q${i}Comments`] = formData[`q${i}Comments`];
           }
           return {
-            'Protocol Information': { ...protocolInfo, iacucCode: undefined, typeOfReview: undefined },
-            'II. Guide Questions for Assessment': questions,
-            'Recommendation': {
-              'recommendation': formData.recommendation,
-              'recommendationJustification': formData.recommendationJustification,
+            "Protocol Information": {
+              ...protocolInfo,
+              iacucCode: undefined,
+              typeOfReview: undefined,
+            },
+            "II. Guide Questions for Assessment": questions,
+            Recommendation: {
+              recommendation: formData.recommendation,
+              recommendationJustification: formData.recommendationJustification,
             },
           };
-        case 'exemption-checklist':
+        case "exemption-checklist":
           return {
-            'Protocol Information': { ...protocolInfo, iacucCode: undefined, typeOfReview: undefined },
-            'II. Protocol Assessment': {
-              'involvesHumanParticipants': formData.involvesHumanParticipants,
-              'involvesHumanParticipantsComments': formData.involvesHumanParticipantsComments,
-              'involvesNonIdentifiableTissue': formData.involvesNonIdentifiableTissue,
-              'involvesNonIdentifiableTissueComments': formData.involvesNonIdentifiableTissueComments,
-              'involvesPublicData': formData.involvesPublicData,
-              'involvesPublicDataComments': formData.involvesPublicDataComments,
-              'involvesInteraction': formData.involvesInteraction,
-              'involvesInteractionComments': formData.involvesInteractionComments,
-              'qualityAssurance': formData.qualityAssurance,
-              'qualityAssuranceComments': formData.qualityAssuranceComments,
-              'publicServiceEvaluation': formData.publicServiceEvaluation,
-              'publicServiceEvaluationComments': formData.publicServiceEvaluationComments,
-              'publicHealthSurveillance': formData.publicHealthSurveillance,
-              'publicHealthSurveillanceComments': formData.publicHealthSurveillanceComments,
-              'educationalEvaluation': formData.educationalEvaluation,
-              'educationalEvaluationComments': formData.educationalEvaluationComments,
-              'consumerAcceptability': formData.consumerAcceptability,
-              'consumerAcceptabilityComments': formData.consumerAcceptabilityComments,
-              'surveysQuestionnaire': formData.surveysQuestionnaire,
-              'surveysQuestionnaireComments': formData.surveysQuestionnaireComments,
-              'interviewsFocusGroup': formData.interviewsFocusGroup,
-              'interviewsFocusGroupComments': formData.interviewsFocusGroupComments,
-              'publicObservations': formData.publicObservations,
-              'publicObservationsComments': formData.publicObservationsComments,
-              'existingData': formData.existingData,
-              'existingDataComments': formData.existingDataComments,
-              'audioVideo': formData.audioVideo,
-              'audioVideoComments': formData.audioVideoComments,
-              'dataAnonymization': formData.dataAnonymization,
-              'foreseeableRisk': formData.foreseeableRisk,
-              'foreseeableRiskComments': formData.foreseeableRiskComments,
+            "Protocol Information": {
+              ...protocolInfo,
+              iacucCode: undefined,
+              typeOfReview: undefined,
             },
-            'II. Risk Assessment': {
-              'riskVulnerableGroups': formData.riskVulnerableGroups,
-              'riskVulnerableGroupsComments': formData.riskVulnerableGroupsComments,
-              'riskSensitiveTopics': formData.riskSensitiveTopics,
-              'riskSensitiveTopicsComments': formData.riskSensitiveTopicsComments,
-              'riskUseOfDrugs': formData.riskUseOfDrugs,
-              'riskUseOfDrugsComments': formData.riskUseOfDrugsComments,
-              'riskInvasiveProcedure': formData.riskInvasiveProcedure,
-              'riskInvasiveProcedureComments': formData.riskInvasiveProcedureComments,
-              'riskPhysicalDistress': formData.riskPhysicalDistress,
-              'riskPhysicalDistressComments': formData.riskPhysicalDistressComments,
-              'riskPsychologicalDistress': formData.riskPsychologicalDistress,
-              'riskPsychologicalDistressComments': formData.riskPsychologicalDistressComments,
-              'riskDeception': formData.riskDeception,
-              'riskDeceptionComments': formData.riskDeceptionComments,
-              'riskAccessData': formData.riskAccessData,
-              'riskAccessDataComments': formData.riskAccessDataComments,
-              'riskConflictInterest': formData.riskConflictInterest,
-              'riskConflictInterestComments': formData.riskConflictInterestComments,
-              'riskOtherDilemmas': formData.riskOtherDilemmas,
-              'riskOtherDilemmasComments': formData.riskOtherDilemmasComments,
-              'riskBloodSampling': formData.riskBloodSampling,
-              'riskBloodSamplingComments': formData.riskBloodSamplingComments,
+            "II. Protocol Assessment": {
+              involvesHumanParticipants: formData.involvesHumanParticipants,
+              involvesHumanParticipantsComments:
+                formData.involvesHumanParticipantsComments,
+              involvesNonIdentifiableTissue:
+                formData.involvesNonIdentifiableTissue,
+              involvesNonIdentifiableTissueComments:
+                formData.involvesNonIdentifiableTissueComments,
+              involvesPublicData: formData.involvesPublicData,
+              involvesPublicDataComments: formData.involvesPublicDataComments,
+              involvesInteraction: formData.involvesInteraction,
+              involvesInteractionComments: formData.involvesInteractionComments,
+              qualityAssurance: formData.qualityAssurance,
+              qualityAssuranceComments: formData.qualityAssuranceComments,
+              publicServiceEvaluation: formData.publicServiceEvaluation,
+              publicServiceEvaluationComments:
+                formData.publicServiceEvaluationComments,
+              publicHealthSurveillance: formData.publicHealthSurveillance,
+              publicHealthSurveillanceComments:
+                formData.publicHealthSurveillanceComments,
+              educationalEvaluation: formData.educationalEvaluation,
+              educationalEvaluationComments:
+                formData.educationalEvaluationComments,
+              consumerAcceptability: formData.consumerAcceptability,
+              consumerAcceptabilityComments:
+                formData.consumerAcceptabilityComments,
+              surveysQuestionnaire: formData.surveysQuestionnaire,
+              surveysQuestionnaireComments:
+                formData.surveysQuestionnaireComments,
+              interviewsFocusGroup: formData.interviewsFocusGroup,
+              interviewsFocusGroupComments:
+                formData.interviewsFocusGroupComments,
+              publicObservations: formData.publicObservations,
+              publicObservationsComments: formData.publicObservationsComments,
+              existingData: formData.existingData,
+              existingDataComments: formData.existingDataComments,
+              audioVideo: formData.audioVideo,
+              audioVideoComments: formData.audioVideoComments,
+              dataAnonymization: formData.dataAnonymization,
+              foreseeableRisk: formData.foreseeableRisk,
+              foreseeableRiskComments: formData.foreseeableRiskComments,
             },
-            'Decision': {
-              'decision': formData.decision,
-              'decisionJustification': formData.decisionJustification,
+            "II. Risk Assessment": {
+              riskVulnerableGroups: formData.riskVulnerableGroups,
+              riskVulnerableGroupsComments:
+                formData.riskVulnerableGroupsComments,
+              riskSensitiveTopics: formData.riskSensitiveTopics,
+              riskSensitiveTopicsComments: formData.riskSensitiveTopicsComments,
+              riskUseOfDrugs: formData.riskUseOfDrugs,
+              riskUseOfDrugsComments: formData.riskUseOfDrugsComments,
+              riskInvasiveProcedure: formData.riskInvasiveProcedure,
+              riskInvasiveProcedureComments:
+                formData.riskInvasiveProcedureComments,
+              riskPhysicalDistress: formData.riskPhysicalDistress,
+              riskPhysicalDistressComments:
+                formData.riskPhysicalDistressComments,
+              riskPsychologicalDistress: formData.riskPsychologicalDistress,
+              riskPsychologicalDistressComments:
+                formData.riskPsychologicalDistressComments,
+              riskDeception: formData.riskDeception,
+              riskDeceptionComments: formData.riskDeceptionComments,
+              riskAccessData: formData.riskAccessData,
+              riskAccessDataComments: formData.riskAccessDataComments,
+              riskConflictInterest: formData.riskConflictInterest,
+              riskConflictInterestComments:
+                formData.riskConflictInterestComments,
+              riskOtherDilemmas: formData.riskOtherDilemmas,
+              riskOtherDilemmasComments: formData.riskOtherDilemmasComments,
+              riskBloodSampling: formData.riskBloodSampling,
+              riskBloodSamplingComments: formData.riskBloodSamplingComments,
+            },
+            Decision: {
+              decision: formData.decision,
+              decisionJustification: formData.decisionJustification,
             },
           };
-        case 'iacuc-review':
+        case "iacuc-review":
           return {
-            'Protocol Information': protocolInfo,
-            '1. SCIENTIFIC VALUE': {
-              'scientificValue': formData.scientificValue,
-              'scientificValueComments': formData.scientificValueComments,
+            "Protocol Information": protocolInfo,
+            "1. SCIENTIFIC VALUE": {
+              scientificValue: formData.scientificValue,
+              scientificValueComments: formData.scientificValueComments,
             },
-            '2. SCIENTIFIC SOUNDNESS': {
-              'studyObjectives': formData.studyObjectives,
-              'studyObjectivesComments': formData.studyObjectivesComments,
-              'literatureReview': formData.literatureReview,
-              'literatureReviewComments': formData.literatureReviewComments,
-              'researchDesign': formData.researchDesign,
-              'researchDesignComments': formData.researchDesignComments,
-              'dataCollection': formData.dataCollection,
-              'dataCollectionComments': formData.dataCollectionComments,
-              'facilitiesInfrastructure': formData.facilitiesInfrastructure,
-              'facilitiesInfrastructureComments': formData.facilitiesInfrastructureComments,
-              'investigatorQualifications': formData.investigatorQualifications,
-              'investigatorQualificationsComments': formData.investigatorQualificationsComments,
+            "2. SCIENTIFIC SOUNDNESS": {
+              studyObjectives: formData.studyObjectives,
+              studyObjectivesComments: formData.studyObjectivesComments,
+              literatureReview: formData.literatureReview,
+              literatureReviewComments: formData.literatureReviewComments,
+              researchDesign: formData.researchDesign,
+              researchDesignComments: formData.researchDesignComments,
+              dataCollection: formData.dataCollection,
+              dataCollectionComments: formData.dataCollectionComments,
+              facilitiesInfrastructure: formData.facilitiesInfrastructure,
+              facilitiesInfrastructureComments:
+                formData.facilitiesInfrastructureComments,
+              investigatorQualifications: formData.investigatorQualifications,
+              investigatorQualificationsComments:
+                formData.investigatorQualificationsComments,
             },
-            '3. JUSTIFICATION ON THE USE OF ANIMALS': {
-              'animalSource': formData.animalSource,
-              'animalSourceComments': formData.animalSourceComments,
-              'housingCare': formData.housingCare,
-              'housingCareComments': formData.housingCareComments,
-              'restraintProcedures': formData.restraintProcedures,
-              'restraintProceduresComments': formData.restraintProceduresComments,
-              'anesthesiaAnalgesia': formData.anesthesiaAnalgesia,
-              'anesthesiaAnalgesiaComments': formData.anesthesiaAnalgesiaComments,
-              'postProcedureMonitoring': formData.postProcedureMonitoring,
-              'postProcedureMonitoringComments': formData.postProcedureMonitoringComments,
-              'euthanasia': formData.euthanasia,
-              'euthanasiaComments': formData.euthanasiaComments,
-              'biologicalAgentCollection': formData.biologicalAgentCollection,
-              'biologicalAgentCollectionComments': formData.biologicalAgentCollectionComments,
-              'examinationMethods': formData.examinationMethods,
-              'examinationMethodsComments': formData.examinationMethodsComments,
-              'surgicalProcedures': formData.surgicalProcedures,
-              'surgicalProceduresComments': formData.surgicalProceduresComments,
-              'humaneEndpoints': formData.humaneEndpoints,
-              'humaneEndpointsComments': formData.humaneEndpointsComments,
-              'potentialHazards': formData.potentialHazards,
-              'potentialHazardsComments': formData.potentialHazardsComments,
-              'wasteDisposal': formData.wasteDisposal,
-              'wasteDisposalComments': formData.wasteDisposalComments,
+            "3. JUSTIFICATION ON THE USE OF ANIMALS": {
+              animalSource: formData.animalSource,
+              animalSourceComments: formData.animalSourceComments,
+              housingCare: formData.housingCare,
+              housingCareComments: formData.housingCareComments,
+              restraintProcedures: formData.restraintProcedures,
+              restraintProceduresComments: formData.restraintProceduresComments,
+              anesthesiaAnalgesia: formData.anesthesiaAnalgesia,
+              anesthesiaAnalgesiaComments: formData.anesthesiaAnalgesiaComments,
+              postProcedureMonitoring: formData.postProcedureMonitoring,
+              postProcedureMonitoringComments:
+                formData.postProcedureMonitoringComments,
+              euthanasia: formData.euthanasia,
+              euthanasiaComments: formData.euthanasiaComments,
+              biologicalAgentCollection: formData.biologicalAgentCollection,
+              biologicalAgentCollectionComments:
+                formData.biologicalAgentCollectionComments,
+              examinationMethods: formData.examinationMethods,
+              examinationMethodsComments: formData.examinationMethodsComments,
+              surgicalProcedures: formData.surgicalProcedures,
+              surgicalProceduresComments: formData.surgicalProceduresComments,
+              humaneEndpoints: formData.humaneEndpoints,
+              humaneEndpointsComments: formData.humaneEndpointsComments,
+              potentialHazards: formData.potentialHazards,
+              potentialHazardsComments: formData.potentialHazardsComments,
+              wasteDisposal: formData.wasteDisposal,
+              wasteDisposalComments: formData.wasteDisposalComments,
             },
-            'Recommendation': {
-              'recommendation': formData.recommendation,
-              'justification': formData.justification,
+            Recommendation: {
+              recommendation: formData.recommendation,
+              justification: formData.justification,
             },
           };
         default:
@@ -432,15 +627,20 @@ export function ChairpersonActions({
 
   const handleExportTemplate = async (assessment: Record<string, unknown>) => {
     try {
-      const { exportAssessmentFormToTemplate, downloadAssessmentForm } = await import(
-        '@/lib/services/assessments/assessmentFormExportService'
-      );
-      
+      const { exportAssessmentFormToTemplate, downloadAssessmentForm } =
+        await import("@/lib/services/assessments/assessmentFormExportService");
+
       // Ensure submittedAt is available to the template (it's stored on the assessment doc, not formData)
       const formDataForExport = {
         ...(assessment.formData || {}),
-        submittedAt: assessment.submittedAt || (assessment.formData as Record<string, unknown>)?.submittedAt || null,
-        status: assessment.status || (assessment.formData as Record<string, unknown>)?.status || 'draft',
+        submittedAt:
+          assessment.submittedAt ||
+          (assessment.formData as Record<string, unknown>)?.submittedAt ||
+          null,
+        status:
+          assessment.status ||
+          (assessment.formData as Record<string, unknown>)?.status ||
+          "draft",
       };
 
       // Export form to Word template
@@ -448,21 +648,28 @@ export function ChairpersonActions({
         formDataForExport,
         assessment.formType as string,
         submission,
-        { name: assessment.reviewerName as string, reviewerName: assessment.reviewerName as string }
+        {
+          name: assessment.reviewerName as string,
+          reviewerName: assessment.reviewerName as string,
+        }
       );
-      
+
       // Generate filename
-      const formTypeName = (assessment.formType as string).replace(/-/g, '_');
-      const fileName = `${getProtocolCode(submission) || String(submission.id)}_${formTypeName}_${(assessment.reviewerId as string) || 'reviewer'}.docx`;
-      
+      const formTypeName = (assessment.formType as string).replace(/-/g, "_");
+      const fileName = `${
+        getProtocolCode(submission) || String(submission.id)
+      }_${formTypeName}_${
+        (assessment.reviewerId as string) || "reviewer"
+      }.docx`;
+
       // Download the file
       downloadAssessmentForm(blob, fileName);
     } catch (error) {
-      console.error('Error exporting assessment form to template:', error);
-        customToast.error(
-          "Export Failed",
-          "Failed to export assessment form. Please try again."
-        );
+      console.error("Error exporting assessment form to template:", error);
+      customToast.error(
+        "Export Failed",
+        "Failed to export assessment form. Please try again."
+      );
     }
   };
 
@@ -488,7 +695,9 @@ export function ChairpersonActions({
       <Card className="border-[#036635]/10 dark:border-[#FECC07]/20 transition-all duration-300 hover:shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden p-0">
         <CardHeader className="bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20 rounded-t-lg pt-6 pb-6">
           <CardTitle className="flex items-center justify-between">
-            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Administrative Actions</span>
+            <span className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">
+              Administrative Actions
+            </span>
             <div className="flex items-center gap-2">
               {getStatusIcon(submission.status)}
               <Badge
@@ -513,55 +722,93 @@ export function ChairpersonActions({
         </CardHeader>
         <CardContent className="space-y-4 p-6">
           {/* Document Status Summary for Pending Protocols */}
-          {submission.status === "pending" && (documents.length > 0 || documentRequests.length > 0) && (
-            <div className="bg-muted/50 p-4 rounded-lg border space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileTextIcon className="h-5 w-5 text-muted-foreground" />
-                  <span className="font-medium">Document Review Status</span>
+          {submission.status === "pending" &&
+            (documents.length > 0 || documentRequests.length > 0) && (
+              <div className="bg-muted/50 p-4 rounded-lg border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileTextIcon className="h-5 w-5 text-muted-foreground" />
+                    <span className="font-medium">Document Review Status</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {documents.length > 0 && (
+                      <Badge
+                        variant={
+                          documents.every((d) => {
+                            const dRec = d as unknown as Record<
+                              string,
+                              unknown
+                            >;
+                            const status =
+                              (dRec.currentStatus as string) ||
+                              (dRec.status as string);
+                            return status === "accepted";
+                          })
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
+                        {
+                          documents.filter((d) => {
+                            const dRec = d as unknown as Record<
+                              string,
+                              unknown
+                            >;
+                            const status =
+                              (dRec.currentStatus as string) ||
+                              (dRec.status as string);
+                            return status === "accepted";
+                          }).length
+                        }{" "}
+                        / {documents.length} Accepted
+                      </Badge>
+                    )}
+                    {pendingRequestsCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="bg-blue-100 text-blue-800 border-blue-200"
+                      >
+                        {pendingRequestsCount} Requested Document
+                        {pendingRequestsCount > 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  {documents.length > 0 && (
-                    <Badge variant={documents.every((d) => {
-                      const dRec = d as unknown as Record<string, unknown>;
-                      const status = (dRec.currentStatus as string) || (dRec.status as string);
-                      return status === "accepted";
-                    }) ? "default" : "secondary"}>
-                      {documents.filter((d) => {
+                {!allDocumentsAccepted && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      {pendingRequestsCount > 0 &&
+                        `${pendingRequestsCount} requested document(s) must be uploaded by proponent. `}
+                      {documents.some((d) => {
                         const dRec = d as unknown as Record<string, unknown>;
-                        const status = (dRec.currentStatus as string) || (dRec.status as string);
-                        return status === "accepted";
-                      }).length} / {documents.length} Accepted
-                    </Badge>
-                  )}
-                  {pendingRequestsCount > 0 && (
-                    <Badge variant="destructive" className="bg-blue-100 text-blue-800 border-blue-200">
-                      {pendingRequestsCount} Requested Document{pendingRequestsCount > 1 ? 's' : ''}
-                    </Badge>
-                  )}
-                </div>
+                        const status =
+                          (dRec.currentStatus as string) ||
+                          (dRec.status as string);
+                        return status !== "accepted" && status !== "requested";
+                      }) &&
+                        `${
+                          documents.filter((d) => {
+                            const dRec = d as unknown as Record<
+                              string,
+                              unknown
+                            >;
+                            const status =
+                              (dRec.currentStatus as string) ||
+                              (dRec.status as string);
+                            return (
+                              status !== "accepted" && status !== "requested"
+                            );
+                          }).length
+                        } document(s) need review. `}
+                    </p>
+                    <p className="text-sm font-medium text-[#036635] dark:text-[#FECC07]">
+                      Review and accept all documents before accepting the
+                      protocol.
+                    </p>
+                  </div>
+                )}
               </div>
-              {!allDocumentsAccepted && (
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    {pendingRequestsCount > 0 && `${pendingRequestsCount} requested document(s) must be uploaded by proponent. `}
-                    {documents.some((d) => {
-                      const dRec = d as unknown as Record<string, unknown>;
-                      const status = (dRec.currentStatus as string) || (dRec.status as string);
-                      return status !== "accepted" && status !== "requested";
-                    }) && `${documents.filter((d) => {
-                      const dRec = d as unknown as Record<string, unknown>;
-                      const status = (dRec.currentStatus as string) || (dRec.status as string);
-                      return status !== "accepted" && status !== "requested";
-                    }).length} document(s) need review. `}
-                  </p>
-                  <p className="text-sm font-medium text-[#036635] dark:text-[#FECC07]">
-                    Review and accept all documents before accepting the protocol.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+            )}
 
           {/* Quick Info */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -585,17 +832,26 @@ export function ChairpersonActions({
                       {!allDocumentsAccepted && !loadingDocuments && (
                         <TooltipContent>
                           <div className="space-y-1">
-                            <p className="font-semibold">Cannot Accept Protocol</p>
+                            <p className="font-semibold">
+                              Cannot Accept Protocol
+                            </p>
                             <p className="text-sm">
-                              {documents.length === 0 
-                                ? "No documents have been submitted yet" 
+                              {documents.length === 0
+                                ? "No documents have been submitted yet"
                                 : pendingRequestsCount > 0
                                 ? `${pendingRequestsCount} requested document(s) pending fulfillment by proponent`
-                                : `${documents.filter((d) => {
-                                    const dRec = d as unknown as Record<string, unknown>;
-                                    const status = (dRec.currentStatus as string) || (dRec.status as string);
-                                    return status !== "accepted";
-                                  }).length} document(s) need to be reviewed and accepted`}
+                                : `${
+                                    documents.filter((d) => {
+                                      const dRec = d as unknown as Record<
+                                        string,
+                                        unknown
+                                      >;
+                                      const status =
+                                        (dRec.currentStatus as string) ||
+                                        (dRec.status as string);
+                                      return status !== "accepted";
+                                    }).length
+                                  } document(s) need to be reviewed and accepted`}
                             </p>
                           </div>
                         </TooltipContent>
@@ -615,15 +871,16 @@ export function ChairpersonActions({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {(submission.status === "accepted") && assignedReviewers.length === 0 && (
-                <Button
-                  onClick={() => setAssignReviewersDialogOpen(true)}
-                  className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
-                >
-                  <Users className="mr-2 h-4 w-4" />
-                  Assign Reviewers
-                </Button>
-              )}
+              {submission.status === "accepted" &&
+                assignedReviewers.length === 0 && (
+                  <Button
+                    onClick={() => setAssignReviewersDialogOpen(true)}
+                    className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black transition-all duration-300 hover:scale-105"
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    Assign Reviewers
+                  </Button>
+                )}
 
               {submission.status === "accepted" && !submission.decision && (
                 <Button
@@ -664,44 +921,68 @@ export function ChairpersonActions({
                 <Badge
                   variant={assessments?.allCompleted ? "default" : "secondary"}
                 >
-                  {assessments ? `${assessments.totalCompleted}/${assessments.totalAssigned}` : `${assignedReviewers.filter(r => r.reviewStatus === "completed").length}/${assignedReviewers.length}`} Completed
+                  {assessments
+                    ? `${assessments.totalCompleted}/${assessments.totalAssigned}`
+                    : `${
+                        assignedReviewers.filter(
+                          (r) => r.reviewStatus === "completed"
+                        ).length
+                      }/${assignedReviewers.length}`}{" "}
+                  Completed
                 </Badge>
                 {assessments && (
                   <Button
                     variant="outline"
                     size="sm"
-                  className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
+                    className="border-[#036635]/20 dark:border-[#FECC07]/30 hover:bg-[#036635]/10 dark:hover:bg-[#FECC07]/20 hover:border-[#036635] dark:hover:border-[#FECC07] transition-all duration-300"
                     onClick={async () => {
                       try {
                         // Export assessments to JSON
                         const exportData = {
                           protocolId: submission.id,
-                          protocolCode: submission.spupCode || submission.tempProtocolCode,
+                          protocolCode:
+                            submission.spupCode || submission.tempProtocolCode,
                           protocolTitle: getProtocolTitle(submission),
                           exportDate: new Date().toISOString(),
-                          assessments: (assessments as unknown as ProtocolAssessmentsResult)?.assessments || [],
+                          assessments:
+                            (
+                              assessments as unknown as ProtocolAssessmentsResult
+                            )?.assessments || [],
                           summary: {
                             totalAssigned: assessments?.totalAssigned || 0,
                             totalCompleted: assessments?.totalCompleted || 0,
-                            allCompleted: assessments?.allCompleted || false
-                          }
+                            allCompleted: assessments?.allCompleted || false,
+                          },
                         };
-                        
+
                         const jsonString = JSON.stringify(exportData, null, 2);
-                        const blob = new Blob([jsonString], { type: 'application/json' });
+                        const blob = new Blob([jsonString], {
+                          type: "application/json",
+                        });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = url;
-                        a.download = `Consolidated_Reviews_${submission.id || submission.spupCode || 'protocol'}.json`;
+                        a.download = `Consolidated_Reviews_${
+                          submission.id || submission.spupCode || "protocol"
+                        }.json`;
                         document.body.appendChild(a);
                         a.click();
                         a.remove();
                         URL.revokeObjectURL(url);
-                        
-                        customToast.success("Export Successful", "Reviewer assessments exported to JSON file");
+
+                        customToast.success(
+                          "Export Successful",
+                          "Reviewer assessments exported to JSON file"
+                        );
                       } catch (error) {
-                        console.error('Error exporting assessments to JSON:', error);
-                        customToast.error("Export Failed", "Failed to export assessments. Please try again.");
+                        console.error(
+                          "Error exporting assessments to JSON:",
+                          error
+                        );
+                        customToast.error(
+                          "Export Failed",
+                          "Failed to export assessments. Please try again."
+                        );
                       }
                     }}
                   >
@@ -712,37 +993,75 @@ export function ChairpersonActions({
               <Separator className="my-2" />
               <div className="space-y-2">
                 {assignedReviewers.map((assignment) => {
-                  const deadline = toDate(assignment.deadline as FirestoreDate) || new Date();
+                  const deadline =
+                    toDate(assignment.deadline as FirestoreDate) || new Date();
                   const now = new Date();
 
                   // Find corresponding assessment data if available
-                  const assessment = ((assessments as unknown as ProtocolAssessmentsResult)?.assessments as unknown as Record<string, unknown>[])?.find(
-                    (a: Record<string, unknown>) => (a.reviewerId as string) === (assignment.reviewerId as string)
+                  const assessment = (
+                    (assessments as unknown as ProtocolAssessmentsResult)
+                      ?.assessments as unknown as Record<string, unknown>[]
+                  )?.find(
+                    (a: Record<string, unknown>) =>
+                      (a.reviewerId as string) ===
+                      (assignment.reviewerId as string)
                   );
 
                   // Determine the actual status to display
                   const getAssessmentStatus = () => {
                     if (assessment?.status) {
                       switch (assessment.status) {
-                        case 'draft':
-                          return { label: 'In Progress', variant: 'secondary' as const, isCompleted: false };
-                        case 'submitted':
-                          return { label: 'Submitted', variant: 'default' as const, isCompleted: true };
-                        case 'approved':
-                          return { label: 'Approved', variant: 'default' as const, isCompleted: true };
-                        case 'returned':
-                          return { label: 'Returned', variant: 'destructive' as const, isCompleted: false };
-                        case 'completed':
-                          return { label: 'Completed', variant: 'default' as const, isCompleted: true };
+                        case "draft":
+                          return {
+                            label: "In Progress",
+                            variant: "secondary" as const,
+                            isCompleted: false,
+                          };
+                        case "submitted":
+                          return {
+                            label: "Submitted",
+                            variant: "default" as const,
+                            isCompleted: true,
+                          };
+                        case "approved":
+                          return {
+                            label: "Approved",
+                            variant: "default" as const,
+                            isCompleted: true,
+                          };
+                        case "returned":
+                          return {
+                            label: "Returned",
+                            variant: "destructive" as const,
+                            isCompleted: false,
+                          };
+                        case "completed":
+                          return {
+                            label: "Completed",
+                            variant: "default" as const,
+                            isCompleted: true,
+                          };
                         default:
-                          return { label: 'In Progress', variant: 'secondary' as const, isCompleted: false };
+                          return {
+                            label: "In Progress",
+                            variant: "secondary" as const,
+                            isCompleted: false,
+                          };
                       }
                     }
                     // Fallback to assignment status if no assessment
-                    if (assignment.reviewStatus === 'completed') {
-                      return { label: 'Completed', variant: 'default' as const, isCompleted: true };
+                    if (assignment.reviewStatus === "completed") {
+                      return {
+                        label: "Completed",
+                        variant: "default" as const,
+                        isCompleted: true,
+                      };
                     }
-                    return { label: 'Not Started', variant: 'outline' as const, isCompleted: false };
+                    return {
+                      label: "Not Started",
+                      variant: "outline" as const,
+                      isCompleted: false,
+                    };
                   };
 
                   const statusInfo = getAssessmentStatus();
@@ -769,12 +1088,16 @@ export function ChairpersonActions({
                     >
                       <div className="flex-1">
                         <div className="font-medium">
-                          {String(assignment.reviewerName || 'Unknown')}
+                          {String(assignment.reviewerName || "Unknown")}
                         </div>
                         <div className="text-muted-foreground text-xs">
-                          {assessment ? `Form: ${assessment.formType as string} • ` : ''}
-                          Status: {statusInfo.label} • 
-                          Due: {deadline.toLocaleDateString()}
+                          {assessment
+                            ? `Form: ${formatFormType(
+                                assessment.formType as string
+                              )} • `
+                            : ""}
+                          Status: {statusInfo.label} • Due:{" "}
+                          {deadline.toLocaleDateString()}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -801,29 +1124,67 @@ export function ChairpersonActions({
                         {/* Actions menu */}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                            >
                               <MoreVertical className="h-4 w-4" />
                               <span className="sr-only">Open actions</span>
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem
+                              onClick={() =>
+                                handleCopyReviewerLetter(assignment, assessment)
+                              }
+                              disabled={
+                                isCopyingLetterId ===
+                                String(
+                                  assignment.id || assignment.reviewerId || ""
+                                )
+                              }
+                            >
+                              <Copy className="mr-2 h-4 w-4" />
+                              {isCopyingLetterId ===
+                              String(
+                                assignment.id || assignment.reviewerId || ""
+                              )
+                                ? "Copying..."
+                                : "Copy letter"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               disabled={!assessment || !assessment.formData}
-                              onClick={() => assessment && handleViewAssessment(assessment, String(assignment.reviewerName || 'Unknown'))}
+                              onClick={() =>
+                                assessment &&
+                                handleViewAssessment(
+                                  assessment,
+                                  String(assignment.reviewerName || "Unknown")
+                                )
+                              }
                             >
                               <FileTextIcon className="mr-2 h-4 w-4" />
                               View Assessment
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               disabled={!assessment || !assessment.formData}
-                              onClick={() => assessment && handleDownloadJson(assessment, String(submission.id), String(assignment.reviewerId))}
+                              onClick={() =>
+                                assessment &&
+                                handleDownloadJson(
+                                  assessment,
+                                  String(submission.id),
+                                  String(assignment.reviewerId)
+                                )
+                              }
                             >
                               <FileJson className="mr-2 h-4 w-4" />
                               Download JSON
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               disabled={!assessment || !assessment.formData}
-                              onClick={() => assessment && handleExportTemplate(assessment)}
+                              onClick={() =>
+                                assessment && handleExportTemplate(assessment)
+                              }
                             >
                               <Download className="mr-2 h-4 w-4" />
                               Export to Template
@@ -865,19 +1226,40 @@ export function ChairpersonActions({
                 try {
                   const chairName = await getCurrentChairName();
                   const data = extractTemplateData(submission, chairName);
-                  const blob = await documentGenerator.generateDocument('archiving_notification', data);
-                  const fileName = `${submission.spupCode || submission.tempProtocolCode || 'SPUP_REC'}_Archiving_Notification_${new Date().toISOString().split('T')[0]}.docx`;
+                  const blob = await documentGenerator.generateDocument(
+                    "archiving_notification",
+                    data
+                  );
+                  const fileName = `${
+                    submission.spupCode ||
+                    submission.tempProtocolCode ||
+                    "SPUP_REC"
+                  }_Archiving_Notification_${
+                    new Date().toISOString().split("T")[0]
+                  }.docx`;
                   documentGenerator.downloadDocument(blob, fileName);
                 } catch (e) {
-                  console.error('Failed to generate archiving notification:', e);
+                  console.error(
+                    "Failed to generate archiving notification:",
+                    e
+                  );
                 }
               }}
               onUploadArchiveNotification={async (file: File) => {
                 try {
-                  const fileName = `${submission.spupCode || submission.tempProtocolCode || 'SPUP_REC'}_Archiving_Notification_${file.name}`;
-                  const { storagePath, downloadUrl } = await documentGenerator.uploadToStorage(file, fileName, submission.id);
+                  const fileName = `${
+                    submission.spupCode ||
+                    submission.tempProtocolCode ||
+                    "SPUP_REC"
+                  }_Archiving_Notification_${file.name}`;
+                  const { storagePath, downloadUrl } =
+                    await documentGenerator.uploadToStorage(
+                      file,
+                      fileName,
+                      submission.id
+                    );
                 } catch (e) {
-                  console.error('Failed to upload archiving notification:', e);
+                  console.error("Failed to upload archiving notification:", e);
                 }
               }}
             />
@@ -915,7 +1297,7 @@ export function ChairpersonActions({
         submission={submission as unknown as Record<string, unknown>}
         onAssignmentsUpdate={handleAssignmentsUpdate}
       />
-      
+
       {/* Reassign Reviewer Dialog */}
       {selectedAssignmentToReassign && (
         <ReassignReviewerDialog
@@ -929,7 +1311,7 @@ export function ChairpersonActions({
           }}
         />
       )}
-      
+
       {/* View Assessment Dialog */}
       {selectedAssessmentToView && (
         <ViewAssessmentDialog
@@ -943,8 +1325,12 @@ export function ChairpersonActions({
             if (assignedReviewers.length > 0) {
               try {
                 setLoadingAssessments(true);
-                const result = await getProtocolReviewerAssessments(String(submission.id));
-                setAssessments(result as unknown as Record<string, unknown> | null);
+                const result = await getProtocolReviewerAssessments(
+                  String(submission.id)
+                );
+                setAssessments(
+                  result as unknown as Record<string, unknown> | null
+                );
               } catch (e) {
                 console.error("Failed to load reviewer assessments:", e);
               } finally {

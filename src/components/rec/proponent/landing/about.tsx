@@ -48,18 +48,6 @@ export const About = () => {
             institutional policies.
           </p>
         </div>
-        <div className={`pt-4 transition-all duration-700 delay-300 ${
-          aboutVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-        }`}>
-          <Button
-            variant="outline"
-            onClick={() => router.push('/rec/proponent/about')}
-            className="gap-2 px-6 py-4 text-base hover:bg-primary hover:text-primary-foreground transition-all duration-300 hover:scale-105 border-primary text-primary hover:shadow-lg"
-          >
-            Want to know more about the SPUP REC?
-            <MoveRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
-          </Button>
-        </div>
       </div>
     </div>
   </div>

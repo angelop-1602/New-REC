@@ -6,6 +6,7 @@ import { About } from '@/components/rec/proponent/landing/about';
 import { Footer } from '@/components/rec/proponent/landing/footer';
 import { FAQ } from '@/components/rec/proponent/landing/fqa';
 import { Hero } from '@/components/rec/proponent/landing/hero';
+import { Members } from '@/components/rec/proponent/landing/members';
 
 const Page = () => {
   const { loading } = useAuth();
@@ -20,6 +21,7 @@ const Page = () => {
     <>
       <Hero />
       <About />
+      <Members />
       {/* <CTA />
       <Pricing /> */}
       {/* <Blog />   */}

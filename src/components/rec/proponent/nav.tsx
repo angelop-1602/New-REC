@@ -55,19 +55,18 @@ export const Header = () => {
       title: "About us",
       description: "Learn about our research ethics committee",
       items: [
-        { title: "Members", href: "#members" },
-        { title: "Processes", href: "#processes" },
-        { title: "Fees", href: "#fees" },
+        { title: "About SPUP REC", href: "/rec/proponent/about" },
+        { title: "Review Process", href: "/rec/proponent/process" },
+        { title: "FAQ", href: "/rec/proponent#faq" },
       ],
     },
     {
       title: "Resources",
       description: "Helpful information and updates",
       items: [
-        { title: "Guidelines", href: "/guidelines" },
-        { title: "Forms", href: "/forms" },
-        { title: "FAQ", href: "/faq" },
-        { title: "Contact", href: "/contact" },
+        { title: "Review Process", href: "/rec/proponent/process" },
+        { title: "Forms", href: "/rec/proponent/process#forms" },
+        { title: "FAQ", href: "/rec/proponent#faq" },
       ],
     },
   ];

@@ -38,6 +38,7 @@ export default function ProtocolReviewPage() {
   const [reviewerAssignment, setReviewerAssignment] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accessReason, setAccessReason] = useState<string | null>(null);
 
   // Form state
   const [formType, setFormType] = useState<FormType | null>(null);
@@ -52,9 +53,17 @@ export default function ProtocolReviewPage() {
       // Wait for auth to finish initializing
       if (isLoading) return;
 
+      // If not authenticated, remember this URL then redirect to reviewer landing/login page
       if (!isAuthenticated || !reviewer || !protocolId) {
-        setError('Authentication required');
-        setLoading(false);
+        if (typeof window !== 'undefined') {
+          try {
+            const redirectPath = window.location.pathname + window.location.search;
+            localStorage.setItem('reviewerRedirectUrl', redirectPath);
+          } catch (e) {
+            console.warn('Unable to store reviewer redirect URL:', e);
+          }
+        }
+        router.push('/rec/reviewers');
         return;
       }
 
@@ -62,8 +71,18 @@ export default function ProtocolReviewPage() {
          setLoading(true);
          setError(null);
 
+         console.log('Loading protocol data for:', protocolId, 'Reviewer:', reviewer.id);
+
          // Get complete protocol data with documents
-         const completeProtocol = await getSubmissionWithDocuments(protocolId);
+         let completeProtocol;
+         try {
+           completeProtocol = await getSubmissionWithDocuments(protocolId);
+         } catch (submissionError) {
+           console.error('Error fetching submission:', submissionError);
+           setError(`Failed to load protocol: ${submissionError instanceof Error ? submissionError.message : 'Unknown error'}`);
+           setLoading(false);
+           return;
+         }
          
          if (!completeProtocol) {
            setError('Protocol not found');
@@ -71,69 +90,111 @@ export default function ProtocolReviewPage() {
            return;
          }
 
+         console.log('Protocol loaded successfully');
          setProtocolData(completeProtocol);
          // Convert documents to typed array
          const typedDocuments = (completeProtocol.documents || []) as DocumentsType[];
          setDocuments(typedDocuments);
 
         // Check if this reviewer was reassigned from this protocol
-        const reassignmentHistoryRef = collection(db, 'submissions', protocolId, 'reassignment_history');
-        const reassignmentHistorySnap = await getDocs(reassignmentHistoryRef);
-        
-        const wasReassigned = reassignmentHistorySnap.docs.some(doc => 
-          doc.data().oldReviewerId === reviewer.id
-        );
-        
-        if (wasReassigned) {
-          setError('You have been removed from reviewing this protocol. Please check the "Reassigned" tab for more details.');
-          setLoading(false);
-          return;
+        try {
+          const reassignmentHistoryRef = collection(db, 'submissions', protocolId, 'reassignment_history');
+          const reassignmentHistorySnap = await getDocs(reassignmentHistoryRef);
+          
+          const wasReassigned = reassignmentHistorySnap.docs.some(doc => {
+            const data = doc.data();
+            return String(data.oldReviewerId || '') === String(reviewer.id);
+          });
+          
+          if (wasReassigned) {
+            setAccessReason(
+              'This protocol was reassigned to a different reviewer after you were initially assigned.'
+            );
+            setError(
+              'You can no longer access this protocol because it was reassigned to another reviewer.'
+            );
+            setLoading(false);
+            return;
+          }
+        } catch (reassignError) {
+          console.warn('Could not check reassignment history:', reassignError);
+          // Continue anyway - reassignment check is not critical
         }
         
         // Get reviewer assignment
-        const reviewersRef = collection(db, 'submissions', protocolId, 'reviewers');
-        const reviewersSnap = await getDocs(reviewersRef);
-        
-        const assignment = reviewersSnap.docs.find(doc => 
-          doc.data().reviewerId === reviewer.id
-        );
+        try {
+          const reviewersRef = collection(db, 'submissions', protocolId, 'reviewers');
+          const reviewersSnap = await getDocs(reviewersRef);
+          
+          const assignment = reviewersSnap.docs.find(doc => {
+            const data = doc.data();
+            return String(data.reviewerId || '') === String(reviewer.id);
+          });
 
-        if (!assignment) {
-          setError('You are not assigned to review this protocol');
+          if (!assignment) {
+            console.warn('No assignment found for reviewer:', reviewer.id, 'in protocol:', protocolId);
+            setAccessReason('This protocol is not currently assigned to your reviewer code.');
+            setError('You are not assigned to review this protocol.');
+            setLoading(false);
+            return;
+          }
+
+          const assignmentData = assignment.data();
+          console.log('Assignment found:', assignmentData);
+          setReviewerAssignment(assignmentData);
+
+          // Map assessment type to form type
+          const mappedFormType = mapAssessmentTypeToFormType(assignmentData.assessmentType) as FormType;
+          setFormType(mappedFormType);
+
+          // Check if there's existing assessment data first
+          try {
+            const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
+            const existingAssessment = await AssessmentSubmissionService.getAssessment(protocolId, mappedFormType, reviewer.id);
+            
+            if (existingAssessment && existingAssessment.formData) {
+              // Use existing assessment data
+              setDefaultValues(existingAssessment.formData);
+              setAssessmentStatus(existingAssessment.status);
+              setReturnReason(existingAssessment.rejectionReason || null);
+              // Set flag to skip Firebase loading in form component since we already have the data
+              setSkipFirebaseLoad(true);
+            } else {
+              // Pre-populate form fields with protocol information for new assessments
+              const prepopulatedFields = prePopulateFormFields(completeProtocol);
+              const formDefaults = getFormDefaultValues(mappedFormType, prepopulatedFields);
+              setDefaultValues(formDefaults);
+              setAssessmentStatus('draft');
+              setSkipFirebaseLoad(false);
+            }
+          } catch (assessmentError) {
+            console.error('Error loading assessment:', assessmentError);
+            // Continue with default values if assessment load fails
+            const prepopulatedFields = prePopulateFormFields(completeProtocol);
+            const formDefaults = getFormDefaultValues(mappedFormType, prepopulatedFields);
+            setDefaultValues(formDefaults);
+            setAssessmentStatus('draft');
+            setSkipFirebaseLoad(false);
+          }
+        } catch (assignmentError) {
+          console.error('Error fetching reviewer assignment:', assignmentError);
+          setAccessReason('There was a problem checking your assignment for this protocol.');
+          setError(
+            `Failed to load assignment: ${
+              assignmentError instanceof Error ? assignmentError.message : 'Unknown error'
+            }`
+          );
           setLoading(false);
           return;
-        }
-
-        const assignmentData = assignment.data();
-        setReviewerAssignment(assignmentData);
-
-        // Map assessment type to form type
-        const mappedFormType = mapAssessmentTypeToFormType(assignmentData.assessmentType) as FormType;
-        setFormType(mappedFormType);
-
-        // Check if there's existing assessment data first
-        const { default: AssessmentSubmissionService } = await import('@/lib/services/assessments/assessmentSubmissionService');
-        const existingAssessment = await AssessmentSubmissionService.getAssessment(protocolId, mappedFormType, reviewer.id);
-        
-        if (existingAssessment && existingAssessment.formData) {
-          // Use existing assessment data
-          setDefaultValues(existingAssessment.formData);
-          setAssessmentStatus(existingAssessment.status);
-          setReturnReason(existingAssessment.rejectionReason || null);
-          // Set flag to skip Firebase loading in form component since we already have the data
-          setSkipFirebaseLoad(true);
-        } else {
-          // Pre-populate form fields with protocol information for new assessments
-          const prepopulatedFields = prePopulateFormFields(completeProtocol);
-          const formDefaults = getFormDefaultValues(mappedFormType, prepopulatedFields);
-          setDefaultValues(formDefaults);
-          setAssessmentStatus('draft');
-          setSkipFirebaseLoad(false);
         }
 
       } catch (error) {
         console.error('Error loading protocol data:', error);
-        setError('Failed to load protocol data');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (!accessReason) {
+          setAccessReason('There was an unexpected error while loading this protocol.');
+        }
+        setError(`Failed to load protocol data: ${errorMessage}`);
       } finally {
         setLoading(false);
       }
@@ -189,7 +250,20 @@ export default function ProtocolReviewPage() {
         <div className="max-w-md mx-auto text-center">
           <Alert className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="space-y-2">
+              <p className="font-semibold">Cannot access this protocol.</p>
+              <p>{error}</p>
+              {accessReason && <p className="text-sm text-muted-foreground">{accessReason}</p>}
+              <p className="text-sm text-muted-foreground">
+                Possible reasons:
+                <br />- The protocol is not assigned to your reviewer code.
+                <br />- The chairperson may have reassigned this protocol to another reviewer.
+                <br />- There is a technical issue loading your assignment.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                If you believe you should have access to this protocol, please contact the REC Office.
+              </p>
+            </AlertDescription>
           </Alert>
           <Button 
             onClick={() => router.push('/rec/reviewers')}
