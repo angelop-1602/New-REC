@@ -631,7 +631,6 @@ export const SubmissionInformation = () => {
                   ]?.rules
                 }
                 placeholder="Enter number of participants"
-                required
                 fieldPath="participants.number_of_participants"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
@@ -651,7 +650,6 @@ export const SubmissionInformation = () => {
                 }
                 placeholder="Describe the type and characteristics of participants"
                 rows={3}
-                required
                 fieldPath="participants.type_and_description"
                 registerValidation={registerFieldValidation}
                 unregisterValidation={unregisterFieldValidation}
@@ -750,7 +748,6 @@ export const SubmissionInformation = () => {
               }
               placeholder="Provide a brief but comprehensive description of your study"
               rows={5}
-              maxLength={1000}
               showCharCount
               required
               fieldPath="brief_description_of_study"

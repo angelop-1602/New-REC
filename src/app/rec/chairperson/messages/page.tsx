@@ -13,6 +13,7 @@ import { getMessagesForSubmission, sendMessageToSubmission, markAllMessagesAsRea
 import { useRealtimeProtocols } from '@/hooks/useRealtimeProtocols';
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages';
 import { format } from 'date-fns';
+import { useRouter } from 'next/navigation';
 import { 
   toChairpersonProtocols,
   getProtocolTitle,
@@ -34,6 +35,7 @@ interface ProtocolConversation {
 
 export default function MessagesPage() {
   const { user } = useAuth();
+  const router = useRouter();
   
   // Use Firebase Auth user (chairperson should be auto-logged in via layout)
   const currentUserId = user?.uid;
@@ -391,7 +393,11 @@ export default function MessagesPage() {
             <>
               {/* Chat Header */}
               <div className="p-4 border-b border-[#036635]/10 dark:border-[#FECC07]/20 flex items-center justify-between flex-shrink-0 bg-gradient-to-r from-[#036635]/5 to-transparent dark:from-[#FECC07]/10">
-                <div>
+                <div 
+                  onClick={() => router.push(`/rec/chairperson/protocol/${selectedConversation.protocolId}`)}
+                  className="cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                  title="Click to view protocol details"
+                >
                   <h3 className="font-semibold bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">
                     {selectedConversation.principalInvestigatorName}
                   </h3>

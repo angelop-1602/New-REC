@@ -312,25 +312,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Chairperson can sign in even if email is not verified (system account)
       if (userCredential.user.emailVerified || isChairperson) {
         // Create chairperson settings document if it doesn't exist
-        if (isChairperson && userCredential.user.email === 'rec@spup.edu.ph') {
-          try {
-            const db = getFirestore(firebaseApp);
-            const userId = userCredential.user.uid;
-            const recSettingsRef = doc(db, 'rec_settings', userId);
-            const recSettingsDoc = await getDoc(recSettingsRef);
-            
-            if (!recSettingsDoc.exists()) {
-              await setDoc(recSettingsRef, {
-                initialized: true,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-              });
-            }
-          } catch (error) {
-            console.warn('⚠️ Could not create chairperson settings document:', error);
-            // Don't block sign-in if this fails
-          }
-        }
         
         customToast.success(
           "Sign In Successful", 

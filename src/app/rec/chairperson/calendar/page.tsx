@@ -53,15 +53,17 @@ export default function CalendarPage() {
       setLoading(true)
       setError(null)
 
-      // Fetch all submissions from all statuses in parallel
-      const [pending, accepted, approved, archived] = await Promise.all([
+      // Fetch all submissions from all relevant statuses in parallel
+      // Include 'under_review' so reviewer due dates for in-progress reviews appear
+      const [pending, accepted, underReview, approved, archived] = await Promise.all([
         getAllSubmissionsByStatus('pending'),
         getAllSubmissionsByStatus('accepted'),
+        getAllSubmissionsByStatus('under_review'),
         getAllSubmissionsByStatus('approved'),
         getAllSubmissionsByStatus('archived')
       ])
 
-      const combinedSubmissions = [...pending, ...accepted, ...approved, ...archived]
+      const combinedSubmissions = [...pending, ...accepted, ...underReview, ...approved, ...archived]
       const typedSubmissions = toChairpersonProtocols(combinedSubmissions)
       setAllSubmissions(typedSubmissions)
     } catch (err) {
@@ -172,41 +174,83 @@ export default function CalendarPage() {
           }
         }
 
-        // 3. Progress report due dates (for approved protocols)
+        // 3. Progress report due dates (for approved protocols) - Auto-calculate every 3 months
         if (submission.approvedAt && (submission.status === 'approved' || submission.status === 'archived')) {
           const approvedDate = toDate(submission.approvedAt)
           if (approvedDate && !isNaN(approvedDate.getTime())) {
-            // First progress report due 6 months after approval
-            const firstProgressDue = addMonths(approvedDate, 6)
-            if (isDateInRange(firstProgressDue)) {
-              calendarEvents.push({
-                id: `${submissionId}-progress-1`,
-                date: firstProgressDue,
-                type: "progress_report_due",
-                title: `Progress Report Due: ${title}`,
-                protocolCode,
-                submissionId,
-                description: "First progress report due (6 months after approval)"
-              })
+            // Determine the end date for progress reports
+            const endDate = submission.approvalValidUntil 
+              ? toDate(submission.approvalValidUntil)
+              : submission.status === 'archived' && submission.archivedAt
+              ? toDate(submission.archivedAt)
+              : null
+
+            // Get the last submitted progress report date (if any)
+            let lastReportDate: Date | null = null
+            if ((submission as any).progressReports && Array.isArray((submission as any).progressReports)) {
+              const progressReports = (submission as any).progressReports as Array<{
+                submittedAt?: FirestoreDate;
+                reportDate?: FirestoreDate;
+              }>
+              
+              // Find the most recent submitted report
+              const submittedReports = progressReports
+                .map(report => {
+                  const date = report.submittedAt ? toDate(report.submittedAt) : 
+                               report.reportDate ? toDate(report.reportDate) : null
+                  return date && !isNaN(date.getTime()) ? date : null
+                })
+                .filter((date): date is Date => date !== null)
+                .sort((a, b) => b.getTime() - a.getTime())
+              
+              if (submittedReports.length > 0) {
+                lastReportDate = submittedReports[0]
+              }
             }
 
-            // Second progress report due 12 months after approval (if not archived)
-            if (submission.status === 'approved') {
-              const secondProgressDue = addMonths(approvedDate, 12)
-              if (isDateInRange(secondProgressDue)) {
+            // Calculate the starting point for next due date
+            // If there's a last submitted report, start from 3 months after that
+            // Otherwise, start from 3 months after approval
+            const startDate = lastReportDate ? lastReportDate : approvedDate
+            const firstDueDate = addMonths(startDate, 3)
+
+            // Generate progress report due dates every 3 months
+            // Continue until we reach the end date or go beyond the filter range
+            let reportNumber = 1
+            let currentDueDate = firstDueDate
+            
+            // Generate reports for up to 5 years (20 reports) or until end date
+            const maxReports = 20
+            while (reportNumber <= maxReports) {
+              // Stop if we've reached or passed the end date
+              if (endDate && currentDueDate > endDate) {
+                break
+              }
+
+              // Only add if within the filter range
+              if (isDateInRange(currentDueDate)) {
                 calendarEvents.push({
-                  id: `${submissionId}-progress-2`,
-                  date: secondProgressDue,
+                  id: `${submissionId}-progress-${reportNumber}`,
+                  date: currentDueDate,
                   type: "progress_report_due",
                   title: `Progress Report Due: ${title}`,
                   protocolCode,
                   submissionId,
-                  description: "Second progress report due (12 months after approval)"
+                  description: `Progress report #${reportNumber} due (3 months interval)`
                 })
+              }
+
+              // Move to next 3-month interval
+              currentDueDate = addMonths(currentDueDate, 3)
+              reportNumber++
+
+              // Stop if we've gone beyond the filter range
+              if (currentDueDate > filterEnd) {
+                break
               }
             }
 
-            // Check deadlines array if it exists
+            // Check deadlines array if it exists (for manually set deadlines)
             if (submission.deadlines && Array.isArray(submission.deadlines)) {
               submission.deadlines.forEach((deadline: Record<string, unknown>, index: number) => {
                 if (deadline.type === 'progress_report' && deadline.dueDate) {
@@ -281,7 +325,9 @@ export default function CalendarPage() {
           })
         }
 
-        // 5. Review completion date
+        // 5. Review completion date (reviewer due date)
+        // This represents the expected completion/deadline of the reviewers' assessments.
+        // Priority 1: Use estimatedCompletionDate set when reviewers are assigned.
         if (submission.estimatedCompletionDate) {
           const completionDate = toDate(submission.estimatedCompletionDate)
           if (completionDate && !isNaN(completionDate.getTime()) && isDateInRange(completionDate)) {
@@ -289,14 +335,14 @@ export default function CalendarPage() {
               id: `${submissionId}-review-completion`,
               date: completionDate,
               type: "review_completion",
-              title: `Review Completion: ${title}`,
+              title: `Reviewer Due Date: ${title}`,
               protocolCode,
               submissionId,
-              description: "Estimated review completion date"
+              description: "Deadline for reviewers to complete their assessment"
             })
           }
-        } else if (submission.acceptedAt && submission.status === 'accepted') {
-          // Estimate 30 days from acceptance for review completion
+        } else if (submission.acceptedAt && (submission.status === 'accepted' || submission.status === 'under_review')) {
+          // Fallback: estimate 30 days from acceptance for review completion
           const acceptedDate = toDate(submission.acceptedAt)
           if (acceptedDate && !isNaN(acceptedDate.getTime())) {
             const estimatedCompletion = addDays(acceptedDate, 30)
@@ -305,10 +351,10 @@ export default function CalendarPage() {
                 id: `${submissionId}-review-completion-estimated`,
                 date: estimatedCompletion,
                 type: "review_completion",
-                title: `Review Completion (Estimated): ${title}`,
+                title: `Reviewer Due Date (Estimated): ${title}`,
                 protocolCode,
                 submissionId,
-                description: "Estimated review completion (30 days from acceptance)"
+                description: "Estimated reviewer deadline (30 days from acceptance)"
               })
             }
           }
@@ -528,10 +574,10 @@ export default function CalendarPage() {
               {Array.from({ length: 35 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className="border-r border-b border-[#036635]/20 dark:border-[#FECC07]/30 min-h-[120px] p-2 flex flex-col"
+                  className="border-r border-b border-[#036635]/20 dark:border-[#FECC07]/30 h-[150px] p-2 flex flex-col"
                 >
-                  <LoadingSkeleton className="h-4 w-6 mb-2 rounded-md" />
-                  <div className="space-y-1 mt-1">
+                  <LoadingSkeleton className="h-4 w-6 mb-2 rounded-md flex-shrink-0" />
+                  <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
                     <LoadingSkeleton className="h-3 w-20 rounded-md" />
                     <LoadingSkeleton className="h-3 w-16 rounded-md" />
                   </div>
@@ -667,7 +713,7 @@ export default function CalendarPage() {
                 <div
                   key={idx}
                   className={cn(
-                    "border-r border-b border-[#036635]/20 dark:border-[#FECC07]/30 min-h-[150px] p-2 flex flex-col transition-all duration-300 animate-in fade-in zoom-in-95",
+                    "border-r border-b border-[#036635]/20 dark:border-[#FECC07]/30 h-[127px] p-2 flex flex-col transition-all duration-300 animate-in fade-in zoom-in-95",
                     !isCurrentMonth && "bg-muted/30 text-muted-foreground",
                     isCurrentDay && "bg-gradient-to-br from-[#036635]/20 to-[#036635]/10 dark:from-[#FECC07]/30 dark:to-[#FECC07]/20 border-[#036635] dark:border-[#FECC07] border-2 ring-2 ring-[#036635]/20 dark:ring-[#FECC07]/30",
                     isPastDay && isCurrentMonth && "bg-gray-100/50 dark:bg-gray-800/30 text-gray-500 dark:text-gray-400 opacity-60",
@@ -685,8 +731,8 @@ export default function CalendarPage() {
                     {format(day, 'd')}
                   </div>
 
-                  {/* Events List */}
-                  <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
+                  {/* Events List - Scrollable with fixed height */}
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1 min-h-0 max-h-full">
                     {dayEvents.length === 0 ? (
                       <div className={cn(
                         "text-xs text-center py-2",
@@ -696,11 +742,11 @@ export default function CalendarPage() {
                       </div>
                     ) : (
                       <>
-                        {dayEvents.slice(0, 4).map((event, eventIdx) => (
+                        {dayEvents.map((event, eventIdx) => (
                           <div
                             key={event.id}
                             className={cn(
-                              "text-xs p-1.5 rounded transition-all duration-300 shadow-sm border border-white/20",
+                              "text-xs p-1.5 rounded transition-all duration-300 shadow-sm border border-white/20 flex-shrink-0",
                               getEventTypeColor(event.type),
                               "text-white cursor-pointer",
                               isPastDay ? "opacity-70 hover:opacity-90 hover:scale-[1.05] hover:shadow-md hover:ring-2 hover:ring-white/30" : "hover:opacity-90 hover:scale-[1.05] hover:shadow-md hover:ring-2 hover:ring-white/30"
@@ -725,14 +771,6 @@ export default function CalendarPage() {
                             </div>
                           </div>
                         ))}
-                        {dayEvents.length > 4 && (
-                          <div className={cn(
-                            "text-xs font-medium p-1 text-center bg-[#036635]/10 dark:bg-[#FECC07]/20 rounded border border-[#036635]/20 dark:border-[#FECC07]/30 transition-all duration-300",
-                            isPastDay ? "text-gray-400 dark:text-gray-500" : "text-[#036635] dark:text-[#FECC07] hover:bg-[#036635]/20 dark:hover:bg-[#FECC07]/30"
-                          )}>
-                            +{dayEvents.length - 4} more
-                          </div>
-                        )}
                       </>
                     )}
                   </div>

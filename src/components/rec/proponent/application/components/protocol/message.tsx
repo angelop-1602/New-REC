@@ -44,8 +44,8 @@ export default function ProtocolMessage({ submissionId, unreadCount: initialUnre
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   
   // Use real-time presence hook for chairperson
-  const { presence: chairpersonPresence } = useChairpersonPresence();
-  const chairpersonStatus: "online" | "offline" = chairpersonPresence?.status === "online" ? "online" : "offline";
+  const { isOnline: chairpersonIsOnline } = useChairpersonPresence();
+  const chairpersonStatus: "online" | "offline" = chairpersonIsOnline ? "online" : "offline";
 
   useEffect(() => {
     const updateDirection = () => {

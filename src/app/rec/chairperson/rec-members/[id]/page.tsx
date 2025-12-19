@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/select';
 import { reviewersManagementService, Reviewer, ReviewerRole } from '@/lib/services/reviewers/reviewersManagementService';
 import { reviewerAuthService } from '@/lib/services/reviewers/reviewerAuthService';
-import { recSettingsService } from '@/lib/services/core/recSettingsService';
 import { useAuth } from '@/hooks/useAuth';
 import { customToast } from '@/components/ui/custom/toast';
 import { RECMember, toLocaleDateString, toDate } from '@/types';
@@ -95,12 +94,12 @@ export default function RECMemberProfilePage() {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<{
     name?: string;
+    email?: string;
     role?: ReviewerRole;
     specialty?: string;
     sex?: string;
     ageCategory?: string;
     highestEducationalAttainment?: string;
-    roleInREC?: string;
     birthYear?: number;
     educationalBackground?: string;
     fullTime?: boolean;
@@ -132,12 +131,12 @@ export default function RECMemberProfilePage() {
       setReviewer(reviewerData);
       setEditData({
         name: reviewerData.name,
+        email: reviewerData.email,
         role: reviewerData.role,
         specialty: reviewerData.specialty,
         sex: reviewerData.sex,
         ageCategory: reviewerData.ageCategory,
         highestEducationalAttainment: reviewerData.highestEducationalAttainment,
-        roleInREC: reviewerData.roleInREC,
         birthYear: reviewerData.birthYear,
         educationalBackground: reviewerData.educationalBackground,
         fullTime: reviewerData.fullTime,
@@ -145,13 +144,7 @@ export default function RECMemberProfilePage() {
         tenure: reviewerData.tenure
       });
 
-      // Load REC member if linked (in background)
-      if (reviewerData.recMemberId) {
-        recSettingsService.getAllMembers().then(members => {
-        const member = members.find(m => m.id === reviewerData.recMemberId);
-        setRecMember(member || null);
-        }).catch(err => console.error('Error loading REC member:', err));
-      }
+      // REC member linking removed - not using rec_settings
 
       // Load assignments (in background) - use reviewer ID for assignments
       reviewerAuthService.getAssignedProtocols(reviewerData.id).then(assignmentsData => {
@@ -339,12 +332,12 @@ export default function RECMemberProfilePage() {
     setEditing(false);
     setEditData({
       name: reviewer.name,
+      email: reviewer.email,
       role: reviewer.role,
       specialty: reviewer.specialty,
       sex: reviewer.sex,
       ageCategory: reviewer.ageCategory,
       highestEducationalAttainment: reviewer.highestEducationalAttainment,
-      roleInREC: reviewer.roleInREC,
       birthYear: reviewer.birthYear,
       educationalBackground: reviewer.educationalBackground,
       fullTime: reviewer.fullTime,
@@ -505,17 +498,31 @@ export default function RECMemberProfilePage() {
                 </div>
                 
                 {/* Name and Role */}
-                <div className="space-y-2">
+                <div>
                   {editing ? (
-                    <Input
-                      value={editData.name || ''}
-                      onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
-                      className="text-center text-lg font-semibold"
-                    />
+                    <>
+                      <Input
+                        value={editData.name || ''}
+                        onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
+                        className="text-center text-lg font-semibold"
+                      />
+                      <Input
+                        type="email"
+                        value={editData.email || ''}
+                        onChange={(e) => setEditData(prev => ({ ...prev, email: e.target.value }))}
+                        className="text-center text-sm"
+                        placeholder="reviewer@example.com"
+                      />
+                    </>
                   ) : (
-                    <h2 className="text-2xl font-bold">{reviewer.name}</h2>
+                    <>
+                      <h2 className="text-2xl font-bold">{reviewer.name}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {reviewer.email || <span className="italic">No email</span>}
+                      </p>
+                    </>
                   )}
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-2 mt-4">
                     {editing ? (
                       <Select 
                         value={editData.role || undefined} 
@@ -552,6 +559,9 @@ export default function RECMemberProfilePage() {
                     />
                   </div>
                   <p className="mt-1 text-lg font-mono font-semibold">{reviewer.code}</p>
+                  
+                  {/* Email Field */}
+                  
                 </div>
               </div>
             </CardHeader>
@@ -682,27 +692,8 @@ export default function RECMemberProfilePage() {
                           <p className="text-sm font-medium mt-1">{reviewer.highestEducationalAttainment || <span className="text-muted-foreground italic">Not set</span>}</p>
                         )}
                       </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Role in REC</Label>
-                        {editing ? (
-                          <Select
-                            value={editData.roleInREC || ''}
-                            onValueChange={(value) => setEditData(prev => ({ ...prev, roleInREC: value }))}
-                          >
-                            <SelectTrigger className="mt-1 text-sm">
-                              <SelectValue placeholder="Select role in REC" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Medical/Scientist">Medical/Scientist</SelectItem>
-                              <SelectItem value="Non-Scientist">Non-Scientist</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <p className="text-sm font-medium mt-1">{reviewer.roleInREC || <span className="text-muted-foreground italic">Not set</span>}</p>
-            )}
-          </div>
-        </div>
-      </div>
+                    </div>
+                  </div>
                   <Separator />
                 </>
               )}

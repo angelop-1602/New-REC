@@ -35,9 +35,11 @@ import {
   toChairpersonProtocol, 
   toChairpersonReviewerAssignments,
   toDate,
-  getString
+  getString,
+  getProtocolCode
 } from "@/types";
 import { InlineLoading } from "@/components/ui/loading";
+import { EmailService } from "@/lib/services/email/emailService";
 
 interface AssignReviewersDialogProps {
   open: boolean;
@@ -243,6 +245,46 @@ export function AssignReviewersDialog({
       );
       
       if (success) {
+        // After successful assignment, send email notifications to reviewers (if they have email)
+        try {
+          const protocolCode = getProtocolCode(submission);
+          const protocolTitle = getProtocolTitle();
+
+          // Fetch assignments to get per-reviewer deadlines
+          const assignments = await reviewerService.getProtocolReviewers(submission.id);
+          const deadlineByReviewerId = new Map<string, string>();
+          assignments.forEach((assignment: any) => {
+            if (!assignment.reviewerId || !assignment.deadline) return;
+            const d = toDate(assignment.deadline as any);
+            if (!d || isNaN(d.getTime())) return;
+            deadlineByReviewerId.set(
+              String(assignment.reviewerId),
+              d.toLocaleDateString()
+            );
+          });
+
+          for (const reviewerId of validReviewers) {
+            const reviewer = reviewers.find(r => r.id === reviewerId);
+            if (!reviewer || !reviewer.email) continue;
+
+            const deadlineDisplay = deadlineByReviewerId.get(reviewerId) || undefined;
+
+            // Fire and await each email (small number of reviewers, so OK sequentially)
+            await EmailService.notifyReviewerAssignment(
+              reviewer.email,
+              reviewer.name,
+              String(submission.id),
+              protocolCode,
+              protocolTitle,
+              reviewer.code,
+              deadlineDisplay
+            );
+          }
+        } catch (emailError) {
+          // Log but don't block main flow if email sending fails
+          console.error("Failed to send reviewer assignment emails:", emailError);
+        }
+
         customToast.success(
           "Reviewers Assigned",
           `Successfully assigned ${requirements.count} reviewers with appropriate deadlines.`

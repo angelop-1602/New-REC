@@ -1,32 +1,15 @@
 /**
  * Multi-Layer Analytics Cache Manager
  * 
- * Implements 3-layer caching strategy:
+ * Implements 2-layer caching strategy:
  * L1: In-Memory Cache (Map) - Fastest, current session
- * L2: localStorage - Persists across refreshes
- * L3: Firestore Cache Collection - Shared across users
+ * L2: localStorage - Persists across refreshes, per-user
  * 
+ * Note: Firestore cache removed - analytics can be recomputed from source data
  * Cache invalidation: TTL-based (5-10 minutes) + manual invalidation
  */
 
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  Timestamp,
-  deleteDoc,
-  getDocs,
-  query,
-  where,
-  writeBatch
-} from 'firebase/firestore';
-import { getFirestore } from 'firebase/firestore';
-import firebaseApp from '@/lib/firebaseConfig';
 import { AnalyticsData, DateRange, AnalyticsFilters } from '@/types/analytics.types';
-
-const db = getFirestore(firebaseApp);
-const CACHE_COLLECTION = 'analytics_cache';
 
 // Cache configuration
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes default TTL
@@ -237,94 +220,56 @@ class LocalStorageCache {
   }
 }
 
-// L3: Firestore Cache
-class FirestoreCache {
-  private collection: string = CACHE_COLLECTION;
-
-  async get<T>(key: string): Promise<T | null> {
-    try {
-      const docRef = doc(db, this.collection, key);
-      const docSnap = await getDoc(docRef);
-
-      if (!docSnap.exists()) return null;
-
-      const data = docSnap.data();
-      const expiresAt = data.expiresAt?.toMillis() || 0;
-
-      // Check expiration
-      if (Date.now() > expiresAt) {
-        // Auto-delete expired entry
-        await deleteDoc(docRef);
-        return null;
-      }
-
-      return data.data as T;
-    } catch (error) {
-      console.error('Error reading from Firestore cache:', error);
-      return null;
-    }
-  }
-
-  async set<T>(key: string, data: T, ttl: number = CACHE_TTL_MS): Promise<void> {
-    try {
-      const docRef = doc(db, this.collection, key);
-      await setDoc(docRef, {
-        data,
-        timestamp: Timestamp.now(),
-        expiresAt: Timestamp.fromMillis(Date.now() + ttl),
-        key,
-        lastAccessed: Timestamp.now(),
-      }, { merge: true });
-    } catch (error) {
-      console.error('Error writing to Firestore cache:', error);
-    }
-  }
-
-  async delete(key: string): Promise<void> {
-    try {
-      const docRef = doc(db, this.collection, key);
-      await deleteDoc(docRef);
-    } catch (error) {
-      console.error('Error deleting from Firestore cache:', error);
-    }
-  }
-}
+// Firestore cache removed - analytics can be recomputed from source data
+// Using only L1 (in-memory) and L2 (localStorage) caching
 
 // Main Cache Manager
 class AnalyticsCacheManager {
   private l1Cache: InMemoryCache;
   private l2Cache: LocalStorageCache;
-  private l3Cache: FirestoreCache;
   private stats: CacheStats = {
     hits: 0,
     misses: 0,
     l1Hits: 0,
     l2Hits: 0,
-    l3Hits: 0,
+    l3Hits: 0, // Kept for backwards compatibility but not used
   };
 
   constructor() {
     this.l1Cache = new InMemoryCache();
     this.l2Cache = new LocalStorageCache();
-    this.l3Cache = new FirestoreCache();
   }
 
   /**
    * Generate cache key from dateRange and filters
+   * Normalizes dates to start of day to prevent duplicates from time differences
    */
   private generateCacheKey(
     dateRange: DateRange,
     filters?: AnalyticsFilters,
     tab?: string
   ): string {
-    const dateKey = `${dateRange.start.getTime()}-${dateRange.end.getTime()}-${dateRange.preset || 'custom'}`;
+    // Normalize dates to start of day to prevent duplicates from millisecond differences
+    const normalizeDate = (date: Date): number => {
+      const normalized = new Date(date);
+      normalized.setHours(0, 0, 0, 0);
+      return normalized.getTime();
+    };
+    
+    const startTime = normalizeDate(dateRange.start);
+    const endTime = normalizeDate(dateRange.end);
+    const preset = dateRange.preset || 'custom';
+    const dateKey = `${startTime}-${endTime}-${preset}`;
+    
+    // Normalize filters - sort arrays to ensure consistent keys
     const filterKey = filters 
       ? JSON.stringify({
-          status: filters.status?.sort(),
-          researchType: filters.researchType?.sort(),
-          reviewerId: filters.reviewerId?.sort(),
+          status: filters.status?.sort() || [],
+          researchType: filters.researchType?.sort() || [],
+          reviewerId: filters.reviewerId?.sort() || [],
         })
       : 'no-filters';
+    
     const tabKey = tab ? `-${tab}` : '';
     return `analytics_${dateKey}_${filterKey}${tabKey}`;
   }
@@ -358,23 +303,12 @@ class AnalyticsCacheManager {
       return l2Data;
     }
 
-    // L3: Firestore Cache
-    const l3Data = await this.l3Cache.get<T>(key);
-    if (l3Data) {
-      this.stats.hits++;
-      this.stats.l3Hits++;
-      // Promote to L1 and L2
-      this.l1Cache.set(key, l3Data, ttl);
-      this.l2Cache.set(key, l3Data, ttl);
-      return l3Data;
-    }
-
     this.stats.misses++;
     return null;
   }
 
   /**
-   * Set data in all cache layers
+   * Set data in cache layers (L1 and L2 only)
    */
   async set<T>(
     dateRange: DateRange,
@@ -385,14 +319,9 @@ class AnalyticsCacheManager {
   ): Promise<void> {
     const key = this.generateCacheKey(dateRange, filters, tab);
 
-    // Set in all layers
+    // Set in L1 and L2 layers only
     this.l1Cache.set(key, data, ttl);
     this.l2Cache.set(key, data, ttl);
-    
-    // Firestore cache is async, don't await (fire and forget for performance)
-    this.l3Cache.set(key, data, ttl).catch(error => {
-      console.error('Failed to write to Firestore cache:', error);
-    });
   }
 
   /**
@@ -407,7 +336,6 @@ class AnalyticsCacheManager {
       const key = this.generateCacheKey(dateRange, filters, tab);
       this.l1Cache.delete(key);
       this.l2Cache.delete(key);
-      await this.l3Cache.delete(key);
     } else {
       // Clear all if no specific key
       this.l1Cache.clear();
@@ -461,7 +389,7 @@ export function getAnalyticsCache(): AnalyticsCacheManager {
  */
 export async function invalidateAnalyticsCache(): Promise<void> {
   const cache = getAnalyticsCache();
-  // Clear all cache layers
+  // Clear all cache layers (L1 and L2)
   await cache.invalidate();
 }
 
@@ -476,83 +404,8 @@ export async function invalidateAnalyticsCacheForRange(
   await cache.invalidate(dateRange, filters);
 }
 
-/**
- * Clean up all expired documents from Firestore cache
- * Queries all documents where expiresAt < now and deletes them in batches
- * @returns Object with deleted count and any errors
- */
-export async function cleanupExpiredCacheDocuments(): Promise<{
-  deleted: number;
-  errors: number;
-  totalChecked: number;
-}> {
-  try {
-    const now = Timestamp.now();
-    const cacheCollection = collection(db, CACHE_COLLECTION);
-    
-    // Query all documents where expiresAt < now
-    const expiredQuery = query(
-      cacheCollection,
-      where('expiresAt', '<', now)
-    );
-    
-    const snapshot = await getDocs(expiredQuery);
-    const expiredDocs = snapshot.docs;
-    const totalChecked = expiredDocs.length;
-    
-    if (expiredDocs.length === 0) {
-      console.log('No expired cache documents found.');
-      return { deleted: 0, errors: 0, totalChecked: 0 };
-    }
-    
-    console.log(`Found ${expiredDocs.length} expired cache documents. Deleting...`);
-    
-    // Firestore batch limit is 500 operations
-    const BATCH_SIZE = 500;
-    let deleted = 0;
-    let errors = 0;
-    
-    // Process in batches
-    for (let i = 0; i < expiredDocs.length; i += BATCH_SIZE) {
-      const batch = writeBatch(db);
-      const batchDocs = expiredDocs.slice(i, i + BATCH_SIZE);
-      
-      batchDocs.forEach((docSnapshot) => {
-        try {
-          batch.delete(docSnapshot.ref);
-        } catch (error) {
-          console.error(`Error adding document ${docSnapshot.id} to batch:`, error);
-          errors++;
-        }
-      });
-      
-      try {
-        await batch.commit();
-        deleted += batchDocs.length;
-        console.log(`Deleted batch: ${batchDocs.length} documents (${deleted}/${expiredDocs.length})`);
-      } catch (error) {
-        console.error(`Error committing batch ${i / BATCH_SIZE + 1}:`, error);
-        errors += batchDocs.length;
-      }
-    }
-    
-    console.log(`Cleanup complete: ${deleted} deleted, ${errors} errors, ${totalChecked} total checked`);
-    return { deleted, errors, totalChecked };
-  } catch (error: any) {
-    console.error('Error cleaning up expired cache documents:', error);
-    
-    // Check if it's an index error
-    if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
-      console.error(
-        '⚠️ Firestore index required. Please create an index on the analytics_cache collection ' +
-        'for the field "expiresAt". Firestore will provide a link to create the index in the error message.'
-      );
-    }
-    
-    return { deleted: 0, errors: 1, totalChecked: 0 };
-  }
-}
+// Firestore cleanup functions removed - no longer using Firestore cache
 
 // Export for testing
-export { AnalyticsCacheManager, InMemoryCache, LocalStorageCache, FirestoreCache };
+export { AnalyticsCacheManager, InMemoryCache, LocalStorageCache };
 

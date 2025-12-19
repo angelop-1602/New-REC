@@ -52,7 +52,7 @@ interface CustomBannerProps {
   tempCode?: string;
   dateSubmitted?: string;
   unreadMessageCount?: number;
-  hasReviewers?: boolean;
+  hasReviewers?: boolean; // Deprecated - kept for backward compatibility but not used
 }
 
 export default function CustomBanner({
@@ -63,33 +63,32 @@ export default function CustomBanner({
   tempCode: _tempCode, // eslint-disable-line @typescript-eslint/no-unused-vars
   dateSubmitted,
   unreadMessageCount = 0,
-  hasReviewers = false,
+  hasReviewers: _hasReviewers, // Deprecated - kept for backward compatibility but not used
 }: CustomBannerProps) {
   const [open] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // Format date if not provided
   const displayDate = dateSubmitted || new Date().toLocaleDateString();
 
-  // Get display status based on current status and reviewer assignment
+  // Get display status based on current status
+  // Status is the single source of truth - "under_review" means reviewers are assigned
   const getDisplayStatus = (): keyof typeof BADGE_CONFIG => {
+    // Priority 1: If status is "pending", always show "Pending"
     if (status === "pending") {
-      // If protocol is pending (no SPUP code yet), always show "Pending"
       return "Pending";
     }
-    if (status === "accepted") {
-      // If protocol is accepted (has SPUP code) but no reviewers yet, show "Accepted"
-      // If reviewers are assigned, show "Under Review"
-      return hasReviewers ? "Under Review" : "Accepted";
-    }
-    // Map status to display status
+    
+    // Priority 2: Map status to display status using STATUS_DISPLAY
     const mappedStatus = STATUS_DISPLAY[status as keyof typeof STATUS_DISPLAY];
     if (mappedStatus && mappedStatus in BADGE_CONFIG) {
       return mappedStatus as keyof typeof BADGE_CONFIG;
     }
-    // Fallback: try to use status directly if it exists in BADGE_CONFIG
+    
+    // Priority 3: Try to use status directly if it exists in BADGE_CONFIG
     if (status in BADGE_CONFIG) {
       return status as keyof typeof BADGE_CONFIG;
     }
+    
     // Final fallback to "Pending"
     return "Pending";
   };

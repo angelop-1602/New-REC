@@ -28,13 +28,10 @@ export {
   saveAssessment 
 } from './unifiedDataService';
 
-// REC Settings Service - exports instance and utility functions
+// Chairperson Service - exports utility functions
 export { 
-  recSettingsService, 
-  getCurrentChairName, 
-  initializeDefaultSettings,
-  getCurrentSettings
-} from './recSettingsService';
+  getCurrentChairName
+} from './chairpersonService';
 
 // Archiving Service - exports functions
 export { 
@@ -43,7 +40,8 @@ export {
   updateProtocolActivity 
 } from './archivingService';
 
-// Presence Service - exports functions and interfaces
+// Presence Service - DEPRECATED: Only used for non-reviewer users if needed
+// Reviewers now use the reviewers collection for presence tracking
 export { 
   initializePresence,
   updateLastSeen,

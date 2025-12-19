@@ -105,29 +105,15 @@ export default function ChairpersonProtocolDetailPage() {
     }
   }, [submission, user, submissionId]);
 
-  // Check reviewers when submission changes
+  // Check reviewers when submission changes - status is the single source of truth
   useEffect(() => {
-    const checkReviewers = async () => {
-      if (!submission || (submission.status !== 'pending' && submission.status !== 'accepted')) {
-        setHasReviewers(false);
-        return;
-      }
-
-      try {
-        const reviewers = await reviewerService.getProtocolReviewers(submissionId);
-        setHasReviewers(reviewers.length > 0);
-      } catch (reviewerError) {
-        console.error("Error checking reviewers:", reviewerError);
-        setHasReviewers(false);
-      }
-    };
-
-    if (submission && (submission.status === 'pending' || submission.status === 'accepted')) {
-      checkReviewers();
+    if (submission) {
+      // Status "under_review" means reviewers are assigned
+      setHasReviewers(submission.status === 'under_review');
     } else {
       setHasReviewers(false);
     }
-  }, [submission, submissionId]);
+  }, [submission]);
 
   const handleStatusUpdate = async (newStatus: string) => {
     // TODO: Implement status update logic

@@ -19,9 +19,8 @@ interface UserLike {
  * 
  * Checks in order:
  * 1. Email check (fastest, no document reads needed)
- * 2. rec_settings document exists
- * 3. settings document exists
- * 4. reviewer document with role='chairperson' and isActive=true
+ * 2. settings document exists
+ * 3. reviewer document with role='chairperson' and isActive=true
  */
 export async function isChairperson(user: UserLike | null): Promise<boolean> {
   if (!user) {
@@ -36,21 +35,14 @@ export async function isChairperson(user: UserLike | null): Promise<boolean> {
   const userId = user.uid;
 
   try {
-    // Second check: rec_settings document
-    const recSettingsRef = doc(db, 'rec_settings', userId);
-    const recSettingsDoc = await getDoc(recSettingsRef);
-    if (recSettingsDoc.exists()) {
-      return true;
-    }
-
-    // Third check: settings document
+    // Second check: settings document
     const settingsRef = doc(db, 'settings', userId);
     const settingsDoc = await getDoc(settingsRef);
     if (settingsDoc.exists()) {
       return true;
     }
 
-    // Fourth check: reviewer document with chairperson role
+    // Third check: reviewer document with chairperson role
     const reviewerRef = doc(db, 'reviewers', userId);
     const reviewerDoc = await getDoc(reviewerRef);
     if (reviewerDoc.exists()) {

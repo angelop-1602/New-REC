@@ -67,50 +67,26 @@ export function DataTable() {
   });
   const [globalFilter, setGlobalFilter] = React.useState("");
 
-  // ⚡ Real-time data for all protocols
+  // ⚡ Real-time data for pending protocols only
   const { protocols: pendingProtocols, loading: pendingLoading } = useRealtimeProtocols({
     collectionName: SUBMISSIONS_COLLECTION,
     statusFilter: 'pending',
     enabled: true,
   });
 
-  const { protocols: acceptedProtocols, loading: acceptedLoading } = useRealtimeProtocols({
-    collectionName: SUBMISSIONS_COLLECTION,
-    statusFilter: 'accepted',
-    enabled: true,
-  });
+  const loading = pendingLoading;
 
-  const { protocols: approvedProtocols, loading: approvedLoading } = useRealtimeProtocols({
-    collectionName: SUBMISSIONS_COLLECTION,
-    statusFilter: 'approved',
-    enabled: true,
-  });
-
-  const { protocols: archivedProtocols, loading: archivedLoading } = useRealtimeProtocols({
-    collectionName: SUBMISSIONS_COLLECTION,
-    statusFilter: 'archived',
-    enabled: true,
-  });
-
-  const loading = pendingLoading || acceptedLoading || approvedLoading || archivedLoading;
-
-  // Combine all protocols using new type system
+  // Only show pending protocols
   const protocols = useMemo(() => {
-    const allProtocols = [
-      ...pendingProtocols,
-      ...acceptedProtocols,
-      ...approvedProtocols,
-      ...archivedProtocols,
-    ];
-    const typedProtocols = toChairpersonProtocols(allProtocols);
+    const typedProtocols = toChairpersonProtocols(pendingProtocols);
     return sortProtocolsByDate(typedProtocols);
-  }, [pendingProtocols, acceptedProtocols, approvedProtocols, archivedProtocols]);
+  }, [pendingProtocols]);
 
   const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
+    // Status is the single source of truth - no need to check hasReviewers
     return getStatusBadge(
       protocol.status,
-      protocol.decision || protocol.decisionDetails?.decision,
-      protocol.hasReviewers || false
+      protocol.decision || protocol.decisionDetails?.decision
     );
   };
 

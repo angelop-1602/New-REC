@@ -22,6 +22,7 @@ import {
   updateReviewer,
   deleteReviewer
 } from '@/lib/services/core/unifiedDataService';
+import { reviewersManagementService } from '@/lib/services/reviewers/reviewersManagementService';
 import { toDate } from '@/types';
 import { sendMessageToSubmission } from '@/lib/firebase/firestore';
 
@@ -30,6 +31,7 @@ const db = getFirestore(firebaseApp);
 // Legacy Reviewer interface (for backward compatibility)
 export interface Reviewer {
   id: string;
+  code: string;
   name: string;
   email: string;
   expertise: string[];
@@ -155,12 +157,19 @@ class ReviewerService {
    */
   async getAllReviewers(): Promise<Reviewer[]> {
     try {
-      // Use unified data service
+      // Prefer unified reviewers collection
       const unifiedReviewers = await getAllReviewers();
       
+      if (unifiedReviewers.length > 0) {
       // Convert unified reviewers to legacy format for backward compatibility
-      return unifiedReviewers.map(unified => ({
+        return unifiedReviewers.map(unified => {
+          const preferredTypesSource = Array.isArray(unified.preferredTypes)
+            ? unified.preferredTypes
+            : [];
+
+          return {
         id: unified.id,
+            code: unified.code || '',
         name: unified.name,
         email: unified.email,
         expertise: unified.expertise,
@@ -172,7 +181,7 @@ class ReviewerService {
         maxLoad: 5, // Default since we removed this field
         totalReviewed: unified.totalReviewed,
         specializations: unified.specializations,
-        preferredTypes: unified.preferredTypes.map(type => {
+            preferredTypes: preferredTypesSource.map(type => {
           switch (type) {
             case 'Protocol Review Assessment':
             case 'Informed Consent Assessment':
@@ -187,6 +196,29 @@ class ReviewerService {
         }),
         createdAt: unified.createdAt,
         updatedAt: unified.updatedAt,
+          };
+        });
+      }
+
+      // Fallback: use legacy reviewers collection (reviewersManagementService)
+      const legacyReviewers = await reviewersManagementService.getAllReviewers();
+      return legacyReviewers.map(legacy => ({
+        id: legacy.id,
+        code: legacy.code,
+        name: legacy.name,
+        email: legacy.email || '',
+        expertise: [], // Not tracked in legacy model
+        department: '', // Not tracked
+        qualification: '', // Not tracked
+        availability: 'available' as const,
+        isActive: legacy.isActive,
+        currentLoad: 0,
+        maxLoad: 5,
+        totalReviewed: 0,
+        specializations: [],
+        preferredTypes: ['social'],
+        createdAt: legacy.createdAt,
+        updatedAt: legacy.updatedAt,
       }));
     } catch (error) {
       console.error('Error fetching reviewers:', error);
@@ -203,8 +235,14 @@ class ReviewerService {
       const unifiedReviewers = await getActiveReviewers();
       
       // Convert unified reviewers to legacy format for backward compatibility
-      return unifiedReviewers.map(unified => ({
+      return unifiedReviewers.map(unified => {
+        const preferredTypesSource = Array.isArray(unified.preferredTypes)
+          ? unified.preferredTypes
+          : [];
+
+        return {
         id: unified.id,
+          code: unified.code || '',
         name: unified.name,
         email: unified.email,
         expertise: unified.expertise,
@@ -216,7 +254,7 @@ class ReviewerService {
         maxLoad: 5, // Default since we removed this field
         totalReviewed: unified.totalReviewed,
         specializations: unified.specializations,
-        preferredTypes: unified.preferredTypes.map(type => {
+          preferredTypes: preferredTypesSource.map(type => {
           switch (type) {
             case 'Protocol Review Assessment':
             case 'Informed Consent Assessment':
@@ -231,7 +269,8 @@ class ReviewerService {
         }),
         createdAt: unified.createdAt,
         updatedAt: unified.updatedAt,
-      })).sort((a, b) => a.name.localeCompare(b.name));
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error('Error fetching available reviewers:', error);
       return [];
@@ -251,8 +290,13 @@ class ReviewerService {
       }
       
       // Convert unified reviewer to legacy format for backward compatibility
+      const preferredTypesSource = Array.isArray(unifiedReviewer.preferredTypes)
+        ? unifiedReviewer.preferredTypes
+        : [];
+
       return {
         id: unifiedReviewer.id,
+        code: unifiedReviewer.code || '',
         name: unifiedReviewer.name,
         email: unifiedReviewer.email,
         expertise: unifiedReviewer.expertise,
@@ -264,7 +308,7 @@ class ReviewerService {
         maxLoad: 5, // Default since we removed this field
         totalReviewed: unifiedReviewer.totalReviewed,
         specializations: unifiedReviewer.specializations,
-        preferredTypes: unifiedReviewer.preferredTypes.map(type => {
+        preferredTypes: preferredTypesSource.map(type => {
           switch (type) {
             case 'Protocol Review Assessment':
             case 'Informed Consent Assessment':
@@ -432,7 +476,7 @@ class ReviewerService {
           const protocolReviewersRef = collection(db, SUBMISSIONS_COLLECTION, protocolId, 'reviewers');
           const assignmentRef = doc(protocolReviewersRef);
           
-          // Calculate deadline based on derived baseDays
+          // Calculate deadline based on derived baseDays for this assignment
           const deadline = new Date();
           deadline.setDate(deadline.getDate() + baseDays);
           
@@ -452,6 +496,41 @@ class ReviewerService {
       });
       
       await Promise.all(assignmentPromises);
+
+      // After successfully assigning reviewers, update the parent submission
+      // to reflect that it is now under review and set the estimated completion date
+      // based on the latest (max) reviewer deadline.
+      try {
+        // Fetch all reviewer assignments to find the longest deadline
+        const protocolReviewersRef = collection(db, SUBMISSIONS_COLLECTION, protocolId, 'reviewers');
+        const reviewersSnapshot = await getDocs(protocolReviewersRef);
+
+        let latestDeadline: Date | null = null;
+        reviewersSnapshot.forEach((docSnap) => {
+          const data = docSnap.data() as { deadline?: unknown };
+          const d = toDate(data.deadline as any);
+          if (d && !isNaN(d.getTime())) {
+            if (!latestDeadline || d > latestDeadline) {
+              latestDeadline = d;
+            }
+          }
+        });
+
+        const submissionRef = doc(db, SUBMISSIONS_COLLECTION, protocolId);
+        const updateData: Record<string, unknown> = {
+          status: "under_review",
+          totalReviewers: validReviewerIds.length,
+          updatedAt: serverTimestamp(),
+        };
+
+        if (latestDeadline) {
+          updateData.estimatedCompletionDate = latestDeadline;
+        }
+
+        await updateDoc(submissionRef, updateData);
+      } catch (statusUpdateError) {
+        console.warn("Failed to update submission status / estimatedCompletionDate:", statusUpdateError);
+      }
 
       // Notify proponent that reviewers were assigned (without revealing names)
       try {
@@ -795,7 +874,38 @@ class ReviewerService {
         previousReviewerId: oldAssignment.reviewerId,
         updatedAt: serverTimestamp()
       });
-      
+
+      // After reassignment, update the protocol's estimatedCompletionDate based on
+      // the latest (max) deadline across all reviewer assignments.
+      try {
+        const reviewersRef = collection(db, SUBMISSIONS_COLLECTION, protocolId, 'reviewers');
+        const reviewersSnapshot = await getDocs(reviewersRef);
+
+        let latestDeadline: Date | null = null;
+        reviewersSnapshot.forEach((docSnap) => {
+          const data = docSnap.data() as { deadline?: unknown };
+          const d = toDate(data.deadline as any);
+          if (d && !isNaN(d.getTime())) {
+            if (!latestDeadline || d > latestDeadline) {
+              latestDeadline = d;
+            }
+          }
+        });
+
+        const submissionRef = doc(db, SUBMISSIONS_COLLECTION, protocolId);
+        const updateData: Record<string, unknown> = {
+          updatedAt: serverTimestamp(),
+        };
+
+        if (latestDeadline) {
+          updateData.estimatedCompletionDate = latestDeadline;
+        }
+
+        await updateDoc(submissionRef, updateData);
+      } catch (updateError) {
+        console.warn('Failed to update estimatedCompletionDate after reassignment:', updateError);
+      }
+
       return true;
     } catch (error) {
       console.error('Error reassigning reviewer:', error);

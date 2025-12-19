@@ -1,7 +1,7 @@
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
-import { getCurrentChairName } from '../core/recSettingsService';
+import { getCurrentChairName } from '../core/chairpersonService';
 import { extractTemplateData, formatTemplateData, type TemplateData } from './templateDataMapper';
 
 // Document template types

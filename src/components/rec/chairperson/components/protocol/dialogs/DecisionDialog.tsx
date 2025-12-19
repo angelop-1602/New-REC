@@ -214,8 +214,8 @@ export function DecisionDialog({
   };
 
   return (
-<Dialog open={open} onOpenChange={onOpenChange}>
-  <DialogContent className="border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
+<Dialog open={open} onOpenChange={onOpenChange} >
+  <DialogContent className="!max-w-lg border-[#036635]/20 dark:border-[#FECC07]/30 animate-in fade-in zoom-in-95 duration-300">
     <DialogHeader>
       <DialogTitle className="bg-gradient-to-r from-[#036635] to-[#036635]/80 dark:from-[#FECC07] dark:to-[#FECC07]/80 bg-clip-text text-transparent">Make Protocol Decision</DialogTitle>
       <DialogDescription>

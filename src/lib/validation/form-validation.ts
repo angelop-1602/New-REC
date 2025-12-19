@@ -268,15 +268,15 @@ export const informationFormValidation: ValidationSchema = {
   },
   "participants.number_of_participants": {
     rules: [
-      { required: true },
+      { required: false },
       { numeric: true },
-      { min: 1, max: 10000 }
+      { min: 0, max: 10000 }
     ]
   },
   "participants.type_and_description": {
     rules: [
-      { required: true },
-      { minLength: 10, maxLength: 500 }
+      { required: false },
+      { maxLength: 500 }
     ]
   },
   "technical_review_completed": {
@@ -294,7 +294,7 @@ export const informationFormValidation: ValidationSchema = {
   "brief_description_of_study": {
     rules: [
       { required: true },
-      { minLength: 50, maxLength: 1000 }
+      { minLength: 50 }
     ]
   }
 };

@@ -1,16 +1,13 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "./useAuth";
-import { 
-  initializePresence, 
-  updateLastSeen, 
-  setUserOffline,
-  subscribeToUserPresence,
-  UserPresence
-} from "@/lib/services/core/presenceService";
+import { reviewersManagementService } from "@/lib/services/reviewers/reviewersManagementService";
+import { isReviewer } from "@/lib/utils/permissions";
+import { subscribeToChairpersonPresence } from "@/lib/services/reviewers/reviewerPresenceService";
 
 /**
- * Hook to manage user presence (online/offline status)
- * Automatically initializes presence on mount and cleans up on unmount
+ * Hook to manage reviewer presence (online/offline status)
+ * Only tracks reviewers - proponents don't need presence tracking
+ * Automatically sets reviewer as online when they sign in and offline when they sign out
  */
 export function usePresence() {
   const { user } = useAuth();
@@ -22,25 +19,23 @@ export function usePresence() {
       return;
     }
 
-    // Initialize presence when user is logged in
+    // Initialize presence when reviewer is logged in
     const init = async () => {
       try {
-        await initializePresence(user.uid, user.email || "");
-        setIsInitialized(true);
-
-        // Update last seen every 30 seconds while user is active
-        const interval = setInterval(() => {
-          if (user) {
-            updateLastSeen(user.uid, user.email || "");
+        // Check if user is a reviewer
+        const userIsReviewer = await isReviewer(user);
+        
+        if (userIsReviewer) {
+          // For reviewers: update reviewers collection directly
+          if (user.email) {
+            await reviewersManagementService.linkReviewerByEmail(user.email, user.uid);
           }
-        }, 30000); // 30 seconds
-
-        // Cleanup interval on unmount
-        return () => {
-          clearInterval(interval);
-        };
+        }
+        // Proponents don't need presence tracking
+        
+        setIsInitialized(true);
       } catch (error) {
-        console.error("Error initializing presence:", error);
+        console.error("Error initializing reviewer presence:", error);
       }
     };
 
@@ -49,7 +44,17 @@ export function usePresence() {
     // Set offline when component unmounts or user logs out
     return () => {
       if (user) {
-        setUserOffline(user.uid, user.email || "");
+        // Check if user is a reviewer and set offline
+        isReviewer(user).then(userIsReviewer => {
+          if (userIsReviewer && user.email) {
+            // For reviewers: update reviewers collection directly
+            reviewersManagementService.updateReviewerPresenceByEmail(user.email, false).catch(() => {
+              // Silently fail if update doesn't work
+            });
+          }
+        }).catch(() => {
+          // Silently fail
+        });
       }
     };
   }, [user]);
@@ -58,47 +63,18 @@ export function usePresence() {
 }
 
 /**
- * Hook to subscribe to a specific user's presence status
- */
-export function useUserPresence(userId: string | null) {
-  const [presence, setPresence] = useState<UserPresence | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!userId) {
-      setPresence(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const unsubscribe = subscribeToUserPresence(userId, (presenceData) => {
-      setPresence(presenceData);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [userId]);
-
-  return { presence, loading };
-}
-
-/**
- * Hook to subscribe to chairperson's presence
- * Since chairperson email is rec@spup.edu.ph, we can look it up directly
+ * Hook to subscribe to chairperson's presence from reviewers collection
+ * Returns whether chairperson is online (presence = true)
  */
 export function useChairpersonPresence() {
-  const [presence, setPresence] = useState<UserPresence | null>(null);
+  const [isOnline, setIsOnline] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    const { subscribeToChairpersonPresence } = require("@/lib/services/core/presenceService");
     
-    const unsubscribe = subscribeToChairpersonPresence((presenceData: any) => {
-      setPresence(presenceData);
+    const unsubscribe = subscribeToChairpersonPresence((online) => {
+      setIsOnline(online);
       setLoading(false);
     });
 
@@ -107,6 +83,10 @@ export function useChairpersonPresence() {
     };
   }, []);
 
-  return { presence, loading };
+  return { 
+    presence: isOnline ? { status: "online" as const } : { status: "offline" as const },
+    isOnline,
+    loading 
+  };
 }
 

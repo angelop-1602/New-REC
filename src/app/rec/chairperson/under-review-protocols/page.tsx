@@ -34,20 +34,28 @@ export default function UnderReviewProtocolsPage() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
 
-  // ⚡ Real-time data for accepted protocols
-  const { protocols: acceptedProtocols, loading, error } = useRealtimeProtocols({
+  // ⚡ Real-time data for under review protocols
+  // Status is the single source of truth - fetch only protocols with status 'under_review'
+  const { protocols: underReviewProtocols, loading, error } = useRealtimeProtocols({
     collectionName: SUBMISSIONS_COLLECTION,
-    statusFilter: 'accepted',
+    statusFilter: 'under_review',
     enabled: true,
   });
 
-  // Filter to only show protocols with reviewers assigned - Using type system
+  // Filter to only show protocols that are actually under review
+  // Status is the single source of truth - "under_review" means reviewers are assigned
   const protocols = useMemo(() => {
-    const typedProtocols = toChairpersonProtocols(acceptedProtocols);
-    // Rely on the hasReviewers flag maintained on the submission document
-    const filtered = typedProtocols.filter((protocol) => protocol.hasReviewers);
+    const typedProtocols = toChairpersonProtocols(underReviewProtocols);
+    
+    // Only show protocols with status 'under_review'
+    // No need to check hasReviewers - status is the single source of truth
+    const filtered = typedProtocols.filter((protocol) => {
+      const status = (protocol.status || '').toLowerCase();
+      return status === 'under_review';
+    });
+    
     return sortProtocolsByDate(filtered);
-  }, [acceptedProtocols]);
+  }, [underReviewProtocols]);
 
   const handleViewProtocol = (protocolId: string) => {
     router.push(`/rec/chairperson/protocol/${protocolId}`);
@@ -62,10 +70,12 @@ export default function UnderReviewProtocolsPage() {
   };
 
   const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
+    // For under review protocols, ensure we pass the correct hasReviewers flag
+    const hasReviewers = protocol.hasReviewers || protocol.status === 'under_review';
     return getStatusBadge(
       protocol.status,
       protocol.decision || protocol.decisionDetails?.decision,
-      protocol.hasReviewers || true // hasReviewers - these protocols have reviewers
+      hasReviewers
     );
   };
 

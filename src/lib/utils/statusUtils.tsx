@@ -32,32 +32,29 @@ const STATUS_DISPLAY_MAP: Record<string, string> = {
 /**
  * Get display status from database status
  * Handles all status types including decision-based statuses
+ * Status is the single source of truth - "under_review" means reviewers are assigned
  */
 export const getDisplayStatus = (
   status: string,
   decision?: string | null,
-  hasReviewers: boolean = false
+  _hasReviewers?: boolean // Deprecated - kept for backward compatibility but not used
 ): string => {
-  // If status is pending, always show "Pending"
+  // Priority 1: If status is pending, always show "Pending"
   if (status === "pending") {
     return "Pending";
   }
 
-  // If status is accepted, check if reviewers are assigned
+  // Priority 2: If status is accepted, check for decision
   if (status === "accepted") {
     // If there's a decision, use the decision status
     if (decision) {
       return STATUS_DISPLAY_MAP[decision] || "Accepted";
     }
-    // If reviewers are assigned, show "Under Review"
-    if (hasReviewers) {
-      return "Under Review";
-    }
     // Otherwise show "Accepted"
     return "Accepted";
   }
 
-  // Check if status has a direct mapping
+  // Priority 3: Check if status has a direct mapping
   if (status in STATUS_DISPLAY_MAP) {
     return STATUS_DISPLAY_MAP[status];
   }
@@ -69,13 +66,14 @@ export const getDisplayStatus = (
 /**
  * Get status badge component for use in tables
  * This ensures consistent badge styling across all tables
+ * Status is the single source of truth - "under_review" means reviewers are assigned
  */
 export const getStatusBadge = (
   status: string,
   decision?: string | null,
-  hasReviewers: boolean = false
+  _hasReviewers?: boolean // Deprecated - kept for backward compatibility but not used
 ): React.ReactElement => {
-  const displayStatus = getDisplayStatus(status, decision, hasReviewers);
+  const displayStatus = getDisplayStatus(status, decision);
   
   // Use CustomBadge which handles all status types
   return (

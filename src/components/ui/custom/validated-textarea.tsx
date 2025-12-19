@@ -207,8 +207,11 @@ export const ValidatedTextarea: React.FC<ValidatedTextareaProps> = ({
   }, [showAnimation]);
 
   // Determine validation state for styling
-  const hasErrors = errors.length > 0 && isTouched;
-  const shouldAnimate = showAnimation && hasErrors;
+  // Show errors immediately if they exist (for forced validation triggers), or if touched
+  const hasErrors = errors.length > 0;
+  // Show errors if touched OR if there are errors (forced validation will set errors without touch)
+  const showErrors = hasErrors;
+  const shouldAnimate = showAnimation && showErrors;
 
   // Character count
   const currentLength = value.length;
@@ -221,7 +224,7 @@ export const ValidatedTextarea: React.FC<ValidatedTextareaProps> = ({
         htmlFor={label}
         className={cn(
           "text-sm font-medium flex items-center gap-2 transition-all duration-200",
-          hasErrors && "text-destructive",
+          showErrors && "text-destructive",
           labelClassName
         )}
       >
@@ -249,7 +252,8 @@ export const ValidatedTextarea: React.FC<ValidatedTextareaProps> = ({
           maxLength={maxLength}
           className={cn(
             "transition-all duration-200",
-            hasErrors && "border-red-500 focus-visible:ring-red-500",
+            showErrors && "border-red-500 focus-visible:ring-red-500 focus-visible:border-red-500",
+            !showErrors && isRequired && !value && "border-red-300",
             shouldAnimate && "animate-pulse",
             !resize && "resize-none",
             textareaClassName
@@ -263,7 +267,7 @@ export const ValidatedTextarea: React.FC<ValidatedTextareaProps> = ({
         />
         
         {/* Validation Icon */}
-        {showValidationIcon && hasErrors && (
+        {showValidationIcon && showErrors && (
           <div className="absolute right-3 top-3">
             <AlertCircle className="h-4 w-4 text-red-500" />
           </div>
@@ -283,7 +287,7 @@ export const ValidatedTextarea: React.FC<ValidatedTextareaProps> = ({
       )}
 
       {/* Error Messages */}
-      {hasErrors && (
+      {showErrors && (
         <div className="space-y-1">
           {errors.map((error, index) => (
             <p key={index} className="text-sm text-red-500">

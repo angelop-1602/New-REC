@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/select';
 import { reviewersManagementService, Reviewer, ReviewerRole } from '@/lib/services/reviewers/reviewersManagementService';
 import { reviewerAuthService } from '@/lib/services/reviewers/reviewerAuthService';
-import { recSettingsService } from '@/lib/services/core/recSettingsService';
 import { useAuth } from '@/hooks/useAuth';
 import { customToast } from '@/components/ui/custom/toast';
 import { RECMember, toLocaleDateString, toDate } from '@/types';
@@ -95,6 +94,7 @@ export default function ReviewerProfilePage() {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<{
     name?: string;
+    email?: string;
     role?: ReviewerRole;
     specialty?: string;
     sex?: string;
@@ -132,6 +132,7 @@ export default function ReviewerProfilePage() {
       setReviewer(reviewerData);
       setEditData({
         name: reviewerData.name,
+        email: reviewerData.email,
         role: reviewerData.role,
         specialty: reviewerData.specialty,
         sex: reviewerData.sex,
@@ -145,13 +146,7 @@ export default function ReviewerProfilePage() {
         tenure: reviewerData.tenure
       });
 
-      // Load REC member if linked (in background)
-      if (reviewerData.recMemberId) {
-        recSettingsService.getAllMembers().then(members => {
-        const member = members.find(m => m.id === reviewerData.recMemberId);
-        setRecMember(member || null);
-        }).catch(err => console.error('Error loading REC member:', err));
-      }
+      // REC member linking removed - not using rec_settings
 
       // Load assignments (in background) - use reviewer ID for assignments
       reviewerAuthService.getAssignedProtocols(reviewerData.id).then(assignmentsData => {
@@ -340,6 +335,7 @@ export default function ReviewerProfilePage() {
     setEditing(false);
     setEditData({
       name: reviewer.name,
+      email: reviewer.email,
       role: reviewer.role,
       specialty: reviewer.specialty,
       sex: reviewer.sex,
@@ -505,16 +501,30 @@ export default function ReviewerProfilePage() {
                   )}
                 </div>
                 
-                {/* Name and Role */}
+                {/* Name, Email, and Role */}
                 <div className="space-y-2">
                   {editing ? (
-                    <Input
-                      value={editData.name || ''}
-                      onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
-                      className="text-center text-lg font-semibold"
-                    />
+                    <>
+                      <Input
+                        value={editData.name || ''}
+                        onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
+                        className="text-center text-lg font-semibold"
+                      />
+                      <Input
+                        type="email"
+                        value={editData.email || ''}
+                        onChange={(e) => setEditData(prev => ({ ...prev, email: e.target.value }))}
+                        className="text-center text-sm"
+                        placeholder="reviewer@example.com"
+                      />
+                    </>
                   ) : (
-                    <h2 className="text-2xl font-bold">{reviewer.name}</h2>
+                    <>
+                      <h2 className="text-2xl font-bold">{reviewer.name}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {reviewer.email || <span className="italic">No email</span>}
+                      </p>
+                    </>
                   )}
                   <div className="flex items-center justify-center gap-2">
                     {editing ? (

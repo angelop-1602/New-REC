@@ -7,20 +7,18 @@ import Image from "next/image";
 import { useAuth } from "../../../../hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
+import { useState } from "react";
+import { SubmissionProcessDialog } from "@/components/rec/proponent/application/components/protocol-submission-process-dialog";
 
 export const Hero = () => {
   const { user } = useAuth();
   const router = useRouter();
   const { ref: heroRef, isVisible: heroVisible } = useScrollAnimation({ threshold: 0.2, triggerOnce: true });
+  const [showProcessDialog, setShowProcessDialog] = useState(false);
 
   const handleSubmitProposal = () => {
-    if (user && user.emailVerified) {
-      // User is authenticated and verified, go to application page
-      router.push("/rec/proponent/application");
-    } else {
-      // User is not authenticated or not verified, redirect to signin
-      router.push("/auth/signin?redirect=/rec/proponent/application");
-    }
+    // Show process dialog first
+    setShowProcessDialog(true);
   };
 
   return (
@@ -145,6 +143,12 @@ export const Hero = () => {
           </div>
         </div>
       </div>
+
+      {/* Process Dialog */}
+      <SubmissionProcessDialog
+        open={showProcessDialog}
+        onOpenChange={setShowProcessDialog}
+      />
     </section>
   );
 };

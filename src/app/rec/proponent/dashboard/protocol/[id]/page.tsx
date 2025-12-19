@@ -12,7 +12,7 @@ import { LoadingSpinner } from "@/components/ui/loading";
 import GlobalBackButton from "@/components/ui/global-back-button";
 import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
 import { documentGenerator } from "@/lib/services/documents/documentGenerator";
-import { getCurrentChairName } from "@/lib/services/core/recSettingsService";
+import { getCurrentChairName } from "@/lib/services/core/chairpersonService";
 import { extractTemplateData } from "@/lib/services/documents/templateDataMapper";
 import { 
   toProponentSubmission,
@@ -44,6 +44,16 @@ export default function Page() {
   // Use realtime protocol if available, fallback to initial submission
   const rawSubmission = realtimeProtocol || initialSubmission;
   const submission = rawSubmission ? toProponentSubmission(rawSubmission) : null;
+  
+  // Update hasReviewers based on status - status is the single source of truth
+  useEffect(() => {
+    if (submission) {
+      // Status "under_review" means reviewers are assigned
+      setHasReviewers(submission.status === 'under_review');
+    } else {
+      setHasReviewers(false);
+    }
+  }, [submission]);
 
   useEffect(() => {
     const fetchSubmission = async () => {
@@ -71,19 +81,10 @@ export default function Page() {
 
         setInitialSubmission(submissionData);
         
-        // Check if protocol has reviewers assigned (only for accepted/pending protocols)
+        // Check if protocol has reviewers assigned - status is the single source of truth
         const typedSubmission = toProponentSubmission(submissionData);
-        if (typedSubmission.status === 'pending' || typedSubmission.status === 'accepted') {
-          try {
-            const reviewers = await reviewerService.getProtocolReviewers(submissionId);
-            setHasReviewers(reviewers.length > 0);
-          } catch (reviewerError) {
-            console.error("Error checking reviewers:", reviewerError);
-            setHasReviewers(false);
-          }
-        } else {
-          setHasReviewers(false);
-        }
+        // Status "under_review" means reviewers are assigned
+        setHasReviewers(typedSubmission.status === 'under_review');
         
         // Fetch unread message count
         if (typedSubmission && user) {

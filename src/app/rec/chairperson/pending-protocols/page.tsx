@@ -62,10 +62,10 @@ export default function PendingProtocolsPage() {
   };
 
   const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
+    // Status is the single source of truth - no need to check hasReviewers
     return getStatusBadge(
       protocol.status,
-      protocol.decision || protocol.decisionDetails?.decision,
-      protocol.hasReviewers || false
+      protocol.decision || protocol.decisionDetails?.decision
     );
   };
 

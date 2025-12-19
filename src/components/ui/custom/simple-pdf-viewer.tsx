@@ -11,6 +11,7 @@ type Props = {
   auto?: boolean;
   className?: string;
   storagePath?: string; // Add storagePath parameter
+  preloadedBlobUrl?: string; // Optional pre-rendered blob URL
 };
 
 export default function SimplePdfViewer({ 
@@ -19,7 +20,8 @@ export default function SimplePdfViewer({
   entry, 
   auto,
   className = "w-full h-[90vh]",
-  storagePath
+  storagePath,
+  preloadedBlobUrl
 }: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,13 +47,22 @@ export default function SimplePdfViewer({
         setLoading(true);
         setError(null);
         
-        // Clear previous PDF URL if it exists
-        if (pdfUrlRef.current) {
+        // Clear previous PDF URL if it exists (only if we created it, not if it was preloaded)
+        if (pdfUrlRef.current && !preloadedBlobUrl) {
           URL.revokeObjectURL(pdfUrlRef.current);
           pdfUrlRef.current = '';
           setPdfUrl('');
         }
         
+        // Use preloaded blob URL if available
+        if (preloadedBlobUrl) {
+          pdfUrlRef.current = preloadedBlobUrl;
+          setPdfUrl(preloadedBlobUrl);
+          setLoading(false);
+          return;
+        }
+        
+        // Otherwise fetch the document
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`Failed to load document: ${response.status} ${response.statusText}`);
@@ -78,15 +89,15 @@ export default function SimplePdfViewer({
 
     loadDocument();
 
-    // Cleanup blob URL on unmount
+    // Cleanup blob URL on unmount (only if we created it, not if it was preloaded)
     return () => {
-      if (pdfUrlRef.current) {
+      if (pdfUrlRef.current && !preloadedBlobUrl) {
         URL.revokeObjectURL(pdfUrlRef.current);
         pdfUrlRef.current = '';
       }
     };
   // Note: Do NOT include pdfUrl in deps to avoid re-fetch loops
-  }, [file, submissionId, entry, auto, storagePath]);
+  }, [file, submissionId, entry, auto, storagePath, preloadedBlobUrl]);
 
   // Loading state
   if (loading) {

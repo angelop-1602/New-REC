@@ -175,12 +175,15 @@ export const ValidatedSelect: React.FC<ValidatedSelectProps> = ({
     }
   }, [showAnimation]);
 
-  const hasErrors = errors.length > 0 && isTouched;
-  const shouldAnimate = showAnimation && hasErrors;
+  // Show errors immediately if they exist (for forced validation triggers), or if touched
+  const hasErrors = errors.length > 0;
+  // Show errors if touched OR if there are errors (forced validation will set errors without touch)
+  const showErrors = hasErrors;
+  const shouldAnimate = showAnimation && showErrors;
 
   const describedByIds: string[] = [];
   if (description) describedByIds.push(descId);
-  if (hasErrors) describedByIds.push(errorId);
+  if (showErrors) describedByIds.push(errorId);
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -189,7 +192,7 @@ export const ValidatedSelect: React.FC<ValidatedSelectProps> = ({
         htmlFor={triggerId}
         className={cn(
           "text-sm font-medium flex items-center gap-2 transition-all duration-200",
-          hasErrors && "text-destructive",
+          showErrors && "text-destructive",
           labelClassName
         )}
       >
@@ -219,11 +222,12 @@ export const ValidatedSelect: React.FC<ValidatedSelectProps> = ({
             <SelectTrigger
               id={triggerId}
               ref={selectRef}
-              aria-invalid={hasErrors || undefined}
+              aria-invalid={showErrors || undefined}
               aria-describedby={describedByIds.join(" ") || undefined}
               className={cn(
                 "transition-all duration-200",
-                hasErrors && "border-red-500 focus:ring-red-500",
+                showErrors && "border-red-500 focus:ring-red-500 focus:border-red-500",
+                !showErrors && isRequired && !value && "border-red-300",
                 shouldAnimate && "animate-pulse",
                 selectClassName
               )}
@@ -279,7 +283,7 @@ export const ValidatedSelect: React.FC<ValidatedSelectProps> = ({
         </TooltipProvider>
 
         {/* Validation Icon */}
-        {showValidationIcon && hasErrors && (
+        {showValidationIcon && showErrors && (
           <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none">
             <AlertCircle className="h-4 w-4 text-red-500" />
           </div>
@@ -287,7 +291,7 @@ export const ValidatedSelect: React.FC<ValidatedSelectProps> = ({
       </div>
 
       {/* Error Messages */}
-      {hasErrors && (
+      {showErrors && (
         <div id={errorId} className="space-y-1">
           {errors.map((error, index) => (
             <p key={index} className="text-sm text-red-500">

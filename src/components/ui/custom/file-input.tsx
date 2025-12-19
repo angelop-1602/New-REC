@@ -8,8 +8,9 @@ import {
 } from "@/components/ui/tooltip";
 
 import { FileSpreadsheet, Upload, X, Download, Info } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
+import { DocumentsType } from "@/types";
 
 export default function StylishFileUpload({
   title,
@@ -19,6 +20,8 @@ export default function StylishFileUpload({
   accept = ".pdf",
   disabled = false,
   onChange,
+  existingDocuments = [],
+  onRemoveDocument,
 }: {
   title: string;
   description: string;
@@ -27,6 +30,8 @@ export default function StylishFileUpload({
   accept?: string;
   disabled?: boolean;
   onChange?: (file: File | null) => void;
+  existingDocuments?: DocumentsType[];
+  onRemoveDocument?: (documentId: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -62,14 +67,27 @@ export default function StylishFileUpload({
   };
 
   const isSingleFileFull = !multiple && files.length >= 1;
-  const isInputDisabled = disabled || isSingleFileFull;
+  // Deduplicate existing documents by ID
+  const uniqueExistingDocs = existingDocuments?.filter((doc, index, self) =>
+    index === self.findIndex((d) => d.id === doc.id)
+  ) || [];
+  const hasExistingDocs = uniqueExistingDocs.length > 0;
+  const isInputDisabled = disabled || isSingleFileFull || (hasExistingDocs && !multiple);
+
+  // Clear local files when documents are saved to context (to prevent duplicates)
+  useEffect(() => {
+    if (hasExistingDocs && files.length > 0) {
+      // Clear local files state when existing documents appear (file was saved)
+      setFiles([]);
+    }
+  }, [hasExistingDocs]);
 
   return (
-    <div className="max-w-xl w-full mx-auto p-4 sm:p-6 bg-white rounded-2xl border border-muted shadow-md space-y-3 sm:space-y-4">
+    <div className="max-w-xl w-full mx-auto p-4 sm:p-6 bg-card rounded-2xl border border-border shadow-md space-y-3 sm:space-y-4">
       {/* Title and Info */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <h2 className="text-sm font-semibold truncate">{title}</h2>
+          <h2 className="text-sm font-semibold truncate text-foreground">{title}</h2>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -148,8 +166,46 @@ export default function StylishFileUpload({
         </Badge>
       </div>
 
-      {/* File Preview */}
-      {files.length > 0 && (
+      {/* File Preview - Show existing documents from context (persists across navigation) */}
+      {hasExistingDocs && (
+        <div className="space-y-3">
+          {uniqueExistingDocs.map((doc) => {
+            // Calculate file size from documents
+            const fileSize = doc.files && doc.files.length > 0
+              ? doc.files.reduce((total, f) => total + (f.size || 0), 0)
+              : 0;
+            const fileName = doc.originalFileName || doc.title;
+            
+            return (
+              <div
+                key={doc.id}
+                className="relative flex items-center p-3 rounded-lg border bg-muted/40"
+              >
+                <FileSpreadsheet className="w-6 h-6 text-primary mr-3" />
+                <div className="flex flex-col flex-1">
+                  <span className="text-sm font-medium truncate">{fileName}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {fileSize > 0 ? `${(fileSize / 1024 / 1024).toFixed(2)} MB` : "File uploaded"}
+                  </span>
+                </div>
+                {onRemoveDocument && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onRemoveDocument(doc.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* File Preview - For newly selected files (only show if no existing documents) */}
+      {files.length > 0 && !hasExistingDocs && (
         <div className="space-y-3">
           {files.map((file, index) => (
             <div

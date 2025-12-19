@@ -238,6 +238,125 @@ export const getUserSubmissions = async (
   }
 };
 
+/**
+ * One-time maintenance helper:
+ * Ensure that submissions with assigned reviewers are marked as "under_review".
+ *
+ * - Finds all submissions with status "accepted"
+ * - Checks their "reviewers" subcollection
+ * - If at least one reviewer exists, updates:
+ *   - status -> "under_review"
+ *   - hasReviewers -> true
+ *   - totalReviewers -> number of assigned reviewers
+ *
+ * You can call this from an admin-only page or dev script to fix older data.
+ */
+export const fixUnderReviewStatuses = async (): Promise<void> => {
+  try {
+    const submissionsRef = collection(db, SUBMISSIONS_COLLECTION);
+    const acceptedQuery = query(submissionsRef, where("status", "==", "accepted"));
+    const acceptedSnapshot = await getDocs(acceptedQuery);
+
+    const updatePromises: Promise<unknown>[] = [];
+
+    for (const submissionDoc of acceptedSnapshot.docs) {
+      const submissionId = submissionDoc.id;
+
+      // Look at reviewers subcollection
+      const reviewersRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, "reviewers");
+      const reviewersSnapshot = await getDocs(reviewersRef);
+      const reviewerCount = reviewersSnapshot.size;
+
+      if (reviewerCount > 0) {
+        const submissionRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+        updatePromises.push(
+          updateDoc(submissionRef, {
+            status: "under_review",
+            totalReviewers: reviewerCount, // Keep for display purposes (optional)
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
+    }
+
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+    }
+  } catch (error) {
+    console.error("Error fixing under_review statuses:", error);
+    throw new Error("Failed to fix under_review statuses");
+  }
+};
+
+/**
+ * Maintenance helper:
+ * Ensure that submissions have a correct estimatedCompletionDate based on reviewer deadlines.
+ *
+ * - Finds all submissions with status "under_review"
+ * - Reads their "reviewers" subcollection
+ * - For each protocol, finds the latest (max) reviewer.deadline
+ * - Writes that as estimatedCompletionDate on the submission (if any deadline exists)
+ *
+ * Use this once to fix existing data, and optionally on demand later.
+ */
+export const fixEstimatedCompletionDates = async (): Promise<void> => {
+  try {
+    const submissionsRef = collection(db, SUBMISSIONS_COLLECTION);
+    const underReviewQuery = query(submissionsRef, where("status", "==", "under_review"));
+    const underReviewSnapshot = await getDocs(underReviewQuery);
+
+    const updatePromises: Promise<unknown>[] = [];
+
+    for (const submissionDoc of underReviewSnapshot.docs) {
+      const submissionId = submissionDoc.id;
+
+      const reviewersRef = collection(db, SUBMISSIONS_COLLECTION, submissionId, "reviewers");
+      const reviewersSnapshot = await getDocs(reviewersRef);
+
+      let latestDeadline: Date | null = null;
+      reviewersSnapshot.forEach((docSnap) => {
+        const data = docSnap.data() as { deadline?: unknown };
+        const raw = (data as any)?.deadline;
+
+        if (!raw) return;
+
+        let d: Date | null = null;
+        if (raw instanceof Date) {
+          d = raw;
+        } else if ((raw as any)?.toDate) {
+          d = (raw as any).toDate();
+        } else if (typeof raw === "string" || typeof raw === "number") {
+          const parsed = new Date(raw as any);
+          if (!isNaN(parsed.getTime())) d = parsed;
+        }
+
+        if (d && !isNaN(d.getTime())) {
+          if (!latestDeadline || d > latestDeadline) {
+            latestDeadline = d;
+          }
+        }
+      });
+
+      if (latestDeadline) {
+        const submissionRef = doc(db, SUBMISSIONS_COLLECTION, submissionId);
+        updatePromises.push(
+          updateDoc(submissionRef, {
+            estimatedCompletionDate: latestDeadline,
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
+    }
+
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+    }
+  } catch (error) {
+    console.error("Error fixing estimatedCompletionDate values:", error);
+    throw new Error("Failed to fix estimatedCompletionDate values");
+  }
+};
+
 // Transaction-based submission with proper error handling and cleanup
 export const createCompleteSubmission = async (
   userId: string,

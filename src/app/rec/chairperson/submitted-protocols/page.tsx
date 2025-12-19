@@ -34,7 +34,7 @@ export default function SubmittedProtocolsPage() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
 
-  // ⚡ Real-time data for pending and accepted protocols
+  // ⚡ Real-time data for pending and accepted protocols (but not under review)
   const { protocols: pendingProtocols, loading: pendingLoading, error: pendingError } = useRealtimeProtocols({
     collectionName: SUBMISSIONS_COLLECTION,
     statusFilter: 'pending',
@@ -50,11 +50,19 @@ export default function SubmittedProtocolsPage() {
   const loading = pendingLoading || acceptedLoading;
   const error = pendingError || acceptedError;
 
-  // Combine and sort protocols using new type system
+  // Combine protocols - exclude those that are under review
+  // Status is the single source of truth - show only pending and accepted (not under_review)
   const protocols = useMemo(() => {
     const allProtocols = [...pendingProtocols, ...acceptedProtocols];
     const typedProtocols = toChairpersonProtocols(allProtocols);
-    return sortProtocolsByDate(typedProtocols);
+    
+    // Filter to only show pending and accepted protocols (exclude under_review)
+    const filtered = typedProtocols.filter((protocol) => {
+      const status = (protocol.status || '').toLowerCase();
+      return status === 'pending' || status === 'accepted';
+    });
+    
+    return sortProtocolsByDate(filtered);
   }, [pendingProtocols, acceptedProtocols]);
 
   const handleViewProtocol = (protocolId: string) => {
@@ -70,11 +78,10 @@ export default function SubmittedProtocolsPage() {
   };
 
   const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
-    // Use centralized status utility
+    // Status is the single source of truth - no need to check hasReviewers
     return getStatusBadge(
       protocol.status,
-      protocol.decision || protocol.decisionDetails?.decision,
-      protocol.hasReviewers || false
+      protocol.decision || protocol.decisionDetails?.decision
     );
   };
 

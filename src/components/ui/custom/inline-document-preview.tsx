@@ -53,6 +53,10 @@ export default function InlineDocumentPreview({
   const [showAcceptDialog, setShowAcceptDialog] = React.useState(false);
   const [showReviseDialog, setShowReviseDialog] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  
+  // PDF pre-rendering cache
+  const pdfCacheRef = React.useRef<Map<string, string>>(new Map());
+  const preloadAbortControllersRef = React.useRef<Map<string, AbortController>>(new Map());
 
   // Filter out documents with "requested" status - only show uploaded documents
   const uploadedDocuments = React.useMemo(() => {
@@ -116,6 +120,108 @@ export default function InlineDocumentPreview({
     }
   };
 
+
+  // Pre-render PDF function
+  const preloadPdf = React.useCallback(async (document: DocumentsType) => {
+    if (!submissionId || pdfCacheRef.current.has(document.id)) {
+      return; // Already cached or no submissionId
+    }
+
+    // Cancel any existing preload for this document
+    const existingController = preloadAbortControllersRef.current.get(document.id);
+    if (existingController) {
+      existingController.abort();
+    }
+
+    const abortController = new AbortController();
+    preloadAbortControllersRef.current.set(document.id, abortController);
+
+    try {
+      // Get storagePath from document
+      const docWithVersions = document as any;
+      let documentStoragePath = document.storagePath;
+      
+      if (docWithVersions.versions && Array.isArray(docWithVersions.versions) && docWithVersions.versions.length > 0) {
+        const currentVersion = docWithVersions.currentVersion || docWithVersions.versions.length;
+        const latestVersion = docWithVersions.versions.find((v: any) => v.version === currentVersion) || 
+                             docWithVersions.versions[docWithVersions.versions.length - 1];
+        if (latestVersion && latestVersion.storagePath) {
+          documentStoragePath = latestVersion.storagePath;
+        }
+      }
+      
+      const fileName = documentStoragePath?.split('/').pop() || 
+                       document.originalFileName || 
+                       `${document.id}.zip`;
+
+      const qs = new URLSearchParams({
+        submissionId,
+        auto: '1',
+        ...(documentStoragePath ? { storagePath: documentStoragePath } : {})
+      }).toString();
+
+      const url = `/api/documents/preview/document/${encodeURIComponent(fileName)}?${qs}`;
+      
+      const response = await fetch(url, { signal: abortController.signal });
+      if (!response.ok) {
+        throw new Error(`Failed to load: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('pdf')) {
+        return; // Not a PDF, skip caching
+      }
+      
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      pdfCacheRef.current.set(document.id, blobUrl);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        // Preload was cancelled, ignore
+        return;
+      }
+      console.warn(`Failed to preload PDF for document ${document.id}:`, error);
+    } finally {
+      preloadAbortControllersRef.current.delete(document.id);
+    }
+  }, [submissionId]);
+
+  // Pre-render adjacent documents when current document changes
+  React.useEffect(() => {
+    if (!selectedDocument || uploadedDocuments.length === 0) return;
+
+    // Pre-render current document
+    preloadPdf(selectedDocument);
+
+    // Pre-render next document
+    if (currentIndex < uploadedDocuments.length - 1) {
+      const nextDoc = uploadedDocuments[currentIndex + 1];
+      preloadPdf(nextDoc);
+    }
+
+    // Pre-render previous document
+    if (currentIndex > 0) {
+      const prevDoc = uploadedDocuments[currentIndex - 1];
+      preloadPdf(prevDoc);
+    }
+  }, [selectedDocument, currentIndex, uploadedDocuments, preloadPdf]);
+
+  // Cleanup blob URLs on unmount
+  React.useEffect(() => {
+    return () => {
+      // Revoke all cached blob URLs
+      pdfCacheRef.current.forEach((blobUrl) => {
+        URL.revokeObjectURL(blobUrl);
+      });
+      pdfCacheRef.current.clear();
+      
+      // Abort all pending preloads
+      preloadAbortControllersRef.current.forEach((controller) => {
+        controller.abort();
+      });
+      preloadAbortControllersRef.current.clear();
+    };
+  }, []);
 
   // Handle document selection
   const handleDocumentSelect = (document: DocumentsType, index: number) => {
@@ -193,6 +299,11 @@ export default function InlineDocumentPreview({
       onDocumentStatusUpdate?.(selectedDocument.id, 'revise', comment.trim());
       setComment("");
       setShowReviseDialog(false);
+      // Refresh the document to update status
+      const updatedDoc = uploadedDocuments.find(d => d.id === selectedDocument.id);
+      if (updatedDoc) {
+        (updatedDoc as any).currentStatus = 'revise';
+      }
     } catch (error) {
       console.error('Error requesting document revision:', error);
       customToast.error(
@@ -208,25 +319,28 @@ export default function InlineDocumentPreview({
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'accepted':
-        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Accepted</Badge>;
+        return <Badge variant="default" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"><CheckCircle className="w-3 h-3 mr-1" />Accepted</Badge>;
       case 'revise':
-        return <Badge variant="default" className="bg-amber-100 text-amber-800"><AlertTriangle className="w-3 h-3 mr-1" />Needs Revision</Badge>;
+        return <Badge variant="default" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"><AlertTriangle className="w-3 h-3 mr-1" />Needs Revision</Badge>;
       case 'requested':
-        return <Badge variant="default" className="bg-blue-100 text-blue-800"><FileText className="w-3 h-3 mr-1" />Requested</Badge>;
+        return <Badge variant="default" className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20"><FileText className="w-3 h-3 mr-1" />Requested</Badge>;
       case 'pending':
-        return <Badge variant="secondary" className="bg-gray-100 text-gray-800"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+        return <Badge variant="secondary" className="bg-muted text-muted-foreground"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
       default:
-        return <Badge variant="secondary" className="bg-gray-100 text-gray-800"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+        return <Badge variant="secondary" className="bg-muted text-muted-foreground"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
     }
   };
 
+  // Check if document is already accepted
+  const isDocumentAccepted = selectedDocument && ((selectedDocument as any).currentStatus === 'accepted' || selectedDocument.status === 'accepted');
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg w-[96vw] h-[90vh] flex flex-col transform-none animate-none overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-background rounded-lg w-[96vw] h-[90vh] flex flex-col transform-none animate-none overflow-hidden border border-border">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b border-border bg-card">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold">{selectedDocument ? selectedDocument.title || selectedDocument.originalFileName : 'Preview'}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{selectedDocument ? selectedDocument.title || selectedDocument.originalFileName : 'Preview'}</h2>
             {selectedDocument && (
               <span className="text-sm text-muted-foreground">
                 {currentIndex + 1} of {uploadedDocuments.length}
@@ -234,26 +348,6 @@ export default function InlineDocumentPreview({
             )}
           </div>
           <div className="flex items-center gap-2">
-             {selectedDocument && (
-               <>
-                 <Button
-                   variant="outline"
-                   size="sm"
-                   onClick={handlePrevious}
-                   disabled={currentIndex === 0}
-                 >
-                   <ChevronLeft className="w-4 h-4" />
-                 </Button>
-                 <Button
-                   variant="outline"
-                   size="sm"
-                   onClick={handleNext}
-                   disabled={currentIndex === uploadedDocuments.length - 1}
-                 >
-                   <ChevronRight className="w-4 h-4" />
-                 </Button>
-               </>
-             )}
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="w-4 h-4" />
             </Button>
@@ -261,16 +355,40 @@ export default function InlineDocumentPreview({
         </div>
 
         {/* Content */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden relative">
+          {/* Left Navigation Button */}
+          {selectedDocument && uploadedDocuments.length > 1 && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePrevious}
+              disabled={currentIndex === 0}
+              className="absolute left-[2%] top-1/2 -translate-y-1/2 z-10 bg-background/80 rounded-full backdrop-blur-sm border-border hover:bg-background shadow-lg"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+          )}
+
+          {/* Right Navigation Button */}
+          {selectedDocument && uploadedDocuments.length > 1 && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleNext}
+              disabled={currentIndex === uploadedDocuments.length - 1}
+              className="absolute right-[32.33%] top-1/2 -translate-y-1/2 z-10 bg-background/80 rounded-full backdrop-blur-sm border-border hover:bg-background shadow-lg"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          )}
+
           {/* Left: Document Preview */}
           <div className="flex-[7] flex flex-col">
-            <Card className="h-full m-4">
-              <CardContent className="p-0 h-[calc(90vh-120px)] overflow-hidden">
                  {error ? (
                    <div className="flex items-center justify-center h-full">
                      <div className="text-center">
-                       <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-2" />
-                       <p className="text-red-600 mb-2">Preview Error</p>
+                       <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-2" />
+                       <p className="text-destructive mb-2 font-semibold">Preview Error</p>
                        <p className="text-sm text-muted-foreground">{error}</p>
                      </div>
                    </div>
@@ -294,6 +412,9 @@ export default function InlineDocumentPreview({
                                     selectedDocument.originalFileName || 
                                     `${selectedDocument.id}.zip`;
                    
+                   // Get preloaded blob URL from cache if available
+                   const cachedBlobUrl = pdfCacheRef.current.get(selectedDocument.id);
+                   
                    return (
                      <SimplePdfViewer
                        key={selectedDocument.id} // Force re-render when document changes
@@ -302,6 +423,7 @@ export default function InlineDocumentPreview({
                        auto={true}
                        className="w-full h-full"
                        storagePath={documentStoragePath} // Pass the actual storagePath (from version if available)
+                       preloadedBlobUrl={cachedBlobUrl} // Pass pre-rendered blob URL if available
                      />
                    );
                  })() : (
@@ -309,25 +431,23 @@ export default function InlineDocumentPreview({
                      <span className="text-muted-foreground">No document selected</span>
                    </div>
                  )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* Right: Document List & Actions */}
           <div className="flex-[3] flex flex-col min-h-0">
-            <Card className="m-4 flex-1 min-h-0">
-              <CardHeader className="flex-shrink-0">
-                <CardTitle>Documents & Actions</CardTitle>
+            <Card className="m-4 flex-1 min-h-0 border-border">
+              <CardHeader className="flex-shrink-0 bg-card">
+                <CardTitle className="text-foreground">Documents & Actions</CardTitle>
               </CardHeader>
 
               {/* Make CardContent a column, and keep it non-scrolling.
                   Only the ScrollArea (list) should scroll. */}
-              <CardContent className="flex flex-col gap-4 p-4 flex-1 min-h-0 overflow-hidden">
+              <CardContent className="flex flex-col gap-4 p-4 flex-1 min-h-0 overflow-hidden bg-card">
                 {/* Document List Section */}
                 <div className="flex-1 min-h-0">
                   {/* Let the list fill the available height and be scrollable */}
-                  <ScrollArea className="h-full border rounded">
-                    <ul className="divide-y">
+                  <ScrollArea className="h-full border rounded border-border">
+                    <ul className="divide-y divide-border">
                       {uploadedDocuments.length === 0 ? (
                         <li className="px-3 py-2 text-sm text-muted-foreground">
                           No uploaded documents found
@@ -344,7 +464,7 @@ export default function InlineDocumentPreview({
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 {getFileIcon(doc.originalFileName || doc.title || "")}
-                                <span className="truncate">
+                                <span className="truncate text-foreground">
                                   {doc.title || doc.originalFileName || "Untitled"}
                                 </span>
                               </div>
@@ -357,9 +477,9 @@ export default function InlineDocumentPreview({
                   </ScrollArea>
                 </div>
 
-                {/* Actions Section - stays pinned at the bottom */}
-                {selectedDocument && (
-                  <div className="flex-shrink-0 flex flex-col gap-2 pt-4 border-t bg-white">
+                {/* Actions Section - stays pinned at the bottom, only show if document is not accepted */}
+                {selectedDocument && !isDocumentAccepted && (
+                  <div className="flex-shrink-0 flex flex-col gap-2 pt-4 border-t border-border bg-card">
                     <div className="flex gap-2">
                       <Button
                         variant="default"
@@ -374,14 +494,56 @@ export default function InlineDocumentPreview({
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => setShowReviseDialog(true)}
+                        onClick={() => {
+                          if (showReviseDialog) {
+                            setShowReviseDialog(false);
+                            setComment("");
+                          } else {
+                            setShowReviseDialog(true);
+                          }
+                        }}
                         className="flex-1"
                         disabled={isSubmitting}
                       >
                         <Pencil className="mr-2 h-4 w-4" />
-                        Revise
+                        {showReviseDialog ? 'Cancel' : 'Revise'}
                       </Button>
                     </div>
+                    {/* Revise textarea - shown below buttons when revise is clicked */}
+                    {showReviseDialog && (
+                      <div className="space-y-2">
+                        <Textarea
+                          placeholder="Comments (required for revision)..."
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                          rows={3}
+                          className="resize-none"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowReviseDialog(false);
+                              setComment("");
+                            }}
+                            disabled={isSubmitting}
+                            className="flex-1"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={submitRevise}
+                            disabled={!comment.trim() || isSubmitting}
+                            className="flex-1"
+                          >
+                            {isSubmitting ? 'Submitting...' : 'Submit Revision'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -402,33 +564,6 @@ export default function InlineDocumentPreview({
               <Button variant="outline" onClick={() => setShowAcceptDialog(false)} disabled={isSubmitting}>Cancel</Button>
               <Button onClick={confirmAccept} disabled={isSubmitting}>
                 {isSubmitting ? 'Accepting...' : 'Confirm'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Revise Dialog */}
-        <Dialog open={showReviseDialog} onOpenChange={setShowReviseDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Request revision</DialogTitle>
-              <DialogDescription>
-                Add comments explaining what needs to be revised.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-2">
-              <Textarea
-                placeholder="Comments (required for revision)..."
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={4}
-                className="resize-none"
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowReviseDialog(false)} disabled={isSubmitting}>Cancel</Button>
-              <Button onClick={submitRevise} disabled={!comment.trim() || isSubmitting}>
-                {isSubmitting ? 'Submitting...' : 'Submit'}
               </Button>
             </DialogFooter>
           </DialogContent>

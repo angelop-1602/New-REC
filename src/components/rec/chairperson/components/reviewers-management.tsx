@@ -46,10 +46,12 @@ import {
   ToggleLeft,
   ToggleRight,
   Copy,
-  CheckCircle2
+  CheckCircle2,
+  Mail
 } from 'lucide-react';
 import { reviewersManagementService, Reviewer, CreateReviewerRequest, ReviewerRole, ReviewersManagementService } from '@/lib/services/reviewers/reviewersManagementService';
 import { generateReviewerCode } from '@/lib/services/reviewers/reviewerCodeGenerator';
+import { EmailService } from '@/lib/services/email/emailService';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -78,6 +80,7 @@ export default function ReviewersManagement({
   const setAddReviewerOpen = onAddReviewerDialogChange || setInternalAddReviewerOpen;
   const [newReviewer, setNewReviewer] = useState<CreateReviewerRequest>({
     name: '',
+    email: '',
     role: undefined
   });
   const [generatedCode, setGeneratedCode] = useState<string>('');
@@ -92,6 +95,9 @@ export default function ReviewersManagement({
   
   // Controlled dropdown state
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  
+  // Test email state
+  const [sendingTestEmail, setSendingTestEmail] = useState<string | null>(null);
 
   // Load data on mount
   useEffect(() => {
@@ -221,6 +227,28 @@ export default function ReviewersManagement({
     }
   };
 
+  const handleSendTestEmail = async (reviewer: Reviewer) => {
+    if (!reviewer.email) {
+      toast.error('This reviewer does not have an email address configured');
+      return;
+    }
+
+    setSendingTestEmail(reviewer.id);
+    try {
+      const result = await EmailService.sendTestNotification(reviewer.email, reviewer.name);
+      if (result.success) {
+        toast.success(`Test email sent successfully to ${reviewer.email}`);
+      } else {
+        toast.error(`Failed to send test email: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending test email:', error);
+      toast.error('Failed to send test email');
+    } finally {
+      setSendingTestEmail(null);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -250,6 +278,7 @@ export default function ReviewersManagement({
                 <TableRow className="bg-[#036635]/5 dark:bg-[#FECC07]/10 border-b border-[#036635]/10 dark:border-[#FECC07]/20">
                   <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Name</TableHead>
                   <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Code</TableHead>
+                  <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Email</TableHead>
                   <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Status</TableHead>
                   <TableHead className="font-semibold text-[#036635] dark:text-[#FECC07]">Added</TableHead>
                   <TableHead className="text-right font-semibold text-[#036635] dark:text-[#FECC07]">Actions</TableHead>
@@ -265,6 +294,13 @@ export default function ReviewersManagement({
                     >
                       <TableCell className="font-medium">{reviewer.name}</TableCell>
                       <TableCell className="font-mono text-sm">{reviewer.code}</TableCell>
+                      <TableCell className="text-sm">
+                        {reviewer.email ? (
+                          <span className="text-muted-foreground">{reviewer.email}</span>
+                        ) : (
+                          <span className="text-muted-foreground italic">No email</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge 
                           variant={reviewer.isActive ? "default" : "secondary"} 
@@ -309,6 +345,19 @@ export default function ReviewersManagement({
                               <Eye className="h-4 w-4 mr-2" />
                               View Profile
                             </DropdownMenuItem>
+                            {reviewer.email && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setOpenDropdownId(null);
+                                  handleSendTestEmail(reviewer);
+                                }}
+                                disabled={saving || sendingTestEmail === reviewer.id}
+                              >
+                                <Mail className="h-4 w-4 mr-2" />
+                                {sendingTestEmail === reviewer.id ? 'Sending...' : 'Send Test Email'}
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.preventDefault();
@@ -402,6 +451,20 @@ export default function ReviewersManagement({
               />
               <p className="text-xs text-muted-foreground mt-1">
                 A unique code will be automatically generated based on the name initials
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="email">Email Address (Optional)</Label>
+              <Input
+                id="email"
+                type="email"
+                value={newReviewer.email || ''}
+                onChange={(e) => setNewReviewer(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="reviewer@example.com"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Email address for sending notifications about protocol assignments and updates
               </p>
             </div>
             

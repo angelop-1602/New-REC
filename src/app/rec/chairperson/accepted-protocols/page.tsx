@@ -33,17 +33,27 @@ export default function AcceptedProtocolsPage() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
 
-  // ⚡ Real-time data for accepted protocols only
+  // ⚡ Real-time data for accepted protocols only (not under review)
+  // Fetch protocols with status 'accepted' and exclude those that are actually under review
   const { protocols: acceptedProtocols, loading, error } = useRealtimeProtocols({
     collectionName: SUBMISSIONS_COLLECTION,
     statusFilter: 'accepted',
     enabled: true,
   });
 
-  // Sort protocols by creation date (most recent first) - Using type-safe utilities
+  // Filter to only show protocols that are accepted but NOT under review
+  // Status is the single source of truth - only show status 'accepted' (not 'under_review')
   const protocols = useMemo(() => {
     const typedProtocols = toChairpersonProtocols(acceptedProtocols);
-    return sortProtocolsByDate(typedProtocols);
+    
+    // Only show protocols with status 'accepted'
+    // Protocols with status 'under_review' won't appear here (they're filtered by statusFilter)
+    const filtered = typedProtocols.filter((protocol) => {
+      const status = (protocol.status || '').toLowerCase();
+      return status === 'accepted';
+    });
+    
+    return sortProtocolsByDate(filtered);
   }, [acceptedProtocols]);
 
   const handleViewProtocol = (protocolId: string) => {
@@ -59,10 +69,10 @@ export default function AcceptedProtocolsPage() {
   };
 
   const getProtocolStatusBadge = (protocol: ChairpersonProtocol) => {
+    // Status is the single source of truth - no need to pass hasReviewers
     return getStatusBadge(
       protocol.status,
-      protocol.decision || protocol.decisionDetails?.decision,
-      false
+      protocol.decision || protocol.decisionDetails?.decision
     );
   };
 

@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/select';
 import { reviewersManagementService, Reviewer, ReviewerRole } from '@/lib/services/reviewers/reviewersManagementService';
 import { reviewerAuthService } from '@/lib/services/reviewers/reviewerAuthService';
-import { recSettingsService } from '@/lib/services/core/recSettingsService';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { RECMember, toLocaleDateString, toDate } from '@/types';
@@ -142,13 +141,7 @@ export default function ReviewerProfilePage() {
         tenure: reviewerData.tenure
       });
 
-      // Load REC member if linked (in background)
-      if (reviewerData.recMemberId) {
-        recSettingsService.getAllMembers().then(members => {
-          const member = members.find(m => m.id === reviewerData.recMemberId);
-          setRecMember(member || null);
-        }).catch(err => console.error('Error loading REC member:', err));
-      }
+      // REC member linking removed - not using rec_settings
 
       // Load assignments (in background) - use reviewer ID for assignments
       reviewerAuthService.getAssignedProtocols(reviewerData.id).then(assignmentsData => {

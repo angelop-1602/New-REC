@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Moon, Sun, Monitor, Palette, UserCheck, Users, Crown, Shield, FileText, UserCog, Check, Copy, CheckCircle2, Upload, FileJson, AlertCircle } from 'lucide-react';
+import { Moon, Sun, Monitor, Palette, UserCheck, Users, Crown, Shield, FileText, UserCog, Check, Copy, CheckCircle2, Mail } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -24,6 +24,7 @@ import { generateReviewerCode } from '@/lib/services/reviewers/reviewerCodeGener
 import { useAuth } from '@/hooks/useAuth';
 import { customToast } from '@/components/ui/custom/toast';
 import { LoadingSimple, InlineLoading } from "@/components/ui/loading";
+import { EmailService } from "@/lib/services/email/emailService";
 
 export default function RECSettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -35,21 +36,17 @@ export default function RECSettingsPage() {
   // Add Reviewer State
   const [newReviewer, setNewReviewer] = useState<CreateReviewerRequest>({
     name: '',
+    email: '',
     role: undefined
   });
   const [generatedCode, setGeneratedCode] = useState<string>('');
   const [codeCopied, setCodeCopied] = useState(false);
   const [savingReviewer, setSavingReviewer] = useState(false);
 
-  // JSON Upload State
-  const [uploadingJson, setUploadingJson] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadResult, setUploadResult] = useState<{
-    success: number;
-    failed: number;
-    skipped: number;
-    errors: Array<{ index: number; name: string; error: string }>;
-  } | null>(null);
+  // Test Email State (Reviewers tab)
+  const [testEmail, setTestEmail] = useState<string>('');
+  const [testName, setTestName] = useState<string>('');
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   // Member Management State
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
@@ -277,113 +274,38 @@ export default function RECSettingsPage() {
     return reviewers.filter(r => !selectedIds.includes(r.id));
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+  const handleSendTestEmail = async () => {
+    if (!testEmail.trim()) {
         customToast.error(
-          'Invalid File',
-          'Please select a valid JSON file.'
+        'Missing Email',
+        'Please enter an email address to send a test email.'
         );
         return;
       }
-      setSelectedFile(file);
-      setUploadResult(null);
-    }
-  };
 
-  const handleJsonUpload = async () => {
-    if (!selectedFile || !user) return;
-
-    setUploadingJson(true);
-    setUploadResult(null);
-
+    setSendingTestEmail(true);
     try {
-      // Read file content
-      const fileContent = await selectedFile.text();
-      
-      // Parse JSON
-      let jsonData: any[];
-      try {
-        const parsed = JSON.parse(fileContent);
-        // Handle both array format and object with reviewers array
-        if (Array.isArray(parsed)) {
-          jsonData = parsed;
-        } else if (parsed.reviewers && Array.isArray(parsed.reviewers)) {
-          jsonData = parsed.reviewers;
-        } else {
-          throw new Error('Invalid JSON format: Expected an array or an object with a "reviewers" array');
-        }
-      } catch (parseError) {
-        customToast.error(
-          'Invalid JSON',
-          'Invalid JSON file. Please check the file format.'
-        );
-        setUploadingJson(false);
-        return;
-      }
-
-      // Validate that it's an array of reviewer objects
-      if (!Array.isArray(jsonData) || jsonData.length === 0) {
-        customToast.error(
-          'Invalid Content',
-          'JSON file must contain an array of reviewers.'
-        );
-        setUploadingJson(false);
-        return;
-      }
-
-      // Import reviewers
-      const result = await reviewersManagementService.bulkImportReviewers(jsonData);
-      setUploadResult(result);
-
-      // Show success message
-      if (result.success > 0) {
+      const name = testName.trim() || 'Reviewer';
+      const result = await EmailService.sendTestNotification(testEmail.trim(), name);
+      if (result.success) {
         customToast.success(
-          'Import Successful',
-          `Successfully imported ${result.success} reviewer${result.success !== 1 ? 's' : ''}.`
+          'Test Email Sent',
+          `A test email was sent to ${testEmail.trim()}.`
         );
-        // Refresh members data
-        await loadMembersData();
-      }
-
-      // Show skipped message (duplicates)
-      if (result.skipped > 0) {
-        customToast.warning(
-          'Duplicates Skipped',
-          `Skipped ${result.skipped} duplicate reviewer${result.skipped !== 1 ? 's' : ''}. Check details below.`
-        );
-      }
-
-      // Show failed message
-      if (result.failed > 0) {
+      } else {
         customToast.error(
-          'Import Failed',
-          `Failed to import ${result.failed} reviewer${result.failed !== 1 ? 's' : ''}. Check details below.`
+          'Send Failed',
+          result.error || 'Failed to send test email.'
         );
       }
-
-      // If all were skipped or failed
-      if (result.success === 0 && (result.skipped > 0 || result.failed > 0)) {
-        customToast.info(
-          'No New Reviewers',
-          'No new reviewers were imported. All reviewers were either duplicates or had errors.'
-        );
-      }
-
-      // Clear file selection
-      setSelectedFile(null);
-      // Reset file input
-      const fileInput = document.getElementById('json-upload-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
     } catch (error) {
-      console.error('Error uploading JSON:', error);
+      console.error('Error sending test email:', error);
       customToast.error(
-        'Upload Failed',
-        'Failed to upload JSON file. Please try again.'
+        'Send Failed',
+        'Failed to send test email. Please check your email settings.'
       );
     } finally {
-      setUploadingJson(false);
+      setSendingTestEmail(false);
     }
   };
 
@@ -485,115 +407,52 @@ export default function RECSettingsPage() {
               </Card>
             </TabsContent>
 
-            {/* Reviewers Tab - Add Reviewer Form */}
+            {/* Reviewers Tab - Add Reviewer Form + Test Email */}
             <TabsContent value="reviewers" className="mt-0 space-y-6">
-              {/* JSON Upload Section */}
+              {/* Test Email Section */}
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
-                    <FileJson className="h-5 w-5" />
-                    <CardTitle>Import Reviewers from JSON</CardTitle>
+                    <Mail className="h-5 w-5" />
+                    <CardTitle>Send Test Email</CardTitle>
                   </div>
                   <CardDescription>
-                    Upload a JSON file to bulk import multiple reviewers at once
+                    Use this to verify that your email settings are working before assigning reviewers.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="json-upload-input">Select JSON File</Label>
-                  <div className="mt-2 flex items-center gap-3">
+                        <Label htmlFor="test-email">Email Address</Label>
                         <Input
-                          id="json-upload-input"
-                          type="file"
-                          accept=".json,application/json"
-                          onChange={handleFileSelect}
-                          disabled={uploadingJson}
-                          className="flex-1"
+                          id="test-email"
+                          type="email"
+                          value={testEmail}
+                          onChange={(e) => setTestEmail(e.target.value)}
+                          placeholder="reviewer@example.com"
+                          className="mt-2"
                         />
-                        <Button
-                          onClick={handleJsonUpload}
-                          disabled={!selectedFile || uploadingJson}
-                          className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black"
-                        >
-                          {uploadingJson ? (
-                            <>
-                              <InlineLoading size="sm" />
-                              <span className="ml-2">Uploading...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-4 w-4 mr-2" />
-                              Upload
-                            </>
-                          )}
-                        </Button>
                       </div>
-                      {selectedFile && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
-                        </p>
-                      )}
+                            <div>
+                        <Label htmlFor="test-name">Reviewer Name (optional)</Label>
+                        <Input
+                          id="test-name"
+                          value={testName}
+                          onChange={(e) => setTestName(e.target.value)}
+                          placeholder="Dr. Jane Doe"
+                          className="mt-2"
+                        />
+                      </div>
                     </div>
-
-                    {/* Upload Results */}
-                    {uploadResult && (
-                      <div className="mt-4 p-4 rounded-lg border bg-muted/50">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            {uploadResult.success > 0 && (
-                              <CheckCircle2 className="h-5 w-5 text-green-600" />
-                            )}
-                            {uploadResult.failed > 0 && (
-                              <AlertCircle className="h-5 w-5 text-red-600" />
-                            )}
-                            <span className="font-semibold">Import Results</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <span className="text-green-600 font-medium">Success: </span>
-                              <span>{uploadResult.success}</span>
-                            </div>
-                            <div>
-                              <span className="text-yellow-600 font-medium">Skipped: </span>
-                              <span>{uploadResult.skipped}</span>
-                            </div>
-                            <div>
-                              <span className="text-red-600 font-medium">Failed: </span>
-                              <span>{uploadResult.failed}</span>
-                            </div>
-                          </div>
-                          {uploadResult.errors.length > 0 && (
-                            <div className="mt-3">
-                              <p className="text-sm font-medium mb-2">Errors:</p>
-                              <div className="max-h-48 overflow-y-auto space-y-1">
-                                {uploadResult.errors.map((error, idx) => (
-                                  <div key={idx} className="text-xs p-2 bg-red-50 dark:bg-red-950/20 rounded border border-red-200 dark:border-red-900/30">
-                                    <span className="font-medium">Row {error.index + 1} ({error.name}):</span>{' '}
-                                    <span className="text-red-700 dark:text-red-400">{error.error}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="text-xs text-muted-foreground">
-                      <p className="font-medium mb-1">Expected JSON format:</p>
-                      <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
-{`[
-  {
-    "name": "Dr. John Doe",
-    "code": "DRJD-001",
-    "role": "member",
-    "sex": "Male",
-    "specialty": "Medicine",
-    ...
-  }
-]`}
-                      </pre>
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={handleSendTestEmail}
+                        disabled={sendingTestEmail}
+                        className="bg-[#036635] hover:bg-[#024A28] dark:bg-[#FECC07] dark:hover:bg-[#E6B800] text-white dark:text-black"
+                      >
+                        {sendingTestEmail ? 'Sending...' : 'Send Test Email'}
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -623,6 +482,21 @@ export default function RECSettingsPage() {
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         A unique code will be automatically generated based on the name initials
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="email">Email Address (Optional)</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={newReviewer.email || ''}
+                        onChange={(e) => setNewReviewer(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="reviewer@example.com"
+                        className="mt-2"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Email address for sending notifications about protocol assignments and updates
                       </p>
                     </div>
                     
@@ -691,7 +565,7 @@ export default function RECSettingsPage() {
                       <Button 
                         variant="outline" 
                         onClick={() => {
-                          setNewReviewer({ name: '', role: undefined });
+                          setNewReviewer({ name: '', email: '', role: undefined });
                           setGeneratedCode('');
                           setCodeCopied(false);
                         }}

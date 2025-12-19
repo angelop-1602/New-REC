@@ -5,12 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PlusIcon, FileText, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { SubmissionProcessDialog } from "@/components/rec/proponent/application/components/protocol-submission-process-dialog";
 import { useFirestoreQuery } from "@/hooks/useFirestore";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { PageLoading } from "@/components/ui/loading";
 import { getDisplayStatus } from "@/lib/utils/statusUtils";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getUnreadMessageCount } from "@/lib/firebase/firestore";
 import { 
   ProponentSubmission, 
@@ -27,8 +27,8 @@ export default function Page() {
   const router = useRouter();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [showProcessDialog, setShowProcessDialog] = useState(false);
 
   // Realtime query for single submissions collection
   const submissionsQuery = useFirestoreQuery("submissions", {
@@ -52,22 +52,15 @@ export default function Page() {
     return sortByDate(processed, 'createdAt', 'desc');
   }, [user, submissionsQuery.data]);
 
-  // Filter submissions based on search and status
+  // Filter submissions based on search and ONLY pending-like status
   const submissions = useMemo(() => {
-    let filtered = allSubmissions;
-
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((submission: ProponentSubmission) => {
-        if (statusFilter === "pending") {
-          return submission.status === "pending" || submission.status === "draft" || submission.status === "submitted";
-        }
-        if (statusFilter === "under_review") {
-          return submission.status === "accepted" || submission.status === "under_review";
-        }
-        return submission.status === statusFilter;
-      });
-    }
+    // Always limit to pending-like protocols (pending, draft, submitted)
+    // Explicitly exclude accepted, under_review, approved, archived, etc.
+    let filtered = allSubmissions.filter((submission: ProponentSubmission) => {
+      const status = (submission.status || '').toLowerCase();
+      // Only include truly pending statuses
+      return status === "pending" || status === "draft" || status === "submitted";
+    });
 
     // Filter by search query
     if (searchQuery.trim()) {
@@ -81,18 +74,18 @@ export default function Page() {
     }
 
     return filtered;
-  }, [allSubmissions, statusFilter, searchQuery]);
+  }, [allSubmissions, searchQuery]);
 
   // Determine loading and error states
   const loading = submissionsQuery.loading;
   const error = submissionsQuery.error;
 
   // Format status for display - use centralized utility
+  // Status is the single source of truth - no need to check hasReviewers
   const formatStatusForDisplay = (submission: ProponentSubmission) => {
     return getDisplayStatus(
       submission.status || 'pending',
-      submission.decision || submission.decisionDetails?.decision,
-      false // hasReviewers - can be enhanced if needed
+      submission.decision || submission.decisionDetails?.decision
     );
   };
 
@@ -255,7 +248,7 @@ export default function Page() {
                   Start by submitting your first protocol for ethics review.
                 </p>
                 <Button 
-                  onClick={() => router.push("/rec/proponent/application")}
+                  onClick={() => setShowProcessDialog(true)}
                   className="bg-[#036635] hover:bg-[#036635]/90 dark:bg-[#FECC07] dark:hover:bg-[#FECC07]/90 dark:text-[#036635] text-white"
                 >
                   <PlusIcon className="w-4 h-4 mr-2" />
@@ -265,30 +258,6 @@ export default function Page() {
             </Card>
           ) : (
             <>
-              {/* Status Tabs */}
-              <Tabs value={statusFilter} onValueChange={setStatusFilter} className="mb-6">
-                <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                  <TabsList className="inline-flex w-full sm:grid sm:grid-cols-3 lg:grid-cols-5 bg-muted/50 min-w-max sm:min-w-0 gap-1 sm:gap-0">
-                    <TabsTrigger value="all" className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0">
-                      All ({allSubmissions.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="pending" className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0">
-                    Pending ({allSubmissions.filter((s: ProponentSubmission) => s.status === "pending" || s.status === "draft" || s.status === "submitted").length})
-                  </TabsTrigger>
-                    <TabsTrigger value="under_review" className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0">
-                      <span className="hidden sm:inline">Under Review</span>
-                      <span className="sm:hidden">Review</span> ({allSubmissions.filter((s: ProponentSubmission) => s.status === "accepted" || s.status === "under_review").length})
-                  </TabsTrigger>
-                    <TabsTrigger value="approved" className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0">
-                    Approved ({allSubmissions.filter((s: ProponentSubmission) => s.status === "approved").length})
-                  </TabsTrigger>
-                    <TabsTrigger value="archived" className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0">
-                    Archived ({allSubmissions.filter((s: ProponentSubmission) => s.status === "archived").length})
-                  </TabsTrigger>
-                </TabsList>
-                </div>
-              </Tabs>
-
               {/* Protocols Grid */}
               {submissions.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 auto-rows-fr">
@@ -324,6 +293,12 @@ export default function Page() {
           )}
         </div>
       </div>
+
+      {/* Process Dialog */}
+      <SubmissionProcessDialog
+        open={showProcessDialog}
+        onOpenChange={setShowProcessDialog}
+      />
     </div>
   );
 }

@@ -26,8 +26,11 @@ export interface Reviewer {
   id: string;
   code: string;
   name: string;
+  email?: string; // Email address for notifications
+  userId?: string; // Firebase user ID - links reviewer to user account
   role?: ReviewerRole; // Role in the REC
-  isActive: boolean;
+  isActive: boolean; // Whether reviewer is currently active (based on presence)
+  presence?: boolean; // Online/offline status - true if online, false if offline
   recMemberId?: string; // Link to REC member if this reviewer is also an REC member
   imageUrl?: string; // Image URL for member photo
   
@@ -53,6 +56,7 @@ export interface Reviewer {
 
 export interface CreateReviewerRequest {
   name: string;
+  email?: string; // Email address for notifications
   role?: ReviewerRole; // Optional: role in the REC
   recMemberId?: string; // Optional: link to REC member
   
@@ -75,6 +79,7 @@ export interface CreateReviewerRequest {
 
 export interface UpdateReviewerRequest {
   name?: string;
+  email?: string | null; // null means delete the field
   role?: ReviewerRole | null; // null means delete the field
   recMemberId?: string | null; // null means delete the field
   isActive?: boolean;
@@ -99,6 +104,65 @@ export interface UpdateReviewerRequest {
 
 export class ReviewersManagementService {
   /**
+   * Update reviewer presence status directly
+   * Call this when reviewer signs in (presence = true) or signs out (presence = false)
+   */
+  async updateReviewerPresence(reviewerId: string, isOnline: boolean): Promise<boolean> {
+    try {
+      const reviewerRef = doc(db, REVIEWERS_COLLECTION, reviewerId);
+      await updateDoc(reviewerRef, {
+        presence: isOnline,
+        isActive: isOnline,
+        updatedAt: serverTimestamp()
+      });
+      return true;
+    } catch (error) {
+      console.error('Error updating reviewer presence:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Update reviewer presence by userId
+   */
+  async updateReviewerPresenceByUserId(userId: string, isOnline: boolean): Promise<boolean> {
+    try {
+      const reviewersRef = collection(db, REVIEWERS_COLLECTION);
+      const q = query(reviewersRef, where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const reviewerId = snapshot.docs[0].id;
+        return await this.updateReviewerPresence(reviewerId, isOnline);
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating reviewer presence by userId:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Update reviewer presence by email
+   */
+  async updateReviewerPresenceByEmail(email: string, isOnline: boolean): Promise<boolean> {
+    try {
+      const reviewersRef = collection(db, REVIEWERS_COLLECTION);
+      const q = query(reviewersRef, where('email', '==', email));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const reviewerId = snapshot.docs[0].id;
+        return await this.updateReviewerPresence(reviewerId, isOnline);
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating reviewer presence by email:', error);
+      return false;
+    }
+  }
+
+  /**
    * Get all reviewers
    */
   async getAllReviewers(): Promise<Reviewer[]> {
@@ -118,14 +182,14 @@ export class ReviewersManagementService {
   }
 
   /**
-   * Get active reviewers only
+   * Get active reviewers only (those with presence = true)
    */
   async getActiveReviewers(): Promise<Reviewer[]> {
     try {
       const reviewersRef = collection(db, REVIEWERS_COLLECTION);
       const q = query(
         reviewersRef, 
-        where('isActive', '==', true),
+        where('presence', '==', true),
         orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(q);
@@ -209,12 +273,17 @@ export class ReviewersManagementService {
       const reviewer: Omit<Reviewer, 'id'> = {
         code,
         name: reviewerData.name,
-        isActive: true,
+        isActive: false, // Initially inactive until presence is detected
+        presence: false, // Initially offline
         createdAt: serverTimestamp() as Timestamp,
         updatedAt: serverTimestamp() as Timestamp
       };
       
       // Only add optional fields if they are defined
+      if (reviewerData.email) {
+        reviewer.email = reviewerData.email;
+      }
+      
       if (reviewerData.role) {
         reviewer.role = reviewerData.role;
       }
@@ -306,6 +375,48 @@ export class ReviewersManagementService {
   }
 
   /**
+   * Link a reviewer to a Firebase user account and set them as online
+   * This should be called when a reviewer signs in
+   */
+  async linkReviewerToUser(reviewerId: string, userId: string): Promise<boolean> {
+    try {
+      const reviewerRef = doc(db, REVIEWERS_COLLECTION, reviewerId);
+      await updateDoc(reviewerRef, {
+        userId,
+        presence: true,
+        isActive: true,
+        updatedAt: serverTimestamp()
+      });
+      return true;
+    } catch (error) {
+      console.error('Error linking reviewer to user:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Link a reviewer to a user by email and set them as online
+   * This automatically finds the reviewer by email and links them
+   */
+  async linkReviewerByEmail(email: string, userId: string): Promise<boolean> {
+    try {
+      const reviewersRef = collection(db, REVIEWERS_COLLECTION);
+      const q = query(reviewersRef, where('email', '==', email));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const reviewerId = snapshot.docs[0].id;
+        return await this.linkReviewerToUser(reviewerId, userId);
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error linking reviewer by email:', error);
+      return false;
+    }
+  }
+
+  /**
    * Update reviewer
    */
   async updateReviewer(reviewerId: string, updates: UpdateReviewerRequest): Promise<boolean> {
@@ -351,6 +462,15 @@ export class ReviewersManagementService {
           updateData.imageUrl = deleteField();
         } else {
           updateData.imageUrl = updates.imageUrl;
+        }
+      }
+      
+      // Handle email field
+      if (updates.email !== undefined) {
+        if (updates.email === null) {
+          updateData.email = deleteField();
+        } else {
+          updateData.email = updates.email;
         }
       }
       

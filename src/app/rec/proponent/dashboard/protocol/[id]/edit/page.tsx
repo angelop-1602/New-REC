@@ -65,20 +65,9 @@ export default function EditProtocolPage() {
         setInitialInformation((submission.information || {}) as unknown as InformationType);
         setInitialSubmission(submissionData);
         
-        // Check if protocol has reviewers assigned (only for pending/accepted protocols)
-        // Use raw status from submissionData to avoid type narrowing issues
-        const rawStatus = (submissionData.status as string) || submissionStatus;
-        if (rawStatus === 'pending' || rawStatus === 'accepted' || rawStatus === 'under_review') {
-          try {
-            const reviewers = await reviewerService.getProtocolReviewers(submissionId);
-            setHasReviewers(reviewers.length > 0);
-          } catch (reviewerError) {
-            console.error("Error checking reviewers:", reviewerError);
-            setHasReviewers(false);
-          }
-        } else {
-          setHasReviewers(false);
-        }
+        // Check if protocol has reviewers assigned - status is the single source of truth
+        // Note: Edit page only allows editing for pending/draft, so hasReviewers will always be false here
+        setHasReviewers(false);
         
         // Fetch unread message count
         if (submission && user) {

@@ -47,7 +47,7 @@ import { enhancedDocumentManagementService } from "@/lib/services/documents/enha
 import { useRealtimeDocuments } from "@/hooks/useRealtimeDocuments";
 import { useRealtimeProtocol } from "@/hooks/useRealtimeProtocol";
 import { documentGenerator } from "@/lib/services/documents/documentGenerator";
-import { getCurrentChairName } from "@/lib/services/core/recSettingsService";
+import { getCurrentChairName } from "@/lib/services/core/chairpersonService";
 import { extractTemplateData } from "@/lib/services/documents/templateDataMapper";
 import { customToast } from "@/components/ui/custom/toast";
 import {

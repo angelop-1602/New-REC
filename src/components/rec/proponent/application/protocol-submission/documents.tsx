@@ -189,8 +189,7 @@ export default function SubmissionDocuments() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 w-full">
         {basicRequirements.map((requirement) => {
           const existingDoc = getDocumentForRequirement(requirement.id);
-          // Disable input if document exists and it's NOT a multiple file requirement
-          const isDisabled = existingDoc && !requirement.multiple;
+          const existingDocs = existingDoc ? [existingDoc] : [];
           return (
             <div key={requirement.id} className="relative">
               <CustomFileUpload
@@ -199,29 +198,14 @@ export default function SubmissionDocuments() {
                 templateUrl={requirement.templateUrl}
                 multiple={requirement.multiple}
                 accept={getAcceptTypes(requirement.id)}
-                disabled={isDisabled}
+                disabled={false}
+                existingDocuments={existingDocs}
+                onRemoveDocument={async (documentId: string) => {
+                  await removeDocument(documentId);
+                  await removeFileReference(documentId);
+                }}
                 onChange={(file: File | null) => handleFileUpload(file, requirement)}
               />
-              {existingDoc && (
-                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-blue-700 dark:text-blue-300">
-                      ✓ {existingDoc.originalFileName || existingDoc.title}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-blue-700 dark:text-blue-300 hover:text-red-600"
-                      onClick={async () => {
-                        await removeDocument(existingDoc.id);
-                        await removeFileReference(existingDoc.id);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
@@ -243,8 +227,6 @@ export default function SubmissionDocuments() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
         {supplementaryDocuments.map((requirement) => {
           const existingDocs = getDocumentsForRequirement(requirement.id);
-          // Disable input if document exists and it's NOT a multiple file requirement
-          const isDisabled = existingDocs.length > 0 && !requirement.multiple;
           return (
             <div key={requirement.id} className="relative">
               <CustomFileUpload
@@ -253,36 +235,14 @@ export default function SubmissionDocuments() {
                 templateUrl={requirement.templateUrl}
                 multiple={requirement.multiple}
                 accept={getAcceptTypes(requirement.id)}
-                disabled={isDisabled}
+                disabled={false}
+                existingDocuments={existingDocs}
+                onRemoveDocument={async (documentId: string) => {
+                  await removeDocument(documentId);
+                  await removeFileReference(documentId);
+                }}
                 onChange={(file: File | null) => handleFileUpload(file, requirement)}
               />
-              {existingDocs.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {existingDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded text-xs"
-                    >
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                        <span className="text-blue-700 dark:text-blue-300 break-words flex-1">
-                          ✓ {doc.originalFileName || doc.title}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 px-2 text-blue-700 dark:text-blue-300 hover:text-red-600 self-end sm:self-auto"
-                          onClick={async () => {
-                            await removeDocument(doc.id);
-                            await removeFileReference(doc.id);
-                          }}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           );
         })}
@@ -290,8 +250,7 @@ export default function SubmissionDocuments() {
         {/* Custom Document Requirements */}
         {customRequirements.map((requirement) => {
           const existingDoc = getDocumentForRequirement(requirement.id);
-          // Disable input if document exists and it's NOT a multiple file requirement
-          const isDisabled = existingDoc && !requirement.multiple;
+          const existingDocs = existingDoc ? [existingDoc] : [];
           return (
             <div key={requirement.id} className="relative">
               <CustomFileUpload
@@ -300,29 +259,14 @@ export default function SubmissionDocuments() {
                 templateUrl={requirement.templateUrl}
                 multiple={requirement.multiple}
                 accept=".pdf"
-                disabled={isDisabled}
+                disabled={false}
+                existingDocuments={existingDocs}
+                onRemoveDocument={async (documentId: string) => {
+                  await removeDocument(documentId);
+                  await removeFileReference(documentId);
+                }}
                 onChange={(file: File | null) => handleFileUpload(file, requirement)}
               />
-              {existingDoc && (
-                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-blue-700 dark:text-blue-300">
-                      ✓ {existingDoc.originalFileName || existingDoc.title}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-blue-700 dark:text-blue-300 hover:text-red-600"
-                      onClick={async () => {
-                        await removeDocument(existingDoc.id);
-                        await removeFileReference(existingDoc.id);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
